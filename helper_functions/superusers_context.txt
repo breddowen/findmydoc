@@ -1,0 +1,3450 @@
+# ./backend/app/modules/ai_agents/superusers/__init__.py
+
+from .superuser_agent import (
+    build_superuser_agent
+)
+
+
+__all__ = [
+    "build_superuser_agent"
+]
+
+# ./backend/app/modules/ai_agents/superusers/config.py
+
+from dataclasses import (
+    dataclass
+)
+from typing import Any
+from ...ai_models.enums import (
+    AIModelRole
+)
+@dataclass(frozen=True)
+class SuperuserAgentConfig:
+    """
+    Настройки графа суперпользователя.
+    Здесь можно независимо менять модель
+    каждого узла между PRIMARY и SECONDARY.
+    """
+    orchestrator_history_message_limit: int = 12
+    
+    orchestrator_history_token_limit: int = 2500
+    agent_history_token_limit: int = 2000
+    general_history_message_limit: int = 2
+    current_patient_history_message_limit: int = 2
+    web_research_history_message_limit: int = 2
+    memory_history_message_limit: int = 2
+    general_memory_limit: int = 8
+    recent_tool_results_limit: int = 4
+    recent_tool_result_max_chars: int = 4000
+    handoff_max_chars: int = 3000
+    web_source_registry_limit: int = 20
+    max_tool_iterations: int = 8
+    # На первом этапе все узлы работают
+    # через PRIMARY.
+    #
+    # Для эксперимента достаточно заменить
+    # роль нужного узла на SECONDARY.
+    orchestrator_model_role: AIModelRole = (
+        AIModelRole.PRIMARY
+    )
+    general_model_role: AIModelRole = (
+        AIModelRole.PRIMARY
+    )
+    current_patient_model_role: AIModelRole = (
+        AIModelRole.PRIMARY
+    )
+    web_research_model_role: AIModelRole = (
+        AIModelRole.PRIMARY
+    )
+    memory_model_role: AIModelRole = (
+        AIModelRole.PRIMARY
+    )
+@dataclass(frozen=True)
+class SuperuserAgentModels:
+    """
+    Рабочие экземпляры LangChain-моделей.
+    """
+    primary: Any
+    secondary: Any
+    def resolve(
+        self,
+        role: AIModelRole
+    ):
+        if role == AIModelRole.PRIMARY:
+            return self.primary
+        if role == AIModelRole.SECONDARY:
+            return self.secondary
+        raise ValueError(
+            f"Unsupported model role: {role}"
+        )
+DEFAULT_SUPERUSER_AGENT_CONFIG = (
+    SuperuserAgentConfig()
+)
+
+# ./backend/app/modules/ai_agents/superusers/context.py
+
+import logging
+logger = logging.getLogger(
+    __name__
+)
+
+import json
+
+from urllib.parse import (
+    urlparse
+)
+
+from langchain_core.messages import (
+    AIMessage,
+    HumanMessage
+)
+
+from langgraph.runtime import (
+    Runtime
+)
+
+from sqlmodel import (
+    select
+)
+
+from ...ai_chat.enums import (
+    ChatMessagePartType,
+    ChatMessageRole,
+    ChatMessageStatus
+)
+
+from ...ai_chat.message_parts import (
+    get_message_parts
+)
+
+from ...ai_chat.models import (
+    AIChatMessage
+)
+
+from ...ai_memory.utils import (
+    list_user_memories
+)
+
+from ..common.runtime import (
+    AgentRuntimeContext
+)
+
+from .config import (
+    SuperuserAgentConfig
+)
+
+from .utils import (
+    truncate_text
+)
+
+
+from .utils import trim_conversation_messages
+
+WEB_TOOL_NAMES = {
+    "web_search",
+    "search_medical_sources",
+    "scrape_web_page",
+    "list_available_medical_sources"
+}
+
+def load_conversation_messages(
+    runtime_context: AgentRuntimeContext,
+    limit: int,
+    token_budget: int,
+) -> list:
+    with (
+        runtime_context
+        .session_factory()
+    ) as session:
+        statement = select(
+            AIChatMessage
+        ).where(
+            AIChatMessage.chat_id
+            == runtime_context.chat_id,
+            AIChatMessage.status
+            == ChatMessageStatus.COMPLETED,
+        )
+
+        context_changed_at = (
+            runtime_context
+            .chat_context_changed_at
+        )
+
+        if context_changed_at:
+            statement = statement.where(
+                AIChatMessage.created_at
+                >= context_changed_at
+            )
+
+        statement = statement.order_by(
+            AIChatMessage.sequence.desc()
+        ).limit(
+            max(limit, 1)
+        )
+
+        records = list(
+            session.exec(
+                statement
+            ).all()
+        )
+
+        records.reverse()
+
+        messages = []
+
+        for record in records:
+            if (
+                record.role
+                == ChatMessageRole.USER
+            ):
+                messages.append(
+                    HumanMessage(
+                        content=record.content,
+                        id=record.id,
+                    )
+                )
+
+            elif (
+                record.role
+                == ChatMessageRole.ASSISTANT
+            ):
+                messages.append(
+                    AIMessage(
+                        content=record.content,
+                        id=record.id,
+                    )
+                )
+
+        return trim_conversation_messages(
+            messages=messages,
+            token_budget=token_budget,
+        )
+
+
+def load_recent_tool_results(
+    runtime_context: AgentRuntimeContext,
+    config: SuperuserAgentConfig,
+) -> list[dict]:
+    with (
+        runtime_context
+        .session_factory()
+    ) as session:
+        statement = select(
+            AIChatMessage
+        ).where(
+            AIChatMessage.chat_id
+            == runtime_context.chat_id,
+            AIChatMessage.role
+            == ChatMessageRole.ASSISTANT,
+        )
+
+        context_changed_at = (
+            runtime_context
+            .chat_context_changed_at
+        )
+
+        if context_changed_at:
+            statement = statement.where(
+                AIChatMessage.created_at
+                >= context_changed_at
+            )
+
+        statement = statement.order_by(
+            AIChatMessage.sequence.desc()
+        ).limit(30)
+
+        messages = list(
+            session.exec(
+                statement
+            ).all()
+        )
+
+        results = []
+
+        for message in messages:
+            parts = get_message_parts(
+                session=session,
+                message_id=message.id,
+            )
+
+            parts.reverse()
+
+            for part in parts:
+                if (
+                    part.part_type
+                    != ChatMessagePartType
+                    .TOOL_RESULT
+                ):
+                    continue
+
+                results.append({
+                    "message_id": message.id,
+                    "tool_name": part.tool_name,
+                    "tool_call_id": (
+                        part.tool_call_id
+                    ),
+                    "content": truncate_text(
+                        part.content,
+                        config
+                        .recent_tool_result_max_chars,
+                    ),
+                })
+
+                if (
+                    len(results)
+                    >= config
+                    .recent_tool_results_limit
+                ):
+                    return results
+
+        return results
+
+
+def extract_web_sources(
+    recent_tool_results: list[dict],
+    existing_sources: list[dict],
+    limit: int
+) -> list[dict]:
+    by_url = {}
+
+    for source in existing_sources:
+        url = source.get("url")
+
+        if url:
+            by_url[url] = source
+
+    # Идём от более старых результатов
+    # к новым, чтобы новые значения могли
+    # обновить заголовки и snippets.
+    for tool_result in reversed(
+        recent_tool_results
+    ):
+        if (
+            tool_result.get("tool_name")
+            not in WEB_TOOL_NAMES
+        ):
+            continue
+
+        content = tool_result.get(
+            "content"
+        )
+
+        if not content:
+            continue
+
+        try:
+            payload = json.loads(
+                content
+            )
+        except (
+            json.JSONDecodeError,
+            TypeError
+        ):
+            continue
+
+        items = []
+
+        if isinstance(payload, dict):
+            raw_results = payload.get(
+                "results"
+            )
+
+            if isinstance(
+                raw_results,
+                list
+            ):
+                items.extend(
+                    raw_results
+                )
+
+            if payload.get("url"):
+                items.append(payload)
+
+        elif isinstance(payload, list):
+            items.extend(payload)
+
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+
+            url = (
+                item.get("url")
+                or item.get("href")
+                or item.get("link")
+            )
+
+            if not url:
+                continue
+
+            parsed_url = urlparse(url)
+
+            by_url[url] = {
+                "title": (
+                    item.get("title")
+                    or item.get("name")
+                    or url
+                ),
+                "url": url,
+                "domain": (
+                    parsed_url.netloc
+                    or None
+                ),
+                "source": (
+                    item.get("source")
+                    or item.get(
+                        "source_name"
+                    )
+                ),
+                "snippet": truncate_text(
+                    (
+                        item.get("snippet")
+                        or item.get(
+                            "description"
+                        )
+                        or item.get(
+                            "content"
+                        )
+                    ),
+                    1000
+                )
+            }
+
+    sources = list(
+        by_url.values()
+    )[-limit:]
+
+    for index, source in enumerate(
+        sources,
+        start=1
+    ):
+        source["number"] = index
+
+    return sources
+
+
+def load_memory_items(
+    runtime_context: AgentRuntimeContext,
+    limit: int,
+) -> list[dict]:
+    with (
+        runtime_context
+        .session_factory()
+    ) as session:
+        memories = list_user_memories(
+            session=session,
+            subject_user_id=(
+                runtime_context
+                .current_user_id
+            ),
+            include_inactive=False,
+            limit=limit,
+        )
+
+        return [
+            {
+                "id": memory.id,
+                "category": (
+                    memory.category.value
+                ),
+                "content": memory.content,
+                "importance": (
+                    memory.importance
+                ),
+                "confidence": (
+                    memory.confidence
+                ),
+            }
+            for memory in memories
+        ]
+
+
+def build_prepare_context_node(
+    config: SuperuserAgentConfig
+):
+    def prepare_context(
+        state,
+        runtime: Runtime[
+            AgentRuntimeContext
+        ]
+    ) -> dict:
+        runtime_context = (
+            runtime.context
+        )
+
+        conversation_messages = (
+            load_conversation_messages(
+                runtime_context=(
+                    runtime_context
+                ),
+                limit=(
+                    config
+                    .orchestrator_history_message_limit
+                ),
+                token_budget=(
+                    config
+                    .orchestrator_history_token_limit
+                )
+            )
+        )
+
+        recent_tool_results = (
+            load_recent_tool_results(
+                runtime_context=(
+                    runtime_context
+                ),
+                config=config
+            )
+        )
+
+        memory_items = (
+            load_memory_items(
+                runtime_context=(
+                    runtime_context
+                ),
+                limit=(
+                    config
+                    .general_memory_limit
+                )
+            )
+        )
+
+        existing_sources = (
+            state.get(
+                "web_sources",
+                []
+            )
+            or []
+        )
+
+        web_sources = extract_web_sources(
+            recent_tool_results=(
+                recent_tool_results
+            ),
+            existing_sources=(
+                existing_sources
+            ),
+            limit=(
+                config
+                .web_source_registry_limit
+            )
+        )
+
+        # chat = runtime_context.chat
+
+        return {
+            "conversation_messages": (
+                conversation_messages
+            ),
+            "memory_items": memory_items,
+            "recent_tool_results": (
+                recent_tool_results
+            ),
+            "web_sources": web_sources,
+            "patient_context_active": (
+                runtime_context
+                .chat_context_mode
+                == "patient"
+                and bool(
+                    runtime_context
+                    .chat_context_patient_id
+                )
+            ),
+            "patient_profile_id": (
+                runtime_context
+                .chat_context_patient_id
+            ),
+            "final_response": "",
+            "messages": [],
+            "tool_iterations": 0
+        }
+
+    return prepare_context
+
+# ./backend/app/modules/ai_agents/superusers/current_patient/__init__.py
+
+# ./backend/app/modules/ai_agents/superusers/current_patient/graph.py
+
+
+from langgraph.graph import (
+    END,
+    START,
+    StateGraph
+)
+
+from langgraph.prebuilt import (
+    ToolNode
+)
+
+from ...common.runtime import (
+    AgentRuntimeContext
+)
+
+from ...common.state import (
+    ToolAgentState
+)
+
+from ..config import (
+    SuperuserAgentConfig
+)
+
+from ..tool_loop import (
+    build_after_model_router,
+    build_model_node,
+    increment_tool_iterations,
+    initialize_agent_messages
+)
+
+from ..tools.patient_facts import (
+    get_current_patient_facts,
+    propose_current_patient_facts,
+    propose_retract_current_patient_facts,
+    search_current_patient_facts
+)
+
+from ..tools.patients import (
+    get_current_patient_summary
+)
+
+from .prompt import (
+    CURRENT_PATIENT_AGENT_PROMPT
+)
+
+
+def build_current_patient_graph(
+    model,
+    config: SuperuserAgentConfig
+):
+    tools = [
+        get_current_patient_summary,
+        get_current_patient_facts,
+        search_current_patient_facts,
+        propose_current_patient_facts,
+        propose_retract_current_patient_facts
+    ]
+
+    builder = StateGraph(
+        ToolAgentState,
+        context_schema=AgentRuntimeContext
+    )
+
+    builder.add_node(
+        "initialize",
+        initialize_agent_messages
+    )
+
+    builder.add_node(
+        "model",
+        build_model_node(
+            model=model,
+            system_prompt=(
+                CURRENT_PATIENT_AGENT_PROMPT
+            ),
+            tools=tools
+        )
+    )
+
+    builder.add_node(
+        "tools",
+        ToolNode(
+            tools=tools,
+            messages_key=(
+                "agent_messages"
+            ),
+            handle_tool_errors=True
+        )
+    )
+
+    builder.add_node(
+        "increment_tool_iterations",
+        increment_tool_iterations
+    )
+
+    builder.add_edge(
+        START,
+        "initialize"
+    )
+
+    builder.add_edge(
+        "initialize",
+        "model"
+    )
+
+    builder.add_conditional_edges(
+        "model",
+        build_after_model_router(
+            config.max_tool_iterations
+        ),
+        {
+            "tools": "tools",
+            "end": END
+        }
+    )
+
+    builder.add_edge(
+        "tools",
+        "increment_tool_iterations"
+    )
+
+    builder.add_edge(
+        "increment_tool_iterations",
+        "model"
+    )
+
+    return builder.compile(
+        checkpointer=None
+    )
+
+# ./backend/app/modules/ai_agents/superusers/current_patient/prompt.py
+
+
+from ..policies import (
+    SUPERUSER_COMMON_POLICIES
+)
+
+
+CURRENT_PATIENT_AGENT_PROMPT = (
+    """
+Ты — специализированный AI-агент для
+работы с выбранным пациентом.
+
+Работай только с пациентом, указанным
+в активном контексте.
+
+Получение данных:
+- базовую информацию получай через
+  get_current_patient_summary;
+- медицинские факты получай через
+  get_current_patient_facts;
+- для точного поиска фактов используй
+  search_current_patient_facts;
+- не придумывай отсутствующие сведения;
+- не ищи другого пациента.
+
+Добавление медицинских фактов:
+- выполняется только по явному намерению
+  пользователя сохранить данные;
+- используй
+  propose_current_patient_facts;
+- tool сам запросит подтверждение;
+- не утверждай, что данные сохранены,
+  пока tool не вернул saved=true;
+- несколько лабораторных показателей
+  оформляй отдельными фактами;
+- лабораторным показателям назначай
+  category=lab_result;
+- используй нормализованные fact_key,
+  например lab.alt, lab.ast, lab.ggt;
+- не придумывай значения, единицы или даты;
+- предполагаемый диагноз не превращай
+  в подтверждённый диагноз.
+
+Отзыв медицинских фактов:
+- физическое удаление не выполняется;
+- факт получает статус retracted;
+- сначала используй
+  search_current_patient_facts;
+- затем передавай точные ID в
+  propose_retract_current_patient_facts;
+- не придумывай ID;
+- если truncated=true, не предлагай отзыв
+  всех результатов;
+- попроси уточнить запрос или выполнять
+  действие частями;
+- перед подтверждением перечисли факты,
+  которые будут отозваны;
+- не утверждай, что факты отозваны,
+  пока tool не вернул retracted=true.
+
+Не выполняй веб-поиск.
+Не работай с долговременной памятью
+собеседника.
+"""
+    + "\n"
+    + SUPERUSER_COMMON_POLICIES
+)
+
+# ./backend/app/modules/ai_agents/superusers/enums.py
+
+from enum import (
+    Enum
+)
+
+
+class SuperuserAgentRoute(
+    str,
+    Enum
+):
+    GENERAL = "general"
+
+    CURRENT_PATIENT = (
+        "current_patient"
+    )
+
+    WEB_RESEARCH = (
+        "web_research"
+    )
+
+    MEMORY = "memory"
+
+    CLARIFY = "clarify"
+
+
+AGENT_ROUTE_TITLES = {
+    SuperuserAgentRoute.GENERAL: (
+        "Обычный медицинский диалог"
+    ),
+    SuperuserAgentRoute.CURRENT_PATIENT: (
+        "Работа с выбранным пациентом"
+    ),
+    SuperuserAgentRoute.WEB_RESEARCH: (
+        "Поиск медицинской информации"
+    ),
+    SuperuserAgentRoute.MEMORY: (
+        "Работа с долговременной памятью"
+    ),
+    SuperuserAgentRoute.CLARIFY: (
+        "Уточняю запрос"
+    )
+}
+
+
+def normalize_agent_route(
+    value
+) -> SuperuserAgentRoute:
+    if isinstance(
+        value,
+        SuperuserAgentRoute
+    ):
+        return value
+
+    return SuperuserAgentRoute(
+        str(value)
+    )
+
+
+def get_agent_route_title(
+    route
+) -> str:
+    normalized = normalize_agent_route(
+        route
+    )
+
+    return AGENT_ROUTE_TITLES[
+        normalized
+    ]
+
+# ./backend/app/modules/ai_agents/superusers/general/__init__.py
+
+# ./backend/app/modules/ai_agents/superusers/general/graph.py
+
+
+from langgraph.graph import (
+    END,
+    START,
+    StateGraph
+)
+
+from langgraph.prebuilt import (
+    ToolNode
+)
+
+from ...common.runtime import (
+    AgentRuntimeContext
+)
+
+from ...common.state import (
+    ToolAgentState
+)
+
+from ..config import (
+    SuperuserAgentConfig
+)
+
+from ..tool_loop import (
+    build_after_model_router,
+    build_model_node,
+    increment_tool_iterations,
+    initialize_agent_messages
+)
+
+from ..tools.patients import (
+    find_patients,
+    get_patient_summary,
+    list_patients
+)
+
+from .prompt import (
+    GENERAL_AGENT_PROMPT
+)
+
+
+def build_general_graph(
+    model,
+    config: SuperuserAgentConfig,
+    patient_context: bool
+):
+    # В активном patient context общий
+    # агент не должен искать других
+    # пациентов.
+    tools = (
+        []
+        if patient_context
+        else [
+            list_patients,
+            find_patients,
+            get_patient_summary
+        ]
+    )
+
+    builder = StateGraph(
+        ToolAgentState,
+        context_schema=AgentRuntimeContext
+    )
+
+    builder.add_node(
+        "initialize",
+        initialize_agent_messages
+    )
+
+    builder.add_node(
+        "model",
+        build_model_node(
+            model=model,
+            system_prompt=(
+                GENERAL_AGENT_PROMPT
+            ),
+            tools=tools
+        )
+    )
+
+    builder.add_edge(
+        START,
+        "initialize"
+    )
+
+    builder.add_edge(
+        "initialize",
+        "model"
+    )
+
+    if not tools:
+        builder.add_edge(
+            "model",
+            END
+        )
+
+        return builder.compile(
+            checkpointer=None
+        )
+
+    builder.add_node(
+        "tools",
+        ToolNode(
+            tools=tools,
+            messages_key=(
+                "agent_messages"
+            ),
+            handle_tool_errors=True
+        )
+    )
+
+    builder.add_node(
+        "increment_tool_iterations",
+        increment_tool_iterations
+    )
+
+    builder.add_conditional_edges(
+        "model",
+        build_after_model_router(
+            config.max_tool_iterations
+        ),
+        {
+            "tools": "tools",
+            "end": END
+        }
+    )
+
+    builder.add_edge(
+        "tools",
+        "increment_tool_iterations"
+    )
+
+    builder.add_edge(
+        "increment_tool_iterations",
+        "model"
+    )
+
+    return builder.compile(
+        checkpointer=None
+    )
+
+# ./backend/app/modules/ai_agents/superusers/general/prompt.py
+
+
+from ..policies import (
+    SUPERUSER_COMMON_POLICIES
+)
+
+
+GENERAL_AGENT_PROMPT = (
+    """
+Ты — медицинский AI-помощник
+суперпользователя системы.
+
+Основная роль:
+- вести обычный медицинский диалог;
+- отвечать только на вопросы, связанные
+  с медициной, здоровьем, медицинскими
+  организациями и работой системы;
+- использовать эмпатию;
+- помогать пользователю сформулировать
+  или структурировать информацию.
+
+Если вопрос явно не относится к медицине
+или работе медицинской системы, вежливо
+сообщи о своей специализации.
+
+При наличии tools пациентов:
+- список пациентов получай только через
+  list_patients;
+- поиск выполняй только через
+  find_patients;
+- подробную базовую информацию получай
+  через get_patient_summary;
+- patient_user_id бери только из результата
+  list_patients или find_patients;
+- если найдено несколько пациентов,
+  не выбирай одного самостоятельно;
+- покажи варианты и попроси уточнить;
+- найденный пациент не становится активным
+  контекстом автоматически.
+
+Долговременная память:
+- тебе может быть передан read-only
+  контекст предпочтений пользователя;
+- учитывай его в стиле и тематике ответа;
+- не представляй эти сведения как данные
+  пациента;
+- не утверждай, что сохранил новую память;
+- явное сохранение памяти выполняется
+  отдельным memory-agent.
+
+Не выполняй веб-поиск самостоятельно.
+Если пользователь явно просит интернет-
+поиск, такой запрос должен обрабатывать
+web-research агент.
+"""
+    + "\n"
+    + SUPERUSER_COMMON_POLICIES
+)
+
+# ./backend/app/modules/ai_agents/superusers/memory/__init__.py
+
+# ./backend/app/modules/ai_agents/superusers/memory/graph.py
+
+
+from langgraph.graph import (
+    END,
+    START,
+    StateGraph
+)
+
+from langgraph.prebuilt import (
+    ToolNode
+)
+
+from ...common.runtime import (
+    AgentRuntimeContext
+)
+
+from ...common.state import (
+    ToolAgentState
+)
+
+from ...common.tools.memory import (
+    remember_current_user_memory,
+    search_my_long_term_memory
+)
+
+from ..config import (
+    SuperuserAgentConfig
+)
+
+from ..tool_loop import (
+    build_after_model_router,
+    build_model_node,
+    increment_tool_iterations,
+    initialize_agent_messages
+)
+
+from .prompt import (
+    MEMORY_AGENT_PROMPT
+)
+
+
+def build_memory_graph(
+    model,
+    config: SuperuserAgentConfig
+):
+    tools = [
+        search_my_long_term_memory,
+        remember_current_user_memory
+    ]
+
+    builder = StateGraph(
+        ToolAgentState,
+        context_schema=AgentRuntimeContext
+    )
+
+    builder.add_node(
+        "initialize",
+        initialize_agent_messages
+    )
+
+    builder.add_node(
+        "model",
+        build_model_node(
+            model=model,
+            system_prompt=(
+                MEMORY_AGENT_PROMPT
+            ),
+            tools=tools
+        )
+    )
+
+    builder.add_node(
+        "tools",
+        ToolNode(
+            tools=tools,
+            messages_key=(
+                "agent_messages"
+            ),
+            handle_tool_errors=True
+        )
+    )
+
+    builder.add_node(
+        "increment_tool_iterations",
+        increment_tool_iterations
+    )
+
+    builder.add_edge(
+        START,
+        "initialize"
+    )
+
+    builder.add_edge(
+        "initialize",
+        "model"
+    )
+
+    builder.add_conditional_edges(
+        "model",
+        build_after_model_router(
+            config.max_tool_iterations
+        ),
+        {
+            "tools": "tools",
+            "end": END
+        }
+    )
+
+    builder.add_edge(
+        "tools",
+        "increment_tool_iterations"
+    )
+
+    builder.add_edge(
+        "increment_tool_iterations",
+        "model"
+    )
+
+    return builder.compile(
+        checkpointer=None
+    )
+
+# ./backend/app/modules/ai_agents/superusers/memory/prompt.py
+
+
+from ..policies import (
+    SUPERUSER_COMMON_POLICIES
+)
+
+
+MEMORY_AGENT_PROMPT = (
+    """
+Ты — специализированный агент
+долговременной памяти текущего
+собеседника.
+
+Память относится к текущему пользователю,
+который ведёт диалог, а не к пациенту.
+
+Для поиска памяти используй
+search_my_long_term_memory.
+
+Для сохранения используй
+remember_current_user_memory.
+
+Разрешено сохранять:
+- устойчивые интересы;
+- волнующие темы;
+- цели;
+- предпочтения общения;
+- предпочтения частоты контактов;
+- краткий устойчивый эмоциональный
+  контекст.
+
+Не сохраняй:
+- диагнозы;
+- симптомы;
+- лабораторные показатели;
+- лекарства;
+- аллергии;
+- данные выбранного пациента;
+- идентификаторы пациента;
+- одноразовые вопросы;
+- временные поручения.
+
+Если пользователь просит сохранить
+медицинский факт пациента, объясни, что
+это должно выполняться в контексте
+пациента, а не в долговременной памяти.
+
+Сохранение памяти не требует отдельного
+подтверждения.
+
+При сохранении памяти обязательно выбери
+подходящий срок хранения через параметр
+retention инструмента.
+
+Используй следующие значения:
+
+- permanent — сведения, которые должны
+  сохраняться бессрочно (устойчивые интересы,
+  долгосрочные цели, предпочтения общения,
+  постоянные привычки).
+
+- day — информация, актуальная только
+  сегодня или очень короткое время.
+
+- week — сведения, которые вероятно будут
+  полезны около недели.
+
+- month — временные обстоятельства,
+  предпочтения или эмоциональный контекст,
+  которые могут потерять актуальность
+  примерно через месяц.
+
+- three_months — сведения, которые могут
+  оставаться полезными несколько месяцев,
+  но не являются постоянными.
+
+- year — долгосрочные, но не бессрочные
+  сведения.
+
+Если есть сомнения между временным и
+постоянным знанием, предпочитай временный
+срок хранения.
+
+Не используй permanent для эмоционального
+состояния, текущих жизненных обстоятельств,
+разовых планов или временных предпочтений.
+"""
+    + "\n"
+    + SUPERUSER_COMMON_POLICIES
+)
+
+# ./backend/app/modules/ai_agents/superusers/nodes.py
+
+import json
+
+from langchain_core.messages import (
+    SystemMessage
+)
+
+from .config import (
+    SuperuserAgentConfig
+)
+
+from .enums import (
+    SuperuserAgentRoute,
+    normalize_agent_route
+)
+
+from .utils import (
+    truncate_text
+)
+
+from .utils import trim_conversation_messages
+
+def validate_route_node(
+    state
+) -> dict:
+    route = normalize_agent_route(
+        state.get(
+            "route",
+            SuperuserAgentRoute.GENERAL
+        )
+    )
+
+    if (
+        route
+        == SuperuserAgentRoute
+        .CURRENT_PATIENT
+        and not state.get(
+            "patient_context_active",
+            False
+        )
+    ):
+        return {
+            "route": (
+                SuperuserAgentRoute
+                .CLARIFY
+            ),
+            "clarification_question": (
+                "Для работы с медицинскими "
+                "данными сначала выберите "
+                "пациента в интерфейсе чата."
+            )
+        }
+
+    if (
+        route
+        == SuperuserAgentRoute.CLARIFY
+        and not state.get(
+            "clarification_question"
+        )
+    ):
+        return {
+            "clarification_question": (
+                "Уточните, пожалуйста, "
+                "что именно вы хотите сделать."
+            )
+        }
+
+    return {
+        "route": route
+    }
+
+
+def format_memory_context(
+    memory_items: list[dict]
+) -> str:
+    if not memory_items:
+        return ""
+
+    lines = [
+        "Долговременная память о текущем "
+        "пользователе:"
+    ]
+
+    for item in memory_items:
+        lines.append(
+            "- "
+            f"[{item.get('category')}] "
+            f"{item.get('content')}"
+        )
+
+    lines.append(
+        "\nИспользуй эти сведения только "
+        "как предпочтения и контекст общения. "
+        "Не представляй их как медицинские "
+        "данные пациента."
+    )
+
+    return "\n".join(lines)
+
+
+def format_patient_context(
+    state
+) -> str:
+    if not state.get(
+        "patient_context_active"
+    ):
+        return ""
+
+    patient_name = (
+        state.get("patient_name")
+        or "Имя не указано"
+    )
+
+    record_id = (
+        state.get(
+            "patient_record_id"
+        )
+        or "не указан"
+    )
+
+    return (
+        "Активный контекст пациента:\n"
+        f"- пациент: {patient_name};\n"
+        f"- номер карты: {record_id}.\n\n"
+        "Работай только с этим пациентом. "
+        "Не смешивай его данные с данными "
+        "других пациентов."
+    )
+
+
+def format_web_sources(
+    sources: list[dict]
+) -> str:
+    if not sources:
+        return ""
+
+    lines = [
+        "Источники из предыдущих "
+        "веб-запросов:"
+    ]
+
+    for source in sources:
+        number = source.get(
+            "number"
+        )
+
+        title = (
+            source.get("title")
+            or source.get("url")
+        )
+
+        url = source.get("url")
+
+        snippet = source.get(
+            "snippet"
+        )
+
+        line = (
+            f"{number}. {title} — {url}"
+        )
+
+        if snippet:
+            line += (
+                f"\n   Краткое описание: "
+                f"{snippet}"
+            )
+
+        lines.append(line)
+
+    lines.append(
+        "\nЕсли пользователь просит открыть "
+        "первый, второй или другой источник, "
+        "используй соответствующий URL из "
+        "этого списка."
+    )
+
+    return "\n".join(lines)
+
+
+def build_prepare_agent_input_node(
+    config: SuperuserAgentConfig
+):
+    def prepare_agent_input(
+        state
+    ) -> dict:
+        route = normalize_agent_route(
+            state.get(
+                "route",
+                SuperuserAgentRoute.GENERAL
+            )
+        )
+
+        history_limits = {
+            SuperuserAgentRoute.GENERAL: (
+                config
+                .general_history_message_limit
+            ),
+            SuperuserAgentRoute
+            .CURRENT_PATIENT: (
+                config
+                .current_patient_history_message_limit
+            ),
+            SuperuserAgentRoute
+            .WEB_RESEARCH: (
+                config
+                .web_research_history_message_limit
+            ),
+            SuperuserAgentRoute.MEMORY: (
+                config
+                .memory_history_message_limit
+            ),
+            SuperuserAgentRoute.CLARIFY: 1
+        }
+
+        history_limit = history_limits[
+            route
+        ]
+
+        history = list(
+            state.get(
+                "conversation_messages",
+                []
+            )
+        )[-history_limit:]
+
+        history = trim_conversation_messages(
+            messages=history,
+            token_budget=(
+                config.agent_history_token_limit
+            )
+        )
+
+        context_messages = []
+
+        if (
+            route
+            == SuperuserAgentRoute.GENERAL
+        ):
+            memory_context = (
+                format_memory_context(
+                    state.get(
+                        "memory_items",
+                        []
+                    )
+                )
+            )
+
+            if memory_context:
+                context_messages.append(
+                    SystemMessage(
+                        content=memory_context
+                    )
+                )
+
+            if state.get(
+                "patient_context_active"
+            ):
+                context_messages.append(
+                    SystemMessage(
+                        content=(
+                            "В чате выбран пациент, "
+                            "но текущий запрос "
+                            "маршрутизирован как "
+                            "обычный медицинский "
+                            "диалог. Не ищи других "
+                            "пациентов и не изменяй "
+                            "медицинскую карту."
+                        )
+                    )
+                )
+
+        elif (
+            route
+            == SuperuserAgentRoute
+            .CURRENT_PATIENT
+        ):
+            patient_context = (
+                format_patient_context(
+                    state
+                )
+            )
+
+            if patient_context:
+                context_messages.append(
+                    SystemMessage(
+                        content=(
+                            patient_context
+                        )
+                    )
+                )
+
+        elif (
+            route
+            == SuperuserAgentRoute
+            .WEB_RESEARCH
+        ):
+            web_context = (
+                format_web_sources(
+                    state.get(
+                        "web_sources",
+                        []
+                    )
+                )
+            )
+
+            if web_context:
+                context_messages.append(
+                    SystemMessage(
+                        content=web_context
+                    )
+                )
+
+            if state.get(
+                "patient_context_active"
+            ):
+                context_messages.append(
+                    SystemMessage(
+                        content=(
+                            "В чате выбран пациент. "
+                            "Для внешнего поиска "
+                            "используй только "
+                            "обезличенные данные. "
+                            "Не передавай ФИО, email, "
+                            "номер карты, телефон "
+                            "или адрес пациента."
+                        )
+                    )
+                )
+
+        handoff_context = truncate_text(
+            state.get(
+                "handoff_context"
+            ),
+            config.handoff_max_chars
+        )
+
+        # Handoff размещается непосредственно
+        # перед текущим сообщением пользователя.
+        if history:
+            previous_messages = history[:-1]
+            current_message = history[-1:]
+
+        else:
+            previous_messages = []
+            current_message = []
+
+        handoff_messages = []
+
+        if handoff_context:
+            handoff_messages.append(
+                SystemMessage(
+                    content=(
+                        "Контекст передачи от "
+                        "оркестратора:\n"
+                        f"{handoff_context}"
+                    )
+                )
+            )
+
+        messages = [
+            *context_messages,
+            *previous_messages,
+            *handoff_messages,
+            *current_message
+        ]
+
+        return {
+            "messages": messages,
+            "tool_iterations": 0,
+            "final_response": ""
+        }
+
+    return prepare_agent_input
+
+
+def clarify_node(
+    state
+) -> dict:
+    question = (
+        state.get(
+            "clarification_question"
+        )
+        or (
+            "Уточните, пожалуйста, "
+            "что именно вы хотите сделать."
+        )
+    )
+
+    return {
+        "final_response": question
+    }
+
+
+def finalize_response_node(
+    state
+) -> dict:
+    response = (
+        state.get(
+            "final_response",
+            ""
+        )
+        or ""
+    ).strip()
+
+    if not response:
+        raise RuntimeError(
+            "Agent finished without "
+            "a final response"
+        )
+
+    return {
+        "final_response": response
+    }
+
+
+def route_to_agent(
+    state
+) -> str:
+    return normalize_agent_route(
+        state.get(
+            "route",
+            SuperuserAgentRoute.GENERAL
+        )
+    ).value
+
+# ./backend/app/modules/ai_agents/superusers/orchestrator/__init__.py
+
+# ./backend/app/modules/ai_agents/superusers/orchestrator/graph.py
+
+from langgraph.graph import (
+    END,
+    START,
+    StateGraph
+)
+
+from ...common.runtime import (
+    AgentRuntimeContext
+)
+
+from ..state import (
+    SuperuserAgentState
+)
+
+from .nodes import (
+    build_orchestrator_node
+)
+
+
+def build_orchestrator_graph(
+    model
+):
+    builder = StateGraph(
+        SuperuserAgentState,
+        context_schema=AgentRuntimeContext
+    )
+
+    builder.add_node(
+        "classify_request",
+        build_orchestrator_node(
+            model=model
+        )
+    )
+
+    builder.add_edge(
+        START,
+        "classify_request"
+    )
+
+    builder.add_edge(
+        "classify_request",
+        END
+    )
+
+    return builder.compile(
+        checkpointer=None
+    )
+
+# ./backend/app/modules/ai_agents/superusers/orchestrator/nodes.py
+
+import json
+
+from langchain_core.messages import (
+    SystemMessage
+)
+
+from ..enums import (
+    normalize_agent_route
+)
+
+from .prompt import (
+    ORCHESTRATOR_PROMPT
+)
+
+from .schemas import (
+    OrchestratorDecision
+)
+
+
+def build_orchestrator_node(
+    model
+):
+    structured_model = (
+        model.with_structured_output(
+            OrchestratorDecision
+        )
+    )
+
+    async def orchestrate(
+        state
+    ) -> dict:
+        previous_route = state.get(
+            "route"
+        )
+
+        metadata = {
+            "patient_context_active": (
+                state.get(
+                    "patient_context_active",
+                    False
+                )
+            ),
+            "patient_name": (
+                state.get("patient_name")
+            ),
+            "previous_route": (
+                (
+                    normalize_agent_route(
+                        previous_route
+                    ).value
+                )
+                if previous_route
+                else None
+            ),
+            "recent_tool_results": (
+                state.get(
+                    "recent_tool_results",
+                    []
+                )
+            ),
+            "known_web_sources": (
+                state.get(
+                    "web_sources",
+                    []
+                )
+            )
+        }
+
+        messages = [
+            SystemMessage(
+                content=(
+                    ORCHESTRATOR_PROMPT
+                )
+            ),
+            SystemMessage(
+                content=(
+                    "Технический контекст:\n"
+                    + json.dumps(
+                        metadata,
+                        ensure_ascii=False,
+                        indent=2
+                    )
+                )
+            ),
+            *state.get(
+                "conversation_messages",
+                []
+            )
+        ]
+
+        decision = await (
+            structured_model.ainvoke(
+                messages
+            )
+        )
+
+        if not isinstance(
+            decision,
+            OrchestratorDecision
+        ):
+            decision = (
+                OrchestratorDecision
+                .model_validate(
+                    decision
+                )
+            )
+
+        return {
+            "previous_route": (
+                normalize_agent_route(
+                    previous_route
+                )
+                if previous_route
+                else None
+            ),
+            "route": decision.route,
+            "intent_summary": (
+                decision.intent_summary
+            ),
+            "handoff_context": (
+                decision.handoff_context
+            ),
+            "clarification_question": (
+                decision
+                .clarification_question
+            )
+        }
+
+    return orchestrate
+
+# ./backend/app/modules/ai_agents/superusers/orchestrator/prompt.py
+
+
+ORCHESTRATOR_PROMPT = """
+Ты — оркестратор служебного медицинского
+AI-агента.
+
+Твоя задача — определить, какой
+специализированный агент должен обработать
+текущее сообщение пользователя.
+
+Ты не отвечаешь на медицинский вопрос,
+не вызываешь tools и не выполняешь
+действия самостоятельно.
+
+Доступные маршруты:
+
+1. general
+Используй для:
+- обычного медицинского диалога;
+- общих медицинских вопросов;
+- эмпатичного общения;
+- поиска и просмотра пациентов в общем
+  режиме;
+- вопросов, не требующих веб-поиска,
+  изменения памяти или работы с картой
+  выбранного пациента.
+
+2. current_patient
+Используй для:
+- чтения данных выбранного пациента;
+- получения медицинских фактов;
+- поиска фактов пациента;
+- добавления фактов;
+- отзыва фактов;
+- вопросов, прямо относящихся к данным
+  выбранного пациента.
+
+Этот маршрут допустим только при активном
+контексте пациента.
+
+3. web_research
+Используй, если пользователь:
+- явно просит выполнить поиск в интернете;
+- просит найти статьи, рекомендации,
+  исследования или актуальные источники;
+- просит открыть, прочитать или подробнее
+  разобрать ранее найденный источник;
+- говорит «первый источник», «второй
+  источник», «эта статья» и из истории
+  понятно, что речь о веб-результатах.
+
+Не выбирай веб-поиск только потому, что
+вопрос сложный. Нужен явный запрос на
+поиск или продолжение предыдущего
+веб-исследования.
+
+4. memory
+Используй при явном намерении:
+- сохранить предпочтение или интерес;
+- запомнить информацию о собеседнике;
+- узнать, что сохранено в долговременной
+  памяти.
+
+Не используй этот маршрут для медицинских
+фактов пациента.
+
+5. clarify
+Используй, если запрос невозможно
+безопасно отнести к одному маршруту или
+не хватает критически важной информации.
+
+Дополнительные правила:
+
+- Учитывай предыдущий маршрут.
+- Учитывай последние tool results.
+- Учитывай активный контекст пациента.
+- Короткие продолжения интерпретируй
+  с учётом истории.
+- В активном контексте пациента запрос
+  на поиск другого пациента должен вести
+  к clarify с предложением сменить контекст
+  через интерфейс.
+- Выбери только один маршрут.
+- intent_summary должен быть кратким.
+- handoff_context должен содержать только
+  полезное специализированному агенту
+  описание задачи.
+- Не включай скрытые рассуждения.
+"""
+
+# ./backend/app/modules/ai_agents/superusers/orchestrator/schemas.py
+
+
+from pydantic import (
+    BaseModel,
+    Field,
+    model_validator
+)
+
+from ..enums import (
+    SuperuserAgentRoute
+)
+
+
+class OrchestratorDecision(
+    BaseModel
+):
+    route: SuperuserAgentRoute
+
+    intent_summary: str = Field(
+        min_length=1,
+        max_length=500
+    )
+
+    handoff_context: str = Field(
+        min_length=1,
+        max_length=3000
+    )
+
+    clarification_question: (
+        str | None
+    ) = Field(
+        default=None,
+        max_length=1000
+    )
+
+    @model_validator(mode="after")
+    def validate_clarification(
+        self
+    ):
+        if (
+            self.route
+            == SuperuserAgentRoute.CLARIFY
+            and not self
+            .clarification_question
+        ):
+            raise ValueError(
+                "clarification_question is "
+                "required for clarify route"
+            )
+
+        return self
+
+# ./backend/app/modules/ai_agents/superusers/policies.py
+
+from ..general_policies import get_general_policies
+
+SUPERUSER_COMMON_POLICIES = (
+    get_general_policies()
+    + """
+
+- Для получения данных из системы
+  используй только доступные tools.
+- Не утверждай, что действие выполнено,
+  если tool не подтвердил его выполнение.
+"""
+)
+
+# ./backend/app/modules/ai_agents/superusers/state.py
+
+from typing import (
+    Any
+)
+
+from langchain_core.messages import (
+    BaseMessage
+)
+
+from typing_extensions import (
+    TypedDict
+)
+
+from .enums import (
+    SuperuserAgentRoute
+)
+
+
+class WebSourceState(
+    TypedDict,
+    total=False
+):
+    number: int
+
+    title: str
+
+    url: str
+
+    domain: str | None
+
+    source: str | None
+
+    snippet: str | None
+
+
+class SuperuserAgentState(
+    TypedDict,
+    total=False
+):
+    """
+    Состояние родительского графа.
+
+    В отличие от состояния subgraphs,
+    messages не использует add_messages.
+    Каждый запуск заменяет его новым
+    ограниченным контекстом.
+    """
+
+    source_message_id: str
+
+    assistant_message_id: str
+
+    conversation_messages: list[
+        BaseMessage
+    ]
+
+    messages: list[BaseMessage]
+
+    route: SuperuserAgentRoute
+
+    previous_route: (
+        SuperuserAgentRoute | None
+    )
+
+    intent_summary: str
+
+    handoff_context: str
+
+    clarification_question: (
+        str | None
+    )
+
+    patient_context_active: bool
+
+    patient_profile_id: str | None
+
+    patient_name: str | None
+
+    patient_record_id: str | None
+
+    context_version: str
+
+    memory_items: list[
+        dict[str, Any]
+    ]
+
+    recent_tool_results: list[
+        dict[str, Any]
+    ]
+
+    web_sources: list[
+        WebSourceState
+    ]
+
+    final_response: str
+
+    tool_iterations: int
+
+# ./backend/app/modules/ai_agents/superusers/superuser_agent.py
+
+from langgraph.graph import (
+    END,
+    START,
+    StateGraph
+)
+
+from ..common.runtime import (
+    AgentRuntimeContext
+)
+
+from .config import (
+    DEFAULT_SUPERUSER_AGENT_CONFIG,
+    SuperuserAgentConfig,
+    SuperuserAgentModels
+)
+
+from .context import (
+    build_prepare_context_node
+)
+
+from .current_patient.graph import (
+    build_current_patient_graph
+)
+
+from .general.graph import (
+    build_general_graph
+)
+
+from .memory.graph import (
+    build_memory_graph
+)
+
+from .nodes import (
+    build_prepare_agent_input_node,
+    clarify_node,
+    finalize_response_node,
+    route_to_agent,
+    validate_route_node
+)
+
+from .orchestrator.graph import (
+    build_orchestrator_graph
+)
+
+from .state import (
+    SuperuserAgentState
+)
+
+from .web_research.graph import (
+    build_web_research_graph
+)
+
+
+def build_superuser_agent(
+    models: SuperuserAgentModels,
+    checkpointer,
+    patient_context: bool,
+    config: (
+        SuperuserAgentConfig
+    ) = DEFAULT_SUPERUSER_AGENT_CONFIG
+):
+    orchestrator_graph = (
+        build_orchestrator_graph(
+            model=models.resolve(
+                config
+                .orchestrator_model_role
+            )
+        )
+    )
+
+    general_graph = build_general_graph(
+        model=models.resolve(
+            config.general_model_role
+        ),
+        config=config,
+        patient_context=patient_context
+    )
+
+    current_patient_graph = (
+        build_current_patient_graph(
+            model=models.resolve(
+                config
+                .current_patient_model_role
+            ),
+            config=config
+        )
+    )
+
+    web_research_graph = (
+        build_web_research_graph(
+            model=models.resolve(
+                config
+                .web_research_model_role
+            ),
+            config=config
+        )
+    )
+
+    memory_graph = build_memory_graph(
+        model=models.resolve(
+            config.memory_model_role
+        ),
+        config=config
+    )
+
+    builder = StateGraph(
+        SuperuserAgentState,
+        context_schema=AgentRuntimeContext
+    )
+
+    builder.add_node(
+        "prepare_context",
+        build_prepare_context_node(
+            config=config
+        )
+    )
+
+    builder.add_node(
+        "orchestrator",
+        orchestrator_graph
+    )
+
+    builder.add_node(
+        "validate_route",
+        validate_route_node
+    )
+
+    builder.add_node(
+        "prepare_agent_input",
+        build_prepare_agent_input_node(
+            config=config
+        )
+    )
+
+    builder.add_node(
+        "general",
+        general_graph
+    )
+
+    builder.add_node(
+        "current_patient",
+        current_patient_graph
+    )
+
+    builder.add_node(
+        "web_research",
+        web_research_graph
+    )
+
+    builder.add_node(
+        "memory",
+        memory_graph
+    )
+
+    builder.add_node(
+        "clarify",
+        clarify_node
+    )
+
+    builder.add_node(
+        "finalize_response",
+        finalize_response_node
+    )
+
+    builder.add_edge(
+        START,
+        "prepare_context"
+    )
+
+    builder.add_edge(
+        "prepare_context",
+        "orchestrator"
+    )
+
+    builder.add_edge(
+        "orchestrator",
+        "validate_route"
+    )
+
+    builder.add_edge(
+        "validate_route",
+        "prepare_agent_input"
+    )
+
+    builder.add_conditional_edges(
+        "prepare_agent_input",
+        route_to_agent,
+        {
+            "general": "general",
+            "current_patient": (
+                "current_patient"
+            ),
+            "web_research": (
+                "web_research"
+            ),
+            "memory": "memory",
+            "clarify": "clarify"
+        }
+    )
+
+    for node_name in (
+        "general",
+        "current_patient",
+        "web_research",
+        "memory",
+        "clarify"
+    ):
+        builder.add_edge(
+            node_name,
+            "finalize_response"
+        )
+
+    builder.add_edge(
+        "finalize_response",
+        END
+    )
+
+    return builder.compile(
+        checkpointer=checkpointer
+    )
+
+# ./backend/app/modules/ai_agents/superusers/tool_loop.py
+
+
+import json
+
+from fastapi.encoders import (
+    jsonable_encoder,
+)
+
+from collections.abc import (
+    Callable,
+    Sequence
+)
+
+from langchain_core.messages import (
+    AIMessage,
+    SystemMessage,
+    ToolMessage,
+)
+
+from .utils import (
+    normalize_message_content
+)
+
+from langchain_core.messages import (
+    message_chunk_to_message,
+)
+
+from langchain_core.runnables import (
+    RunnableConfig,
+)
+
+def initialize_agent_messages(
+    state
+) -> dict:
+    """
+    Скопировать ограниченный родительский
+    контекст во внутренний канал subgraph.
+    """
+
+    return {
+        "agent_messages": list(
+            state.get(
+                "messages",
+                []
+            )
+        ),
+        "tool_iterations": 0,
+        "final_response": ""
+    }
+
+def normalize_tool_messages(
+    messages: list,
+) -> list:
+    """
+    Groq требует, чтобы content сообщения
+    с role=tool был строкой либо непустым
+    списком.
+
+    Для совместимости преобразуем любой
+    нестроковый результат инструмента
+    в JSON-строку.
+    """
+
+    normalized_messages = []
+
+    for message in messages:
+        if not isinstance(
+            message,
+            ToolMessage,
+        ):
+            normalized_messages.append(
+                message
+            )
+            continue
+
+        content = message.content
+
+        if isinstance(content, str):
+            normalized_content = content
+
+        elif content is None:
+            normalized_content = "null"
+
+        else:
+            normalized_content = json.dumps(
+                jsonable_encoder(content),
+                ensure_ascii=False,
+            )
+
+        normalized_messages.append(
+            message.model_copy(
+                update={
+                    "content": (
+                        normalized_content
+                    ),
+                }
+            )
+        )
+
+    return normalized_messages
+
+def build_model_node(
+    model,
+    system_prompt: str,
+    tools: Sequence | None = None,
+) -> Callable:
+    """
+    Создать узел вызова модели.
+
+    RunnableConfig передаётся во вложенный
+    вызов модели, чтобы внешний LangGraph
+    видел потоковые chunks.
+    """
+
+    tools = list(
+        tools or []
+    )
+
+    model_with_tools = (
+        model.bind_tools(tools)
+        if tools
+        else model
+    )
+
+    async def call_model(
+        state,
+        config: RunnableConfig,
+    ) -> dict:
+        messages = [
+            SystemMessage(
+                content=system_prompt
+            ),
+            *state.get(
+                "agent_messages",
+                [],
+            ),
+        ]
+
+        model_messages = (
+            normalize_tool_messages(
+                messages
+            )
+        )
+
+        inherited_tags = list(
+            config.get(
+                "tags",
+                [],
+            )
+            or []
+        )
+
+        if (
+            "agent_stream_output"
+            not in inherited_tags
+        ):
+            inherited_tags.append(
+                "agent_stream_output"
+            )
+
+        stream_config: RunnableConfig = {
+            **config,
+            "tags": inherited_tags,
+        }
+
+        response_chunk = None
+
+        async for chunk in (
+            model_with_tools.astream(
+                model_messages,
+                config=stream_config,
+            )
+        ):
+            if response_chunk is None:
+                response_chunk = chunk
+            else:
+                response_chunk = (
+                    response_chunk + chunk
+                )
+
+        if response_chunk is None:
+            raise RuntimeError(
+                "Model stream finished "
+                "without a response"
+            )
+
+        response = (
+            message_chunk_to_message(
+                response_chunk
+            )
+        )
+
+        update = {
+            "agent_messages": [
+                response
+            ],
+        }
+
+        tool_calls = getattr(
+            response,
+            "tool_calls",
+            None,
+        ) or []
+
+        if not tool_calls:
+            update["final_response"] = (
+                normalize_message_content(
+                    response.content
+                )
+            )
+
+        return update
+
+    return call_model
+
+
+def build_after_model_router(
+    max_tool_iterations: int
+) -> Callable:
+    def route_after_model(
+        state
+    ) -> str:
+        messages = state.get(
+            "agent_messages",
+            []
+        )
+
+        if not messages:
+            return "end"
+
+        last_message = messages[-1]
+
+        if not isinstance(
+            last_message,
+            AIMessage
+        ):
+            return "end"
+
+        tool_calls = (
+            last_message.tool_calls
+            or []
+        )
+
+        if not tool_calls:
+            return "end"
+
+        tool_iterations = state.get(
+            "tool_iterations",
+            0
+        )
+
+        if (
+            tool_iterations
+            >= max_tool_iterations
+        ):
+            raise RuntimeError(
+                "Agent exceeded the maximum "
+                "number of tool iterations"
+            )
+
+        return "tools"
+
+    return route_after_model
+
+
+def increment_tool_iterations(
+    state
+) -> dict:
+    return {
+        "tool_iterations": (
+            state.get(
+                "tool_iterations",
+                0
+            )
+            + 1
+        )
+    }
+
+# ./backend/app/modules/ai_agents/superusers/tools/__init__.py
+
+# ./backend/app/modules/ai_agents/superusers/tools/patient_facts.py
+
+from sqlalchemy import (
+    func,
+    or_
+)
+from sqlmodel import (
+    Session,
+    select,
+)
+from fastapi.encoders import (
+    jsonable_encoder
+)
+from langchain.tools import (
+    ToolRuntime,
+    tool
+)
+from langgraph.types import (
+    interrupt
+)
+from ....patient_facts.enums import (
+    PatientFactCategory,
+    PatientFactSourceType,
+    PatientFactStatus
+)
+from ....patient_facts.models import (
+    PatientFact
+)
+from ....patient_facts.schemas import (
+    PatientFactCreate
+)
+from ....patient_facts.utils import (
+    create_patient_facts_batch,
+    get_patient_facts,
+    retract_patient_facts_batch
+)
+from ....users.models import User
+from ....users.patients.models import (
+    PatientProfile
+)
+from ...actions import (
+    approve_agent_action,
+    build_action_tool_call_id,
+    complete_agent_action,
+    get_or_create_agent_action,
+    get_or_create_patient_fact_action,
+    reject_agent_action
+)
+from ...common.runtime import (
+    AgentRuntimeContext
+)
+from ...enums import (
+    AgentActionStatus,
+    AgentActionType
+)
+from ...schemas import (
+    AgentResumeDecision,
+    PatientFactCandidate
+)
+
+def require_context_patient(
+    context: AgentRuntimeContext,
+    session: Session,
+) -> tuple[
+    PatientProfile,
+    User,
+]:
+    FUNCTION BODY
+    return (
+        patient_profile,
+        patient_user,
+    )
+def require_current_user(
+    context: AgentRuntimeContext,
+    session: Session,
+) -> User:
+    FUNCTION BODY
+    return current_user
+@@tool
+def get_current_patient_facts(
+    runtime: ToolRuntime[
+        AgentRuntimeContext
+    ],
+    limit: int = 50,
+) -> list[dict]:
+    """
+    Получить подтверждённые медицинские
+    факты пациента, выбранного в текущем
+    контексте чата.
+
+    Доступно только при активном
+    patient context.
+    """
+    FUNCTION BODY
+        return [
+            {
+                "id": fact.id,
+                "category": (
+                    fact.category.value
+                ),
+                "fact_key": fact.fact_key,
+                "summary": fact.summary,
+                "value_number": (
+                    fact.value_number
+                ),
+                "value_text": fact.value_text,
+                "unit": fact.unit,
+                "reference_range": (
+                    fact.reference_range
+                ),
+                "observed_at": (
+                    fact.observed_at.isoformat()
+                    if fact.observed_at
+                    else None
+                ),
+                "verification_status": (
+                    fact
+                    .verification_status
+                    .value
+                ),
+                "created_at": (
+                    fact.created_at.isoformat()
+                ),
+            }
+            for fact in facts
+        ]
+@@tool
+def propose_current_patient_facts(
+    runtime: ToolRuntime[
+        AgentRuntimeContext
+    ],
+    facts: list[
+        PatientFactCandidate
+    ]
+) -> dict:
+    """
+    Предложить добавление медицинских
+    фактов выбранному пациенту.
+
+    Этот инструмент всегда требует
+    подтверждения пользователя.
+
+    observed_at:
+    - если известна только дата, передавать
+      YYYY-MM-DD;
+    - если известно время, передавать
+      YYYY-MM-DDTHH:MM:SS;
+    - не придумывать дату или время.
+
+    Каждый лабораторный показатель
+    передавать отдельным фактом.
+
+    Использовать для:
+    - лабораторных показателей;
+    - симптомов;
+    - лекарств;
+    - аллергий;
+    - анамнеза;
+    - привычек;
+    - жизненных показателей.
+
+    Не вызывать, если пользователь просто
+    задаёт медицинский вопрос и не просит
+    сохранить данные.
+    """
+    FUNCTION BODY
+        return {
+            "saved": True,
+            "rejected": False,
+            "action_id": action.id,
+            **result
+        }
+def serialize_patient_fact(
+    fact: PatientFact
+) -> dict:
+    FUNCTION BODY
+    return {
+        "id": fact.id,
+        "category": (
+            fact.category.value
+        ),
+        "fact_key": fact.fact_key,
+        "summary": fact.summary,
+        "value_number": (
+            fact.value_number
+        ),
+        "value_text": fact.value_text,
+        "unit": fact.unit,
+        "reference_range": (
+            fact.reference_range
+        ),
+        "observed_at": (
+            fact.observed_at.isoformat()
+            if fact.observed_at
+            else None
+        ),
+        "verification_status": (
+            fact.verification_status.value
+        ),
+        "created_at": (
+            fact.created_at.isoformat()
+        )
+    }
+@@tool
+def search_current_patient_facts(
+    runtime: ToolRuntime[
+        AgentRuntimeContext
+    ],
+    category: (
+        PatientFactCategory | None
+    ) = None,
+    query: str = "",
+    limit: int = 50
+) -> dict:
+    """
+    Найти активные медицинские факты
+    выбранного пациента.
+
+    Использовать перед предложением
+    отзыва PatientFact.
+
+    Примеры:
+    - все аллергии:
+      category=allergy;
+    - аллергия на пенициллин:
+      category=allergy,
+      query=пенициллин.
+
+    Возвращает точные ID фактов.
+    """
+    FUNCTION BODY
+        return {
+            "items": [
+                serialize_patient_fact(
+                    fact
+                )
+                for fact in facts
+            ],
+            "total": total,
+            "returned": len(facts),
+            "truncated": (
+                total > len(facts)
+            )
+        }
+@@tool
+def propose_retract_current_patient_facts(
+    runtime: ToolRuntime[
+        AgentRuntimeContext
+    ],
+    fact_ids: list[str],
+    reason: str | None = None
+) -> dict:
+    """
+    Предложить отзыв медицинских фактов
+    выбранного пациента.
+
+    Этот инструмент всегда требует
+    подтверждения пользователя.
+
+    Перед вызовом обязательно использовать
+    search_current_patient_facts и передать
+    точные ID найденных фактов.
+
+    Нельзя придумывать ID.
+    Нельзя отзывать результат неполного
+    поиска, если truncated=true.
+    """
+    FUNCTION BODY
+        return {
+            "retracted": True,
+            "rejected": False,
+            "action_id": action.id,
+            **result
+        }
+
+# ./backend/app/modules/ai_agents/superusers/tools/patients.py
+
+from sqlalchemy import (
+    func,
+    or_
+)
+from sqlmodel import (
+    Session,
+    select,
+)
+from langchain.tools import (
+    ToolRuntime,
+    tool
+)
+from ....users.enums import (
+    UserRole
+)
+from ....users.models import (
+    User
+)
+from ....users.patients.models import (
+    PatientProfile,
+    PatientPhysicianLink,
+    PatientRelativeLink
+)
+from ....users.doctors.models import (
+    PhysicianProfile
+)
+from ....users.relatives.models import (
+    RelativeProfile
+)
+from ...common.runtime import (
+    AgentRuntimeContext
+)
+
+def require_superuser(
+    runtime: ToolRuntime[
+        AgentRuntimeContext
+    ]
+) -> AgentRuntimeContext:
+    FUNCTION BODY
+    return context
+def serialize_patient(
+    user: User,
+    profile: PatientProfile
+) -> dict:
+    FUNCTION BODY
+    return {
+        "patient_user_id": user.id,
+        "patient_profile_id": profile.id,
+        "full_name": (
+            user.get_full_name()
+            or "Имя не указано"
+        ),
+        "record_id": profile.record_id,
+        "email": user.email,
+        "is_active": user.is_active,
+        "is_blocked": user.is_blocked,
+        "is_registered": bool(
+            user.email
+            or user.has_passkey
+        ),
+        "created_at": (
+            user.created_at.isoformat()
+        )
+    }
+@@tool
+def list_patients(
+    runtime: ToolRuntime[
+        AgentRuntimeContext
+    ],
+    page: int = 1,
+    page_size: int = 20,
+) -> dict:
+    """
+    Получить список пациентов.
+
+    Использовать, когда суперпользователь
+    просит показать всех пациентов или
+    перечислить пациентов.
+    """
+    FUNCTION BODY
+        return {
+            "items": [
+                serialize_patient(
+                    user=user,
+                    profile=profile
+                )
+                for user, profile in rows
+            ],
+            "page": normalized_page,
+            "page_size": (
+                normalized_page_size
+            ),
+            "total": total,
+            "has_next": (
+                normalized_page
+                * normalized_page_size
+                < total
+            )
+        }
+@@tool
+def find_patients(
+    runtime: ToolRuntime[
+        AgentRuntimeContext
+    ],
+    query: str,
+    limit: int = 20
+) -> list[dict]:
+    """
+    Найти пациентов по ФИО, отдельной
+    части имени, email или номеру карты.
+
+    Если найдено несколько пациентов,
+    не выбирать одного самостоятельно.
+    """
+    FUNCTION BODY
+        return [
+            serialize_patient(
+                user=user,
+                profile=profile
+            )
+            for user, profile in rows
+        ]
+def build_patient_summary(
+    session: Session,
+    patient_user_id: str,
+) -> dict:
+    FUNCTION BODY
+    return {
+        "found": True,
+        "patient": serialize_patient(
+            user=patient_user,
+            profile=patient_profile
+        ),
+        "physicians": physicians,
+        "relatives": relatives
+    }
+@@tool
+def get_patient_summary(
+    runtime: ToolRuntime[
+        AgentRuntimeContext
+    ],
+    patient_user_id: str,
+) -> dict:
+    """
+    Получить базовую информацию о пациенте
+    в общем режиме.
+
+    patient_user_id необходимо брать
+    из list_patients или find_patients.
+    """
+    FUNCTION BODY
+        return build_patient_summary(
+            session=session,
+            patient_user_id=patient_user_id,
+        )
+@@tool
+def get_current_patient_summary(
+    runtime: ToolRuntime[
+        AgentRuntimeContext
+    ],
+) -> dict:
+    """
+    Получить базовую информацию о пациенте,
+    который выбран в текущем контексте чата.
+
+    Не требует patient_user_id.
+    """
+    FUNCTION BODY
+        return build_patient_summary(
+            session=session,
+            patient_user_id=(
+                patient_profile.user_id
+            ),
+        )
+
+# ./backend/app/modules/ai_agents/superusers/utils.py
+
+
+import logging
+logger = logging.getLogger(
+    __name__
+)
+
+import json
+
+from fastapi.encoders import (
+    jsonable_encoder
+)
+from langchain_core.messages import (
+    AIMessage
+)
+
+from langchain_core.messages.utils import (
+    count_tokens_approximately
+)
+
+def normalize_message_content(
+    content
+) -> str:
+    if content is None:
+        return ""
+
+    if isinstance(content, str):
+        return content.strip()
+
+    if isinstance(content, list):
+        values = []
+
+        for item in content:
+            if isinstance(item, str):
+                values.append(item)
+                continue
+
+            if isinstance(item, dict):
+                text = (
+                    item.get("text")
+                    or item.get("content")
+                )
+
+                if text:
+                    values.append(
+                        str(text)
+                    )
+
+        if values:
+            return "".join(
+                values
+            ).strip()
+
+    try:
+        return json.dumps(
+            jsonable_encoder(content),
+            ensure_ascii=False
+        )
+
+    except Exception:
+        return str(content).strip()
+
+
+def truncate_text(
+    value: str | None,
+    max_chars: int
+) -> str:
+    if not value:
+        return ""
+
+    normalized = str(value).strip()
+
+    if len(normalized) <= max_chars:
+        return normalized
+
+    return (
+        normalized[:max_chars]
+        + "\n...[контекст сокращён]"
+    )
+
+def trim_conversation_messages(
+    messages: list,
+    token_budget: int
+) -> list:
+    """
+    Удаляет самые старые сообщения истории.
+
+    System prompts здесь отсутствуют, поэтому
+    функция обрезает исключительно сообщения
+    диалога.
+
+    Последнее сообщение пользователя всегда
+    сохраняется, даже если оно само превышает
+    бюджет.
+    """
+
+    if not messages:
+        return []
+
+    if token_budget <= 0:
+        return [
+            messages[-1]
+        ]
+
+    trimmed = list(messages)
+
+    initial_tokens = (
+        count_tokens_approximately(
+            trimmed
+        )
+    )
+
+    while (
+        len(trimmed) > 1
+        and count_tokens_approximately(
+            trimmed
+        ) > token_budget
+    ):
+        trimmed.pop(0)
+
+        """
+         После удаления HumanMessage может
+         остаться ответ AI без вопроса.
+         Такие сообщения тоже удаляем.
+        """
+
+        while (
+            len(trimmed) > 1
+            and isinstance(
+                trimmed[0],
+                AIMessage
+            )
+        ):
+            trimmed.pop(0)
+
+    final_tokens = (
+        count_tokens_approximately(
+            trimmed
+        )
+    )
+
+    if len(trimmed) < len(messages):
+        logger.info(
+            "Conversation history trimmed: "
+            "messages=%s->%s tokens=%s->%s "
+            "budget=%s",
+            len(messages),
+            len(trimmed),
+            initial_tokens,
+            final_tokens,
+            token_budget
+        )
+
+    if final_tokens > token_budget:
+        logger.warning(
+            "Latest conversation message "
+            "exceeds token budget: "
+            "tokens=%s budget=%s",
+            final_tokens,
+            token_budget
+        )
+
+    return trimmed
+
+# ./backend/app/modules/ai_agents/superusers/web_research/graph.py
+
+
+from langgraph.graph import (
+    END,
+    START,
+    StateGraph
+)
+
+from langgraph.prebuilt import (
+    ToolNode
+)
+
+from ...common.runtime import (
+    AgentRuntimeContext
+)
+
+from ...common.state import (
+    ToolAgentState
+)
+
+from ...common.tools.web import (
+    list_available_medical_sources,
+    scrape_web_page,
+    search_medical_sources,
+    web_search
+)
+
+from ..config import (
+    SuperuserAgentConfig
+)
+
+from ..tool_loop import (
+    build_after_model_router,
+    build_model_node,
+    increment_tool_iterations,
+    initialize_agent_messages
+)
+
+from .prompt import (
+    WEB_RESEARCH_AGENT_PROMPT
+)
+
+
+def build_web_research_graph(
+    model,
+    config: SuperuserAgentConfig
+):
+    tools = [
+        web_search,
+        search_medical_sources,
+        scrape_web_page,
+        list_available_medical_sources
+    ]
+
+    builder = StateGraph(
+        ToolAgentState,
+        context_schema=AgentRuntimeContext
+    )
+
+    builder.add_node(
+        "initialize",
+        initialize_agent_messages
+    )
+
+    builder.add_node(
+        "model",
+        build_model_node(
+            model=model,
+            system_prompt=(
+                WEB_RESEARCH_AGENT_PROMPT
+            ),
+            tools=tools
+        )
+    )
+
+    builder.add_node(
+        "tools",
+        ToolNode(
+            tools=tools,
+            messages_key=(
+                "agent_messages"
+            ),
+            handle_tool_errors=True
+        )
+    )
+
+    builder.add_node(
+        "increment_tool_iterations",
+        increment_tool_iterations
+    )
+
+    builder.add_edge(
+        START,
+        "initialize"
+    )
+
+    builder.add_edge(
+        "initialize",
+        "model"
+    )
+
+    builder.add_conditional_edges(
+        "model",
+        build_after_model_router(
+            config.max_tool_iterations
+        ),
+        {
+            "tools": "tools",
+            "end": END
+        }
+    )
+
+    builder.add_edge(
+        "tools",
+        "increment_tool_iterations"
+    )
+
+    builder.add_edge(
+        "increment_tool_iterations",
+        "model"
+    )
+
+    return builder.compile(
+        checkpointer=None
+    )
+
+# ./backend/app/modules/ai_agents/superusers/web_research/prompt.py
+
+
+from ..policies import (
+    SUPERUSER_COMMON_POLICIES
+)
+
+
+WEB_RESEARCH_AGENT_PROMPT = (
+    """
+Ты — специализированный агент
+медицинского веб-исследования.
+
+Выполняй веб-поиск только для текущего
+явного запроса пользователя или как
+продолжение предыдущего веб-исследования.
+
+Выбор tools:
+- для медицинских вопросов сначала
+  используй search_medical_sources;
+- предпочтительные источники:
+  pubmed, who, nih, cochrane, nice,
+  esc, aha, cdc;
+- web_search используй для общего поиска
+  или если специализированные источники
+  не подходят;
+- scrape_web_page используй для чтения
+  конкретной найденной страницы;
+- list_available_medical_sources используй,
+  если пользователь спрашивает о доступных
+  источниках.
+
+Конфиденциальность:
+- никогда не отправляй во внешний поиск
+  ФИО пациента;
+- не отправляй email, номер карты,
+  телефон, адрес или другие идентификаторы;
+- используй только обезличенные
+  клинические параметры;
+- не включай в query данные, не относящиеся
+  к вопросу пользователя.
+
+Работа с предыдущими источниками:
+- тебе может быть передан реестр ранее
+  найденных ссылок;
+- если пользователь просит открыть первый,
+  второй или другой источник, используй
+  URL из этого реестра;
+- не выполняй повторный общий поиск, если
+  пользователь просит подробнее раскрыть
+  уже найденный источник.
+
+Работа с результатами:
+- если results пуст, сообщи, что подходящие
+  результаты не найдены;
+- не придумывай содержание страницы по
+  одному title или snippet;
+- отделяй сведения из snippet от сведений,
+  полученных после scrape_web_page;
+- не называй источник прочитанным, если
+  scrape_web_page вернул ok=false;
+- если страница недоступна, укажи URL
+  и предложи открыть его вручную.
+
+Оформление:
+- нумеруй источники;
+- используй кликабельные Markdown-ссылки;
+- связывай существенные тезисы
+  с источниками;
+- отдельно указывай ограничения;
+- не выдавай веб-поиск за диагноз;
+- не назначай лечение только на основании
+  найденных веб-страниц.
+"""
+    + "\n"
+    + SUPERUSER_COMMON_POLICIES
+)

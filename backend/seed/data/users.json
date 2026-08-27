@@ -1,0 +1,149 @@
+{
+  "_path": "./backend/seed/data/users.json",
+  "specialities": [
+    {
+      "code": "therapist",
+      "name": "Терапевт",
+      "description": "Врач общей терапевтической практики"
+    },
+    {
+      "code": "psychiatrist",
+      "name": "Психиатр",
+      "description": "Врач-психиатр"
+    }
+  ],
+  "users": [
+    {
+      "key": "superuser",
+      "email": "superuser@example.com",
+      "password": "secret",
+      "first_name": "Главный",
+      "last_name": "Администратор",
+      "roles": [
+        {
+          "role": "superuser",
+          "is_primary": true
+        }
+      ],
+      "email_verified": true
+    },
+    {
+      "key": "medassistant1",
+      "email": "medassistant1@example.com",
+      "password": "secret",
+      "first_name": "Мария",
+      "last_name": "Ассистентова",
+      "roles": [
+        {
+          "role": "med_assistant",
+          "is_primary": true
+        }
+      ],
+      "email_verified": true
+    },
+    {
+      "key": "doctor1",
+      "email": "doctor1@example.com",
+      "password": "secret",
+      "first_name": "Алексей",
+      "last_name": "Терапевтов",
+      "roles": [
+        {
+          "role": "doctor",
+          "is_primary": true
+        }
+      ],
+      "doctor": {
+        "speciality": "Терапевт"
+      },
+      "email_verified": true
+    },
+    {
+      "key": "doctor2",
+      "email": "doctor2@example.com",
+      "password": "secret",
+      "first_name": "Анна",
+      "last_name": "Психиатрическая",
+      "roles": [
+        {
+          "role": "doctor",
+          "is_primary": true
+        }
+      ],
+      "doctor": {
+        "speciality": "Психиатр"
+      },
+      "email_verified": true
+    },
+    {
+      "key": "patient1",
+      "email": "patient1@example.com",
+      "password": "secret",
+      "first_name": "Иван",
+      "last_name": "Пациентов",
+      "roles": [
+        {
+          "role": "patient",
+          "is_primary": true
+        }
+      ],
+      "patient": {
+        "record_id": "CARD-000001",
+        "fullname": "Пациентов Иван Сергеевич",
+        "dob": "1990-01-15"
+      },
+      "email_verified": true
+    },
+    {
+      "key": "patient2",
+      "email": "patient2@example.com",
+      "password": "secret",
+      "first_name": "Елена",
+      "last_name": "Пациентова",
+      "roles": [
+        {
+          "role": "patient",
+          "is_primary": true
+        }
+      ],
+      "patient": {
+        "record_id": "CARD-000002",
+        "fullname": "Пациентова Елена Андреевна",
+        "dob": "1987-08-22"
+      },
+      "email_verified": true
+    },
+    {
+      "key": "relative1",
+      "email": "relative1@example.com",
+      "password": "secret",
+      "first_name": "Пётр",
+      "last_name": "Родственников",
+      "roles": [
+        {
+          "role": "relative",
+          "is_primary": true
+        }
+      ],
+      "relative": {},
+      "email_verified": true
+    }
+  ],
+  "doctor_patient_links": [
+    {
+      "doctor": "doctor1",
+      "patient": "patient1"
+    },
+    {
+      "doctor": "doctor2",
+      "patient": "patient2"
+    }
+  ],
+  "relative_patient_links": [
+    {
+      "relative": "relative1",
+      "patient": "patient1",
+      "relationship_degree": "Брат"
+    }
+  ]
+}

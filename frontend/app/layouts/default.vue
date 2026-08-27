@@ -1,0 +1,18 @@
+<!-- ./frontend/app/layouts/default.vue -->
+<script setup>
+</script>
+
+<template>
+  <div class="bg-base-200 flex min-h-dvh flex-col">
+    <LayoutEmailVerificationBanner />
+    <LayoutNavbar />
+
+    <main
+      class="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:py-8"
+    >
+      <slot />
+    </main>
+
+    <LayoutFooter />
+  </div>
+</template>

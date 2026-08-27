@@ -1,0 +1,272 @@
+{
+  "title": "AUDIT — тест для выявления расстройств, связанных с употреблением алкоголя",
+  "description": "Alcohol Use Disorders Identification Test (AUDIT), разработанный Всемирной организацией здравоохранения. Опросник состоит из 10 вопросов об употреблении алкоголя.",
+  "pro_content": false,
+  "tag_ids": [],
+  "questions": [
+    {
+      "question_type": "single_choice",
+      "text": "Как часто вы употребляете алкогольные напитки?",
+      "is_required": true,
+      "order_index": 0,
+      "options": [
+        {
+          "text": "Никогда",
+          "order_index": 0
+        },
+        {
+          "text": "Раз в месяц или реже",
+          "order_index": 1
+        },
+        {
+          "text": "2–4 раза в месяц",
+          "order_index": 2
+        },
+        {
+          "text": "2–3 раза в неделю",
+          "order_index": 3
+        },
+        {
+          "text": "4 раза в неделю или чаще",
+          "order_index": 4
+        }
+      ]
+    },
+    {
+      "question_type": "single_choice",
+      "text": "Сколько стандартных порций алкоголя вы обычно выпиваете в день, когда употребляете алкоголь?",
+      "is_required": true,
+      "order_index": 1,
+      "options": [
+        {
+          "text": "1–2",
+          "order_index": 0
+        },
+        {
+          "text": "3–4",
+          "order_index": 1
+        },
+        {
+          "text": "5–6",
+          "order_index": 2
+        },
+        {
+          "text": "7–9",
+          "order_index": 3
+        },
+        {
+          "text": "10 или больше",
+          "order_index": 4
+        }
+      ]
+    },
+    {
+      "question_type": "single_choice",
+      "text": "Как часто вы выпиваете 6 или более стандартных порций алкоголя за один раз?",
+      "is_required": true,
+      "order_index": 2,
+      "options": [
+        {
+          "text": "Никогда",
+          "order_index": 0
+        },
+        {
+          "text": "Реже одного раза в месяц",
+          "order_index": 1
+        },
+        {
+          "text": "Ежемесячно",
+          "order_index": 2
+        },
+        {
+          "text": "Еженедельно",
+          "order_index": 3
+        },
+        {
+          "text": "Ежедневно или почти ежедневно",
+          "order_index": 4
+        }
+      ]
+    },
+    {
+      "question_type": "single_choice",
+      "text": "Как часто за последний год вы обнаруживали, что не можете прекратить употребление алкоголя после того, как начали пить?",
+      "is_required": true,
+      "order_index": 3,
+      "options": [
+        {
+          "text": "Никогда",
+          "order_index": 0
+        },
+        {
+          "text": "Реже одного раза в месяц",
+          "order_index": 1
+        },
+        {
+          "text": "Ежемесячно",
+          "order_index": 2
+        },
+        {
+          "text": "Еженедельно",
+          "order_index": 3
+        },
+        {
+          "text": "Ежедневно или почти ежедневно",
+          "order_index": 4
+        }
+      ]
+    },
+    {
+      "question_type": "single_choice",
+      "text": "Как часто за последний год из-за употребления алкоголя вы не могли выполнить то, что обычно от вас ожидалось?",
+      "is_required": true,
+      "order_index": 4,
+      "options": [
+        {
+          "text": "Никогда",
+          "order_index": 0
+        },
+        {
+          "text": "Реже одного раза в месяц",
+          "order_index": 1
+        },
+        {
+          "text": "Ежемесячно",
+          "order_index": 2
+        },
+        {
+          "text": "Еженедельно",
+          "order_index": 3
+        },
+        {
+          "text": "Ежедневно или почти ежедневно",
+          "order_index": 4
+        }
+      ]
+    },
+    {
+      "question_type": "single_choice",
+      "text": "Как часто за последний год вам требовалось выпить утром, чтобы прийти в себя после употребления большого количества алкоголя накануне?",
+      "is_required": true,
+      "order_index": 5,
+      "options": [
+        {
+          "text": "Никогда",
+          "order_index": 0
+        },
+        {
+          "text": "Реже одного раза в месяц",
+          "order_index": 1
+        },
+        {
+          "text": "Ежемесячно",
+          "order_index": 2
+        },
+        {
+          "text": "Еженедельно",
+          "order_index": 3
+        },
+        {
+          "text": "Ежедневно или почти ежедневно",
+          "order_index": 4
+        }
+      ]
+    },
+    {
+      "question_type": "single_choice",
+      "text": "Как часто за последний год после употребления алкоголя вы испытывали чувство вины или угрызения совести?",
+      "is_required": true,
+      "order_index": 6,
+      "options": [
+        {
+          "text": "Никогда",
+          "order_index": 0
+        },
+        {
+          "text": "Реже одного раза в месяц",
+          "order_index": 1
+        },
+        {
+          "text": "Ежемесячно",
+          "order_index": 2
+        },
+        {
+          "text": "Еженедельно",
+          "order_index": 3
+        },
+        {
+          "text": "Ежедневно или почти ежедневно",
+          "order_index": 4
+        }
+      ]
+    },
+    {
+      "question_type": "single_choice",
+      "text": "Как часто за последний год из-за употребления алкоголя вы не могли вспомнить, что происходило накануне вечером?",
+      "is_required": true,
+      "order_index": 7,
+      "options": [
+        {
+          "text": "Никогда",
+          "order_index": 0
+        },
+        {
+          "text": "Реже одного раза в месяц",
+          "order_index": 1
+        },
+        {
+          "text": "Ежемесячно",
+          "order_index": 2
+        },
+        {
+          "text": "Еженедельно",
+          "order_index": 3
+        },
+        {
+          "text": "Ежедневно или почти ежедневно",
+          "order_index": 4
+        }
+      ]
+    },
+    {
+      "question_type": "single_choice",
+      "text": "Получали ли вы или кто-либо другой травму в результате вашего употребления алкоголя?",
+      "is_required": true,
+      "order_index": 8,
+      "options": [
+        {
+          "text": "Нет",
+          "order_index": 0
+        },
+        {
+          "text": "Да, но не за последний год",
+          "order_index": 1
+        },
+        {
+          "text": "Да, за последний год",
+          "order_index": 2
+        }
+      ]
+    },
+    {
+      "question_type": "single_choice",
+      "text": "Выражал ли родственник, друг, врач или другой медицинский работник обеспокоенность вашим употреблением алкоголя или советовал вам сократить его?",
+      "is_required": true,
+      "order_index": 9,
+      "options": [
+        {
+          "text": "Нет",
+          "order_index": 0
+        },
+        {
+          "text": "Да, но не за последний год",
+          "order_index": 1
+        },
+        {
+          "text": "Да, за последний год",
+          "order_index": 2
+        }
+      ]
+    }
+  ]
+}

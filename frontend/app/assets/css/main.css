@@ -1,0 +1,37 @@
+/* ./frontend/app/assets/css/main.css */
+@import "tailwindcss";
+
+@plugin "daisyui" {
+  themes: light --default, dark --prefersdark;
+}
+
+html {
+  min-height: 100%;
+  background-color: var(--color-base-200);
+}
+
+body {
+  min-height: 100dvh;
+  margin: 0;
+  overscroll-behavior-y: none;
+}
+
+#__nuxt {
+  min-height: 100dvh;
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.safe-area-bottom {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+
+.safe-area-top {
+  padding-top: env(safe-area-inset-top);
+}

@@ -1,0 +1,34 @@
+{
+  "name": "frontend",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "nuxt build",
+    "dev": "nuxt dev",
+    "generate": "nuxt generate",
+    "preview": "nuxt preview",
+    "postinstall": "nuxt prepare"
+  },
+  "dependencies": {
+    "@nuxt/icon": "^2.5.0",
+    "@pinia/nuxt": "^1.0.2",
+    "@tailwindcss/vite": "^4.3.3",
+    "@tiptap/extension-link": "^3.30.3",
+    "@tiptap/extension-placeholder": "^3.30.3",
+    "@tiptap/extension-underline": "^3.30.3",
+    "@tiptap/starter-kit": "^3.30.3",
+    "@tiptap/vue-3": "^3.30.3",
+    "daisyui": "^5.7.21",
+    "dompurify": "^3.4.14",
+    "nuxt": "^4.5.2",
+    "pinia": "^4.0.3",
+    "qrcode": "^1.5.4",
+    "tailwindcss": "^4.3.3",
+    "vue": "^3.5.41",
+    "vue-draggable-plus": "^0.6.1",
+    "vue-router": "^5.2.0"
+  },
+  "devDependencies": {
+    "@iconify-json/lucide": "^1.2.125"
+  }
+}
