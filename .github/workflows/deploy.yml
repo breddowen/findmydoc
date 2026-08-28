@@ -129,7 +129,7 @@ jobs:
             deploy/ \
             "${VPS_USER}@${VPS_HOST}:/opt/findmydoc/deploy/"
 
-      - name: Run deployment
+      - name: Run deployment 
         shell: bash
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}

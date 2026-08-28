@@ -2378,6 +2378,14 @@ git checkout develop
 git merge main
 git push origin develop
 ```
+```bash
+git checkout develop
+git merge main
+git status
+git add .
+git commit -m "Fix deployment configuration"
+git push origin develop
+```
 
 GitHub Actions:
 
