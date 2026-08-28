@@ -1875,7 +1875,7 @@ git commit -m "Prepare Docker deployment"
 5. После создания выполните команды, которые покажет GitHub:
 
 ```bash
-git remote add origin git@github.com:YOUR_USERNAME/findmydoc.git
+git remote add origin git@github.com:breddowen/findmydoc.git
 git push -u origin main
 ```
 
@@ -2061,7 +2061,8 @@ chmod 600 /home/deploy/.ssh/authorized_keys
 Проверьте вход:
 
 ```bash
-ssh -i ./findmydoc_deploy_key deploy@VDS_IP
+ssh -i ./findmydoc_deploy_key deploy@159.194.242.7
+
 ```
 
 ---
@@ -2098,7 +2099,7 @@ staging
 Получить `VPS_KNOWN_HOSTS` можно локально:
 
 ```bash
-ssh-keyscan -H VDS_IP
+ssh-keyscan -H 159.194.242.7
 ```
 
 Лучше сначала вручную сверить fingerprint сервера:
@@ -2115,6 +2116,7 @@ ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub
 
 GitHub Actions сможет загружать private images через `GITHUB_TOKEN`. Но VDS нужен отдельный токен для скачивания.
 
+https://github.com/settings/tokens
 В GitHub создайте Personal Access Token с минимальным правом:
 
 ```text
@@ -2176,7 +2178,6 @@ openssl rand -hex 48
 ```bash
 openssl rand -hex 32
 ```
-
 Используйте буквенно-цифровой или hex-пароль. Это важно, потому что пароль подставляется непосредственно в PostgreSQL URL.
 
 ## Production Compose env
@@ -2200,7 +2201,7 @@ BACKEND_NETWORK_ALIAS=backend-prod
 FRONTEND_NETWORK_ALIAS=frontend-prod
 
 POSTGRES_USER=mentalme
-POSTGRES_PASSWORD=GENERATED_HEX_PASSWORD
+POSTGRES_PASSWORD=Admin21i03i85@
 POSTGRES_DB=mentalme
 ```
 
