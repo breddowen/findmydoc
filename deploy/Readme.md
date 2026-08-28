@@ -2022,10 +2022,7 @@ docker network create findmydoc_proxy
 На локальной машине создайте отдельный ключ:
 
 ```bash
-ssh-keygen \
-  -t ed25519 \
-  -C "github-actions-findmydoc" \
-  -f ./findmydoc_deploy_key
+ssh-keygen -t ed25519 -C "github-actions-findmydoc" -f ./findmydoc_deploy_key
 ```
 
 Для автоматического deployment ключ должен быть без passphrase.
@@ -2033,9 +2030,8 @@ ssh-keygen \
 Скопируйте публичный ключ на сервер:
 
 ```bash
-ssh-copy-id \
-  -i ./findmydoc_deploy_key.pub \
-  deploy@VDS_IP
+cat .\findmydoc_deploy_key.pub
+
 ```
 
 Или вручную добавьте содержимое:
@@ -2093,7 +2089,7 @@ staging
 | `VPS_HOST` | IP или hostname VDS |
 | `VPS_PORT` | `22` |
 | `VPS_USER` | `deploy` |
-| `VPS_SSH_PRIVATE_KEY` | содержимое приватного deployment-ключа |
+| `VPS_SSH_PRIVATE_KEY` | содержимое приватного deployment-ключа | cat /.ssh/authorized_keysfindmydoc_deploy_key
 | `VPS_KNOWN_HOSTS` | запись SSH host key |
 
 Получить `VPS_KNOWN_HOSTS` можно локально:
@@ -2382,7 +2378,7 @@ git push origin develop
 git checkout develop
 git merge main
 git status
-git add .
+git add . 
 git commit -m "Fix deployment configuration"
 git push origin develop
 ```
