@@ -136,7 +136,7 @@ jobs:
           VPS_PORT: ${{ secrets.VPS_PORT || '22' }}
           VPS_USER: ${{ secrets.VPS_USER }}
           TARGET: ${{ steps.target.outputs.name }}
-          IMAGE_PREFIX: ${{ needs.build.outputs.image_prefix }}
+          IMAGE_PREFIX: ${{ needs.build.outputs.image_prefix }}  
           IMAGE_TAG: ${{ needs.build.outputs.image_tag }}
         run: |
           ssh \
