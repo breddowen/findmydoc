@@ -1,20 +1,38 @@
 staging:
+# 1. Переключиться на develop ДО внесения изменений
 git switch develop
+# 2. Получить актуальный develop
 git pull --ff-only origin develop
+# 3. ВНОСИШЬ ИЗМЕНЕНИЯ В КОД
+# После изменений проверяешь:
+git status
+git diff
+# 4. Коммитишь изменения
 git add .
-git commit -m "Prevent email tokens from leaking into production logs"
-git push origin HEAD:develop
+git commit -m "Описание изменений"
+# 5. Отправляешь в develop
+# Это должно запустить deployment на STAGING
+git push origin develop
 
 --- После проверки staging перенесите в production ---
 
+# 6. Убедиться, что незакоммиченных файлов нет
 git status
+# 7. Получить актуальное состояние сервера
 git fetch origin
+# 8. Переключиться на main
 git switch main
+# 9. Обновить локальный main
 git pull --ff-only origin main
-git merge --no-ff origin/develop -m "Promote email logging fix to production"
-git push origin HEAD:main
-git switch develop
+# 10. Влить проверенный develop в main
+git merge --no-ff origin/develop -m "Promote develop to production"
+# 11. Отправить main
+# Это должно запустить deployment на PRODUCTION
+git push origin main
 
+# После успешного production deployment возвращаемся в рабочую ветку:
+git switch develop
+git pull --ff-only origin develop
 
 # FindMyDoc: развёртывание и эксплуатация
 
