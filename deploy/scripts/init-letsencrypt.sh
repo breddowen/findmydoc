@@ -82,7 +82,6 @@ docker run --rm \
     /etc/letsencrypt/live/staging.findmydoc.ru \
     /etc/letsencrypt/archive/staging.findmydoc.ru \
     /etc/letsencrypt/renewal/staging.findmydoc.ru.conf
-  '
 
 echo "Requesting production certificate..."
 
