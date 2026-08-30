@@ -105,14 +105,26 @@ jobs:
           SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
           VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
         run: |
+          set -euo pipefail
+
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
 
-          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$SSH_PRIVATE_KEY" \
+            | sed 's/\r$//' \
+            > ~/.ssh/id_ed25519
+
           chmod 600 ~/.ssh/id_ed25519
 
-          printf '%s\n' "$VPS_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          printf '%s\n' "$VPS_KNOWN_HOSTS" \
+            | sed 's/\r$//' \
+            > ~/.ssh/known_hosts
+
           chmod 600 ~/.ssh/known_hosts
+
+          echo "Private key fingerprint:"
+          ssh-keygen -y -f ~/.ssh/id_ed25519 > /tmp/deploy-key.pub
+          ssh-keygen -lf /tmp/deploy-key.pub
 
       - name: Upload deployment configuration
         shell: bash
