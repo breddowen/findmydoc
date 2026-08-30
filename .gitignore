@@ -56,3 +56,9 @@ backups/
 !deploy/postgres/
 !deploy/postgres/init/
 !deploy/postgres/init/01-enable-pgcrypto.sql
+# Never commit deployment SSH keys
+findmydoc_deploy_key
+findmydoc_deploy_key.pub
+derived-public-key.pub
+*_deploy_key
+*_deploy_key.pub
