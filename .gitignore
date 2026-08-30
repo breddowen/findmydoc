@@ -60,5 +60,5 @@ backups/
 findmydoc_deploy_key
 findmydoc_deploy_key.pub
 derived-public-key.pub
-*_deploy_key
+*_deploy_key 
 *_deploy_key.pub
