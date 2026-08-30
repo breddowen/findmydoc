@@ -2411,7 +2411,6 @@ git pull --ff-only origin develop
 
 # 5. Посмотреть изменения
 git status
-git diff
 
 # 6. Добавить изменения
 git add .
@@ -2419,7 +2418,6 @@ git add .
 # 7. Обязательно проверить, что попадёт в commit
 git status
 git diff --cached --stat
-git diff --cached
 
 # 8. Создать commit
 git commit -m "Описание изменений"
