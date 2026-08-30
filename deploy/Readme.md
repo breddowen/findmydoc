@@ -2443,6 +2443,12 @@ https://staging.findmydoc.ru
 # 1. Убедиться, что незакоммиченных файлов нет
 git status
 
+если пишет:
+error: Your local changes to the following files would be overwritten by checkout:
+git add .
+git commit -m "Update"
+git push origin develop
+
 # 2. Получить актуальные ссылки с GitHub
 git fetch origin
 
