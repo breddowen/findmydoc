@@ -1,3 +1,23 @@
+staging:
+git switch develop
+git pull --ff-only origin develop
+git add backend/app/core/email.py
+git diff --cached
+git commit -m "Prevent email tokens from leaking into production logs"
+git push origin HEAD:develop
+
+--- После проверки staging перенесите в production ---
+
+git status
+git fetch origin
+git switch main
+git pull --ff-only origin main
+git merge --no-ff origin/develop `
+  -m "Promote email logging fix to production"
+git push origin HEAD:main
+git switch develop
+
+
 # FindMyDoc: развёртывание и эксплуатация
 
 Полная инструкция по запуску FindMyDoc на новом VDS:

@@ -73,24 +73,30 @@ def send_console_email(
         action_url=resolved_action_url,
     )
 
-    print()
-    print("=" * 80)
-    print("EMAIL")
-    print(f"Backend: {settings.EMAIL_BACKEND}")
-    print(f"To: {recipient}")
-    print(f"Subject: {subject}")
-    print()
-    print(body)
-    print("=" * 80)
-    print()
+    email_backend = settings.EMAIL_BACKEND.strip().lower()
 
-    if settings.EMAIL_BACKEND.lower() == "console":
+    if email_backend == "console":
+        print()
+        print("=" * 80)
+        print("EMAIL")
+        print(f"Backend: {settings.EMAIL_BACKEND}")
+        print(f"To: {recipient}")
+        print(f"Subject: {subject}")
+        print()
+        print(body)
+        print("=" * 80)
+        print()
         return
 
-    if settings.EMAIL_BACKEND.lower() != "smtp":
+    if email_backend != "smtp":
         raise RuntimeError(
             f"Неизвестный EMAIL_BACKEND: {settings.EMAIL_BACKEND}"
         )
+
+    # if settings.EMAIL_BACKEND.lower() != "smtp":
+    #     raise RuntimeError(
+    #         f"Неизвестный EMAIL_BACKEND: {settings.EMAIL_BACKEND}"
+    #     )
 
     if not settings.SMTP_USERNAME:
         raise RuntimeError("SMTP_USERNAME не настроен")
