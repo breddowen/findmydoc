@@ -2089,7 +2089,7 @@ staging
 | `VPS_HOST` | IP или hostname VDS |
 | `VPS_PORT` | `22` |
 | `VPS_USER` | `deploy` |
-| `VPS_SSH_PRIVATE_KEY` | содержимое приватного deployment-ключа | cat /.ssh/authorized_keysfindmydoc_deploy_key
+| `VPS_SSH_PRIVATE_KEY` | содержимое приватного deployment-ключа | cat ./findmydoc_deploy_key.pub
 | `VPS_KNOWN_HOSTS` | запись SSH host key |
 
 Получить `VPS_KNOWN_HOSTS` можно локально:
