@@ -1875,7 +1875,7 @@ git commit -m "Prepare Docker deployment"
 5. После создания выполните команды, которые покажет GitHub:
 
 ```bash
-git remote add origin git@github.com:YOUR_USERNAME/findmydoc.git
+git remote add origin git@github.com:breddowen/findmydoc.git
 git push -u origin main
 ```
 
@@ -2022,10 +2022,7 @@ docker network create findmydoc_proxy
 На локальной машине создайте отдельный ключ:
 
 ```bash
-ssh-keygen \
-  -t ed25519 \
-  -C "github-actions-findmydoc" \
-  -f ./findmydoc_deploy_key
+ssh-keygen -t ed25519 -C "github-actions-findmydoc" -f ./findmydoc_deploy_key
 ```
 
 Для автоматического deployment ключ должен быть без passphrase.
@@ -2033,9 +2030,8 @@ ssh-keygen \
 Скопируйте публичный ключ на сервер:
 
 ```bash
-ssh-copy-id \
-  -i ./findmydoc_deploy_key.pub \
-  deploy@VDS_IP
+cat .\findmydoc_deploy_key.pub
+
 ```
 
 Или вручную добавьте содержимое:
@@ -2061,7 +2057,8 @@ chmod 600 /home/deploy/.ssh/authorized_keys
 Проверьте вход:
 
 ```bash
-ssh -i ./findmydoc_deploy_key deploy@VDS_IP
+ssh -i ./findmydoc_deploy_key deploy@159.194.242.7
+
 ```
 
 ---
@@ -2092,13 +2089,13 @@ staging
 | `VPS_HOST` | IP или hostname VDS |
 | `VPS_PORT` | `22` |
 | `VPS_USER` | `deploy` |
-| `VPS_SSH_PRIVATE_KEY` | содержимое приватного deployment-ключа |
+| `VPS_SSH_PRIVATE_KEY` | содержимое приватного deployment-ключа | cat ./findmydoc_deploy_key.pub
 | `VPS_KNOWN_HOSTS` | запись SSH host key |
 
 Получить `VPS_KNOWN_HOSTS` можно локально:
 
 ```bash
-ssh-keyscan -H VDS_IP
+ssh-keyscan -H 159.194.242.7
 ```
 
 Лучше сначала вручную сверить fingerprint сервера:
@@ -2115,6 +2112,7 @@ ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub
 
 GitHub Actions сможет загружать private images через `GITHUB_TOKEN`. Но VDS нужен отдельный токен для скачивания.
 
+https://github.com/settings/tokens
 В GitHub создайте Personal Access Token с минимальным правом:
 
 ```text
@@ -2176,7 +2174,6 @@ openssl rand -hex 48
 ```bash
 openssl rand -hex 32
 ```
-
 Используйте буквенно-цифровой или hex-пароль. Это важно, потому что пароль подставляется непосредственно в PostgreSQL URL.
 
 ## Production Compose env
@@ -2200,7 +2197,7 @@ BACKEND_NETWORK_ALIAS=backend-prod
 FRONTEND_NETWORK_ALIAS=frontend-prod
 
 POSTGRES_USER=mentalme
-POSTGRES_PASSWORD=GENERATED_HEX_PASSWORD
+POSTGRES_PASSWORD=Admin21i03i85@
 POSTGRES_DB=mentalme
 ```
 
@@ -2375,6 +2372,14 @@ PostgreSQL-порт `5432` открывать не нужно. Он доступ
 ```bash
 git checkout develop
 git merge main
+git push origin develop 
+```
+```bash
+git checkout develop
+git merge main
+git status 
+git add . 
+git commit -m "Fix deployment configuration"
 git push origin develop
 ```
 
@@ -2416,8 +2421,7 @@ chmod +x /opt/findmydoc/deploy/scripts/*.sh
 Запустите:
 
 ```bash
-/opt/findmydoc/deploy/scripts/init-letsencrypt.sh \
-  your-admin-email@example.com
+/opt/findmydoc/deploy/scripts/init-letsencrypt.sh maxim-titkov@yandex.ru
 ```
 
 Email здесь используется Let's Encrypt для уведомлений о сертификате. Это может быть не `noreply`, а ваш административный адрес.
