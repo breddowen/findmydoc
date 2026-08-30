@@ -27,7 +27,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Prepare image names
         id: names
@@ -84,7 +84,7 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
 
     - name: Determine target environment
       id: target
@@ -110,19 +110,24 @@ jobs:
       run: |
         set -euo pipefail
 
-        if [[ "${VPS_HOST}" != "159.194.242.7" ]]; then
-          echo "VPS_HOST must contain only: 159.194.242.7"
-          echo "Do not include root@ or deploy@"
+        if [[ -z "${VPS_HOST}" ]]; then
+          echo "VPS_HOST is empty"
           exit 1
         fi
 
-        if [[ "${VPS_PORT}" != "22" ]]; then
-          echo "VPS_PORT must be: 22"
+        if [[ "${VPS_HOST}" == *"@"* ]]; then
+          echo "VPS_HOST must contain only an IP address or hostname"
+          echo "Do not include deploy@ or root@"
+          exit 1
+        fi
+
+        if [[ ! "${VPS_PORT}" =~ ^[0-9]+$ ]]; then
+          echo "VPS_PORT must be numeric"
           exit 1
         fi
 
         if [[ "${VPS_USER}" != "deploy" ]]; then
-          echo "VPS_USER must be: deploy"
+          echo "VPS_USER must be deploy"
           exit 1
         fi
 
