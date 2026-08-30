@@ -1,4 +1,5 @@
 services:
+  services:
   postgres:
     image: postgres:17-bookworm
     restart: unless-stopped
@@ -11,7 +12,12 @@ services:
       PGTZ: UTC
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./postgres/init/01-enable-pgcrypto.sql:/docker-entrypoint-initdb.d/01-enable-pgcrypto.sql:ro
+      - type: bind
+        source: ./postgres/init/01-enable-pgcrypto.sql
+        target: /docker-entrypoint-initdb.d/01-enable-pgcrypto.sql
+        read_only: true
+        bind:
+          create_host_path: false
     healthcheck:
       test:
         [
