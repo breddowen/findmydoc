@@ -2382,3 +2382,575 @@ git ls-files |
 ```text
 develop → staging → проверка → main → production
 ```
+
+
+
+
+
+---------------
+------------
+
+
+# Быстрая памятка: обновление и откат
+
+## 1. Обычное обновление staging
+
+Все изменения сначала отправляются в ветку `develop`.
+
+```powershell
+# 1. Переключиться на develop ДО внесения изменений
+git switch develop
+
+# 2. Убедиться, что текущая ветка — develop
+git branch --show-current
+
+# 3. Получить актуальный develop
+git pull --ff-only origin develop
+
+# 4. ВНЕСТИ ИЗМЕНЕНИЯ В КОД
+
+# 5. Посмотреть изменения
+git status
+git diff
+
+# 6. Добавить изменения
+git add .
+
+# 7. Обязательно проверить, что попадёт в commit
+git status
+git diff --cached --stat
+git diff --cached
+
+# 8. Создать commit
+git commit -m "Описание изменений"
+
+# 9. Отправить текущий commit в develop
+# Это запустит deployment на STAGING
+git push origin HEAD:develop
+```
+
+После deployment проверить:
+
+```text
+https://staging.findmydoc.ru
+```
+
+---
+
+## 2. Перенос проверенного staging в production
+
+Выполнять только после успешной проверки staging.
+
+```powershell
+# 1. Убедиться, что незакоммиченных файлов нет
+git status
+
+# 2. Получить актуальные ссылки с GitHub
+git fetch origin
+
+# 3. Переключиться на main
+git switch main
+
+# 4. Убедиться, что текущая ветка — main
+git branch --show-current
+
+# 5. Обновить локальный main
+git pull --ff-only origin main
+
+# 6. Влить проверенный develop в main
+git merge --no-ff origin/develop `
+  -m "Promote develop to production"
+
+# 7. Проверить результат merge
+git status
+git log --oneline --decorate -5
+
+# 8. Отправить текущий commit в main
+# Это запустит deployment на PRODUCTION
+git push origin HEAD:main
+
+# 9. После успешного production deployment
+# вернуться в рабочую ветку
+git switch develop
+git pull --ff-only origin develop
+```
+
+После deployment проверить:
+
+```text
+https://findmydoc.ru
+```
+
+> Если `git switch`, `git pull` или `git merge` завершились с `error`, `fatal`, `conflict` или `aborting`, следующие команды выполнять нельзя, пока ошибка не исправлена.
+
+---
+
+# Откат изменений
+
+## 3. Отмена изменений до commit
+
+Если изменения ещё не добавлены через `git add`:
+
+```powershell
+# Посмотреть изменения
+git status
+git diff
+
+# Отменить изменения во всех отслеживаемых файлах
+git restore .
+```
+
+Если изменения уже добавлены через `git add`, но commit ещё не создан:
+
+```powershell
+# Убрать файлы из staged
+git restore --staged .
+
+# Отменить изменения
+git restore .
+```
+
+Если нужно отменить изменение только одного файла:
+
+```powershell
+git restore путь/к/файлу
+```
+
+Например:
+
+```powershell
+git restore backend/app/core/email.py
+```
+
+> `git restore .` удаляет незакоммиченные изменения в отслеживаемых файлах. Перед выполнением обязательно проверить `git diff`.
+
+---
+
+## 4. Временно сохранить незаконченные изменения
+
+Если изменения пока нельзя коммитить, но нужно переключить ветку:
+
+```powershell
+git stash push -u -m "Temporary work"
+```
+
+Проверить:
+
+```powershell
+git stash list
+```
+
+Вернуться в нужную ветку:
+
+```powershell
+git switch develop
+```
+
+Восстановить изменения:
+
+```powershell
+git stash pop
+```
+
+Перед `stash pop` убедиться, что выбрана правильная ветка.
+
+---
+
+## 5. Откат последнего commit в staging
+
+Ситуация:
+
+- commit уже отправлен в `develop`;
+- GitHub Actions выполнил staging deployment;
+- staging сломался или изменение не понравилось.
+
+Использовать `git revert`, а не `reset --hard` и не force push.
+
+```powershell
+# 1. Перейти в develop
+git switch develop
+
+# 2. Проверить текущую ветку
+git branch --show-current
+
+# 3. Получить актуальный develop
+git pull --ff-only origin develop
+
+# 4. Посмотреть последние commits
+git log --oneline --decorate -10
+
+# 5. Создать обратный commit для последнего изменения
+git revert HEAD
+
+# 6. Отправить откат
+# Это запустит новый staging deployment
+git push origin HEAD:develop
+```
+
+Если Git откроет редактор сообщения commit, сохранить стандартное сообщение `Revert ...` и закрыть редактор.
+
+После deployment проверить:
+
+```text
+https://staging.findmydoc.ru
+```
+
+История получится такой:
+
+```text
+bad commit
+revert bad commit
+```
+
+Это нормальный и безопасный способ отката.
+
+---
+
+## 6. Откат конкретного staging commit
+
+Если плохой commit не является последним:
+
+```powershell
+# Перейти в develop
+git switch develop
+
+# Обновить ветку
+git pull --ff-only origin develop
+
+# Найти SHA плохого commit
+git log --oneline --decorate -15
+
+# Откатить конкретный commit
+git revert BAD_COMMIT_SHA
+
+# Отправить откат в staging
+git push origin HEAD:develop
+```
+
+Пример:
+
+```powershell
+git revert a1b2c3d
+git push origin HEAD:develop
+```
+
+---
+
+## 7. Откат нескольких последних staging commits
+
+Сначала найти последний рабочий commit:
+
+```powershell
+git switch develop
+git pull --ff-only origin develop
+git log --oneline --decorate -20
+```
+
+Допустим:
+
+```text
+GOOD_COMMIT_SHA
+```
+
+— последний рабочий commit.
+
+Создать общий откат всех commits после него:
+
+```powershell
+git revert --no-commit GOOD_COMMIT_SHA..HEAD
+```
+
+Проверить изменения:
+
+```powershell
+git status
+git diff --stat
+git diff
+```
+
+Создать один commit отката:
+
+```powershell
+git commit -m "Rollback staging to GOOD_COMMIT_SHA"
+```
+
+Отправить:
+
+```powershell
+git push origin HEAD:develop
+```
+
+---
+
+## 8. Если во время `git revert` возник конфликт
+
+Посмотреть конфликтующие файлы:
+
+```powershell
+git status
+```
+
+Исправить конфликты в редакторе.
+
+После исправления добавить файлы:
+
+```powershell
+git add путь/к/исправленному/файлу
+```
+
+Продолжить revert:
+
+```powershell
+git revert --continue
+```
+
+Затем:
+
+```powershell
+git push origin HEAD:develop
+```
+
+Если нужно полностью отменить начатый revert:
+
+```powershell
+git revert --abort
+```
+
+---
+
+## 9. Повторное внесение отменённого staging-изменения
+
+Если изменение было отменено через `git revert`, но позже снова понадобилось, можно откатить сам revert.
+
+Найти revert commit:
+
+```powershell
+git log --oneline --decorate -15
+```
+
+Выполнить:
+
+```powershell
+git revert REVERT_COMMIT_SHA
+```
+
+Затем:
+
+```powershell
+git push origin HEAD:develop
+```
+
+---
+
+# Экстренный откат production
+
+## 10. Откат последнего production release
+
+Обычный production release создаётся merge-коммитом:
+
+```text
+Promote develop to production
+```
+
+Чтобы отменить последний production merge:
+
+```powershell
+# 1. Рабочий каталог должен быть чистым
+git status
+
+# 2. Получить актуальные ветки
+git fetch origin
+
+# 3. Переключиться на main
+git switch main
+
+# 4. Проверить текущую ветку
+git branch --show-current
+
+# 5. Получить актуальный main
+git pull --ff-only origin main
+
+# 6. Посмотреть последние commits
+git log --oneline --decorate -10
+```
+
+Если последний commit является merge-коммитом `Promote develop to production`:
+
+```powershell
+git revert -m 1 HEAD
+```
+
+Отправить откат:
+
+```powershell
+git push origin HEAD:main
+```
+
+Это запустит новый production deployment.
+
+После отката обязательно вернуться в `develop` и исправить причину:
+
+```powershell
+git switch develop
+git pull --ff-only origin develop
+```
+
+> Откат только в `main` не удаляет плохое изменение из `develop`. Если позже снова выполнить merge без исправления `develop`, проблема может вернуться.
+
+---
+
+## 11. Откат обычного production commit
+
+Если последний production commit не является merge-коммитом:
+
+```powershell
+git switch main
+git pull --ff-only origin main
+git log --oneline --decorate -10
+git revert HEAD
+git push origin HEAD:main
+```
+
+---
+
+# Важное ограничение: миграции базы данных
+
+## 12. Если неудачное обновление содержало миграцию Alembic
+
+Обычный `git revert` отменяет код, но **не выполняет автоматический downgrade базы данных**.
+
+Например, deployment уже выполнил:
+
+```bash
+alembic upgrade head
+```
+
+После этого простой Git-откат:
+
+```powershell
+git revert HEAD
+```
+
+не вернёт структуру базы автоматически.
+
+Особенно опасны миграции, которые:
+
+- удаляют таблицы;
+- удаляют колонки;
+- переименовывают колонки;
+- меняют типы данных;
+- добавляют обязательный `NOT NULL`;
+- удаляют индексы или ограничения.
+
+### При проблеме с миграцией
+
+Сначала остановиться и проверить текущую ревизию.
+
+Для staging:
+
+```bash
+cd /opt/findmydoc/deploy
+```
+
+```bash
+docker compose \
+  --project-name findmydoc-staging \
+  --env-file /opt/findmydoc/staging/compose.env \
+  run --rm migrate \
+  alembic current
+```
+
+Для production:
+
+```bash
+docker compose \
+  --project-name findmydoc-prod \
+  --env-file /opt/findmydoc/production/compose.env \
+  run --rm migrate \
+  alembic current
+```
+
+Не выполнять `alembic downgrade` вслепую.
+
+Безопасные варианты:
+
+1. Создать новую исправляющую миграцию.
+2. Восстановить базу из backup.
+3. Выполнить `alembic downgrade -1`, только если `downgrade()` проверен и не уничтожает нужные данные.
+
+### Рекомендуемый подход
+
+Для staging чаще всего лучше:
+
+```text
+не удалять старую migration
+→ исправить модель
+→ создать новую migration
+→ отправить исправление в develop
+```
+
+Для production перед любыми ручными действиями с БД обязательно сделать backup:
+
+```bash
+/opt/findmydoc/deploy/scripts/backup.sh production
+```
+
+---
+
+# Краткая памятка
+
+## Обновить staging
+
+```powershell
+git switch develop
+git pull --ff-only origin develop
+
+# Внести изменения
+
+git status
+git diff
+git add .
+git diff --cached
+git commit -m "Описание изменений"
+git push origin HEAD:develop
+```
+
+## Перенести staging в production
+
+```powershell
+git status
+git fetch origin
+git switch main
+git pull --ff-only origin main
+git merge --no-ff origin/develop `
+  -m "Promote develop to production"
+git push origin HEAD:main
+git switch develop
+git pull --ff-only origin develop
+```
+
+## Откатить последний staging commit
+
+```powershell
+git switch develop
+git pull --ff-only origin develop
+git log --oneline -10
+git revert HEAD
+git push origin HEAD:develop
+```
+
+## Отменить локальные изменения без commit
+
+```powershell
+git restore --staged .
+git restore .
+```
+
+## Главное правило
+
+```text
+Не использовать git reset --hard и git push --force
+для отката уже опубликованных staging или production commits.
+
+Для опубликованных изменений использовать git revert.
+```
