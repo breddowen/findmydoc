@@ -123,4 +123,4 @@ docker compose \
   --profile edge \
   up -d --force-recreate nginx certbot
 
-echo "Let's Encrypt initialization completed."
+echo "Let Encrypt initialization completed."

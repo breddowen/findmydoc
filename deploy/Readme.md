@@ -2421,8 +2421,7 @@ chmod +x /opt/findmydoc/deploy/scripts/*.sh
 Запустите:
 
 ```bash
-/opt/findmydoc/deploy/scripts/init-letsencrypt.sh \
-  your-admin-email@example.com
+/opt/findmydoc/deploy/scripts/init-letsencrypt.sh maxim-titkov@yandex.ru
 ```
 
 Email здесь используется Let's Encrypt для уведомлений о сертификате. Это может быть не `noreply`, а ваш административный адрес.
