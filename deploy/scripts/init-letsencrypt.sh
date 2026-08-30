@@ -59,6 +59,7 @@ docker run --rm \
       -keyout /etc/letsencrypt/live/staging.findmydoc.ru/privkey.pem \
       -out /etc/letsencrypt/live/staging.findmydoc.ru/fullchain.pem \
       -subj "/CN=staging.findmydoc.ru"
+  '
 
 echo "Starting Nginx with temporary certificates..."
 
@@ -128,4 +129,4 @@ docker compose \
   --profile edge \
   up -d --force-recreate nginx certbot
 
-echo "Let Encrypt initialization completed."
+echo "Let's Encrypt initialization completed."
