@@ -31,27 +31,34 @@ echo "Creating temporary certificates..."
 
 docker run --rm \
   -v findmydoc_letsencrypt:/etc/letsencrypt \
+  --entrypoint sh \
   alpine/openssl \
-  req \
-  -x509 \
-  -nodes \
-  -newkey rsa:2048 \
-  -days 1 \
-  -keyout /etc/letsencrypt/live/findmydoc.ru/privkey.pem \
-  -out /etc/letsencrypt/live/findmydoc.ru/fullchain.pem \
-  -subj /CN=findmydoc.ru
+  -c '
+    mkdir -p /etc/letsencrypt/live/findmydoc.ru
+    openssl req \
+      -x509 \
+      -nodes \
+      -newkey rsa:2048 \
+      -days 1 \
+      -keyout /etc/letsencrypt/live/findmydoc.ru/privkey.pem \
+      -out /etc/letsencrypt/live/findmydoc.ru/fullchain.pem \
+      -subj "/CN=findmydoc.ru"
+  '
 
 docker run --rm \
   -v findmydoc_letsencrypt:/etc/letsencrypt \
+  --entrypoint sh \
   alpine/openssl \
-  req \
-  -x509 \
-  -nodes \
-  -newkey rsa:2048 \
-  -days 1 \
-  -keyout /etc/letsencrypt/live/staging.findmydoc.ru/privkey.pem \
-  -out /etc/letsencrypt/live/staging.findmydoc.ru/fullchain.pem \
-  -subj /CN=staging.findmydoc.ru
+  -c '
+    mkdir -p /etc/letsencrypt/live/staging.findmydoc.ru
+    openssl req \
+      -x509 \
+      -nodes \
+      -newkey rsa:2048 \
+      -days 1 \
+      -keyout /etc/letsencrypt/live/staging.findmydoc.ru/privkey.pem \
+      -out /etc/letsencrypt/live/staging.findmydoc.ru/fullchain.pem \
+      -subj "/CN=staging.findmydoc.ru"
 
 echo "Starting Nginx with temporary certificates..."
 
@@ -68,14 +75,13 @@ echo "Removing temporary certificates..."
 docker run --rm \
   -v findmydoc_letsencrypt:/etc/letsencrypt \
   alpine:3.22 \
-  sh -c '
-    rm -rf /etc/letsencrypt/live/findmydoc.ru
-    rm -rf /etc/letsencrypt/archive/findmydoc.ru
-    rm -f /etc/letsencrypt/renewal/findmydoc.ru.conf
-
-    rm -rf /etc/letsencrypt/live/staging.findmydoc.ru
-    rm -rf /etc/letsencrypt/archive/staging.findmydoc.ru
-    rm -f /etc/letsencrypt/renewal/staging.findmydoc.ru.conf
+  rm -rf \
+    /etc/letsencrypt/live/findmydoc.ru \
+    /etc/letsencrypt/archive/findmydoc.ru \
+    /etc/letsencrypt/renewal/findmydoc.ru.conf \
+    /etc/letsencrypt/live/staging.findmydoc.ru \
+    /etc/letsencrypt/archive/staging.findmydoc.ru \
+    /etc/letsencrypt/renewal/staging.findmydoc.ru.conf
   '
 
 echo "Requesting production certificate..."
