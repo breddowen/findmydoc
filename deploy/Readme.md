@@ -2258,7 +2258,7 @@ NITRO_PORT=3000
 nano /opt/findmydoc/staging/compose.env
 ```
 
-```dotenv
+```dotenv 
 BACKEND_IMAGE=ghcr.io/YOUR_GITHUB_OWNER/YOUR_REPOSITORY-backend:develop
 FRONTEND_IMAGE=ghcr.io/YOUR_GITHUB_OWNER/YOUR_REPOSITORY-frontend:develop
 
@@ -2268,7 +2268,7 @@ FRONTEND_ENV_FILE=/opt/findmydoc/staging/frontend.env
 BACKEND_NETWORK_ALIAS=backend-staging
 FRONTEND_NETWORK_ALIAS=frontend-staging
 
-POSTGRES_USER=mentalme_staging
+POSTGRES_USER=mentalme_staging  
 POSTGRES_PASSWORD=ANOTHER_GENERATED_HEX_PASSWORD
 POSTGRES_DB=mentalme_staging
 ```
