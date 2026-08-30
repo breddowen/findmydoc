@@ -2372,7 +2372,7 @@ PostgreSQL-порт `5432` открывать не нужно. Он доступ
 ```bash
 git checkout develop
 git merge main
-git push origin develop
+git push origin develop 
 ```
 ```bash
 git checkout develop
