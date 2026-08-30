@@ -173,9 +173,11 @@ volumes:
 
   letsencrypt:
     name: findmydoc_letsencrypt
+    external: true
 
   certbot_www:
     name: findmydoc_certbot_www
+    external: true
 
 networks:
   internal:

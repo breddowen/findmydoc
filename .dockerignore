@@ -23,6 +23,7 @@ frontend/.output
 deploy
 !deploy/backend.Dockerfile
 !deploy/frontend.Dockerfile
+!deploy/postgres/init/01-enable-pgcrypto.sql
 
 *.pem
 *.key

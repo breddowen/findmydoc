@@ -1,3 +1,4 @@
+# .gitignore
 # Environment files
 .env
 .env.*
@@ -42,7 +43,7 @@ npm-debug.log*
 .DS_Store
 Thumbs.db
 
-# Certificates and secrets
+# Certificates and private keys
 *.pem
 *.key
 *.crt
@@ -56,9 +57,14 @@ backups/
 !deploy/postgres/
 !deploy/postgres/init/
 !deploy/postgres/init/01-enable-pgcrypto.sql
+
 # Never commit deployment SSH keys
 findmydoc_deploy_key
 findmydoc_deploy_key.pub
+findmydoc_deploy_key_v2
+findmydoc_deploy_key_v2.pub
 derived-public-key.pub
-*_deploy_key 
+*_deploy_key
 *_deploy_key.pub
+*_deploy_key_v2
+*_deploy_key_v2.pub
