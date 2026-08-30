@@ -24,11 +24,11 @@ class Settings(BaseSettings):
     WEBAUTHN_RP_ID: str = "localhost"
     WEBAUTHN_RP_NAME: str = "MentalMe"
     WEBAUTHN_ORIGIN: str = "http://localhost:3000"
-    WEBAUTHN_CHALLENGE_EXPIRE_SECONDS: int = 300
+    WEBAUTHN_CHALLENGE_EXPIRE_SECONDS: int = 300   
 
 
     # EMAIL
-    EMAIL_BACKEND: str = "console"
+    EMAIL_BACKEND:  str = "console"
 
     SMTP_HOST: str = "smtp.beget.com"
     SMTP_PORT: int = 465

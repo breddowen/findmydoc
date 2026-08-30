@@ -5,7 +5,13 @@ set -Eeuo pipefail
 PROJECT="findmydoc-prod"
 DEPLOY_DIR="/opt/findmydoc/deploy"
 ENV_FILE="/opt/findmydoc/production/compose.env"
-LETSENCRYPT_EMAIL="${1:?Let's Encrypt email is required}"
+
+if [[ $# -lt 1 ]]; then
+  echo "Usage: $0 <letsencrypt-email>" >&2
+  exit 1
+fi
+
+LETSENCRYPT_EMAIL="$1"
 
 cd "$DEPLOY_DIR"
 
@@ -27,7 +33,16 @@ docker compose \
   --profile edge \
   create nginx certbot
 
-echo "Creating temporary certificates..."
+echo "Creating certificate directories..."
+
+docker run --rm \
+  -v findmydoc_letsencrypt:/etc/letsencrypt \
+  alpine:3.22 \
+  mkdir -p \
+  /etc/letsencrypt/live/findmydoc.ru \
+  /etc/letsencrypt/live/staging.findmydoc.ru
+
+echo "Creating temporary certificate for findmydoc.ru..."
 
 docker run --rm \
   -v findmydoc_letsencrypt:/etc/letsencrypt \
@@ -40,6 +55,8 @@ docker run --rm \
   -keyout /etc/letsencrypt/live/findmydoc.ru/privkey.pem \
   -out /etc/letsencrypt/live/findmydoc.ru/fullchain.pem \
   -subj /CN=findmydoc.ru
+
+echo "Creating temporary certificate for staging.findmydoc.ru..."
 
 docker run --rm \
   -v findmydoc_letsencrypt:/etc/letsencrypt \
@@ -68,15 +85,13 @@ echo "Removing temporary certificates..."
 docker run --rm \
   -v findmydoc_letsencrypt:/etc/letsencrypt \
   alpine:3.22 \
-  sh -c '
-    rm -rf /etc/letsencrypt/live/findmydoc.ru
-    rm -rf /etc/letsencrypt/archive/findmydoc.ru
-    rm -f /etc/letsencrypt/renewal/findmydoc.ru.conf
-
-    rm -rf /etc/letsencrypt/live/staging.findmydoc.ru
-    rm -rf /etc/letsencrypt/archive/staging.findmydoc.ru
-    rm -f /etc/letsencrypt/renewal/staging.findmydoc.ru.conf
-  '
+  rm -rf \
+  /etc/letsencrypt/live/findmydoc.ru \
+  /etc/letsencrypt/archive/findmydoc.ru \
+  /etc/letsencrypt/renewal/findmydoc.ru.conf \
+  /etc/letsencrypt/live/staging.findmydoc.ru \
+  /etc/letsencrypt/archive/staging.findmydoc.ru \
+  /etc/letsencrypt/renewal/staging.findmydoc.ru.conf
 
 echo "Requesting production certificate..."
 
@@ -123,4 +138,4 @@ docker compose \
   --profile edge \
   up -d --force-recreate nginx certbot
 
-echo "Let's Encrypt initialization completed."
+echo "Lets Encrypt initialization completed."

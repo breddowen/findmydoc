@@ -83,67 +83,141 @@ jobs:
       name: ${{ github.ref_name == 'main' && 'production' || 'staging' }}
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+    - name: Checkout repository
+      uses: actions/checkout@v4
 
-      - name: Determine target environment
-        id: target
-        shell: bash
-        run: |
-          if [[ "${GITHUB_REF_NAME}" == "main" ]]; then
-            echo "name=production" >> "$GITHUB_OUTPUT"
-          elif [[ "${GITHUB_REF_NAME}" == "develop" ]]; then
-            echo "name=staging" >> "$GITHUB_OUTPUT"
-          else
-            echo "Unsupported deployment branch: ${GITHUB_REF_NAME}" >&2
-            exit 1
-          fi
+    - name: Determine target environment
+      id: target
+      shell: bash
+      run: |
+        set -euo pipefail
 
-      - name: Configure SSH
-        shell: bash
-        env:
-          SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
-          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
-        run: |
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
+        if [[ "${GITHUB_REF_NAME}" == "main" ]]; then
+          echo "name=production" >> "$GITHUB_OUTPUT"
+        elif [[ "${GITHUB_REF_NAME}" == "develop" ]]; then
+          echo "name=staging" >> "$GITHUB_OUTPUT"
+        else
+          echo "Unsupported deployment branch: ${GITHUB_REF_NAME}" >&2
+          exit 1
+        fi
 
-          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
+    - name: Validate deployment target
+      shell: bash
+      env:
+        VPS_HOST: ${{ secrets.VPS_HOST }}
+        VPS_PORT: ${{ secrets.VPS_PORT || '22' }}
+        VPS_USER: ${{ secrets.VPS_USER }}
+      run: |
+        set -euo pipefail
 
-          printf '%s\n' "$VPS_KNOWN_HOSTS" > ~/.ssh/known_hosts
-          chmod 600 ~/.ssh/known_hosts
+        if [[ "${VPS_HOST}" != "159.194.242.7" ]]; then
+          echo "VPS_HOST must contain only: 159.194.242.7"
+          echo "Do not include root@ or deploy@"
+          exit 1
+        fi
 
-      - name: Upload deployment configuration
-        shell: bash
-        env:
-          VPS_HOST: ${{ secrets.VPS_HOST }}
-          VPS_PORT: ${{ secrets.VPS_PORT }}
-          VPS_USER: ${{ secrets.VPS_USER }}
-        run: |
-          rsync \
-            --archive \
-            --compress \
-            --delete \
-            -e "ssh -p ${VPS_PORT}" \
-            deploy/ \
-            "${VPS_USER}@${VPS_HOST}:/opt/findmydoc/deploy/"
+        if [[ "${VPS_PORT}" != "22" ]]; then
+          echo "VPS_PORT must be: 22"
+          exit 1
+        fi
 
-      - name: Run deployment
-        shell: bash
-        env:
-          VPS_HOST: ${{ secrets.VPS_HOST }}
-          VPS_PORT: ${{ secrets.VPS_PORT }}
-          VPS_USER: ${{ secrets.VPS_USER }}
-          TARGET: ${{ steps.target.outputs.name }}
-          IMAGE_PREFIX: ${{ needs.build.outputs.image_prefix }}
-          IMAGE_TAG: ${{ needs.build.outputs.image_tag }}
-        run: |
-          ssh \
-            -p "${VPS_PORT}" \
-            "${VPS_USER}@${VPS_HOST}" \
-            "chmod +x /opt/findmydoc/deploy/scripts/*.sh && \
-             /opt/findmydoc/deploy/scripts/deploy.sh \
-             '${TARGET}' \
-             '${IMAGE_PREFIX}' \
-             '${IMAGE_TAG}'"
+        if [[ "${VPS_USER}" != "deploy" ]]; then
+          echo "VPS_USER must be: deploy"
+          exit 1
+        fi
+
+        echo "Deployment target is correct"
+
+    - name: Configure SSH
+      shell: bash
+      env:
+        SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+        VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+      run: |
+        set -euo pipefail
+
+        mkdir -p ~/.ssh
+        chmod 700 ~/.ssh
+
+        printf '%s\n' "$SSH_PRIVATE_KEY" \
+          | sed 's/\r$//' \
+          > ~/.ssh/id_ed25519
+        chmod 600 ~/.ssh/id_ed25519
+
+        printf '%s\n' "$VPS_KNOWN_HOSTS" \
+          | sed 's/\r$//' \
+          > ~/.ssh/known_hosts
+        chmod 600 ~/.ssh/known_hosts
+
+        ssh-keygen -y -f ~/.ssh/id_ed25519 > /tmp/deploy-key.pub
+
+        echo "Private key fingerprint:"
+        ssh-keygen -lf /tmp/deploy-key.pub
+
+    - name: Test SSH connection
+      shell: bash
+      env:
+        VPS_HOST: ${{ secrets.VPS_HOST }}
+        VPS_PORT: ${{ secrets.VPS_PORT || '22' }}
+        VPS_USER: ${{ secrets.VPS_USER }}
+      run: |
+        set -euo pipefail
+
+        ssh \
+          -i ~/.ssh/id_ed25519 \
+          -o IdentitiesOnly=yes \
+          -o BatchMode=yes \
+          -o PasswordAuthentication=no \
+          -o StrictHostKeyChecking=yes \
+          -p "${VPS_PORT}" \
+          "${VPS_USER}@${VPS_HOST}" \
+          'echo "SSH connection successful"; id'
+
+    - name: Upload deployment configuration
+      shell: bash
+      env:
+        VPS_HOST: ${{ secrets.VPS_HOST }}
+        VPS_PORT: ${{ secrets.VPS_PORT || '22' }}
+        VPS_USER: ${{ secrets.VPS_USER }}
+      run: |
+        set -euo pipefail
+
+        rsync \
+          --archive \
+          --compress \
+          --delete \
+          -e "ssh \
+            -i ~/.ssh/id_ed25519 \
+            -o IdentitiesOnly=yes \
+            -o BatchMode=yes \
+            -o PasswordAuthentication=no \
+            -o StrictHostKeyChecking=yes \
+            -p ${VPS_PORT}" \
+          deploy/ \
+          "${VPS_USER}@${VPS_HOST}:/opt/findmydoc/deploy/"
+
+    - name: Run deployment
+      shell: bash
+      env:
+        VPS_HOST: ${{ secrets.VPS_HOST }}
+        VPS_PORT: ${{ secrets.VPS_PORT || '22' }}
+        VPS_USER: ${{ secrets.VPS_USER }}
+        TARGET: ${{ steps.target.outputs.name }}
+        IMAGE_PREFIX: ${{ needs.build.outputs.image_prefix }}
+        IMAGE_TAG: ${{ needs.build.outputs.image_tag }}
+      run: |
+        set -euo pipefail
+
+        ssh \
+          -i ~/.ssh/id_ed25519 \
+          -o IdentitiesOnly=yes \
+          -o BatchMode=yes \
+          -o PasswordAuthentication=no \
+          -o StrictHostKeyChecking=yes \
+          -p "${VPS_PORT}" \
+          "${VPS_USER}@${VPS_HOST}" \
+          "chmod +x /opt/findmydoc/deploy/scripts/*.sh && \
+          /opt/findmydoc/deploy/scripts/deploy.sh \
+          '${TARGET}' \
+          '${IMAGE_PREFIX}' \
+          '${IMAGE_TAG}'"
