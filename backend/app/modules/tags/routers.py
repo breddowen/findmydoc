@@ -2,7 +2,13 @@
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Query,
+    status,
+)
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
@@ -27,6 +33,7 @@ from app.modules.tags.schemas import (
     TagCreateRequest,
     TagResponse,
     TagUpdateRequest,
+    TagVisibilityRequest,
 )
 from app.modules.tags.utils import (
     get_doctor_effective_tag_data,
@@ -40,6 +47,12 @@ from app.modules.users.models import (
     PatientProfile,
     RelativeProfile,
     Speciality,
+)
+
+from app.modules.articles.models import ArticleTagLink
+from app.modules.programs.models import ProgramTagLink
+from app.modules.questionnaires.models import (
+    QuestionnaireTagLink,
 )
 
 
@@ -98,12 +111,20 @@ def serialize_override(
 
 @router.get("", response_model=list[TagResponse])
 async def list_tags(
+    include_hidden: bool = Query(default=False),
     _: AuthContext = Depends(get_current_auth),
     session: Session = Depends(get_session),
 ) -> list[Tag]:
+    statement = select(Tag)
+
+    if not include_hidden:
+        statement = statement.where(
+            Tag.is_hidden.is_(False)
+        )
+
     return list(
         session.exec(
-            select(Tag).order_by(Tag.name)
+            statement.order_by(Tag.name)
         ).all()
     )
 
@@ -219,10 +240,7 @@ async def update_tag(
 async def delete_tag(
     tag_id: uuid.UUID,
     _: AuthContext = Depends(
-        require_roles(
-            UserRole.SUPERUSER,
-            UserRole.MED_ASSISTANT,
-        )
+        require_roles(UserRole.SUPERUSER)
     ),
     session: Session = Depends(get_session),
 ) -> None:
@@ -237,30 +255,88 @@ async def delete_tag(
     if tag.is_system:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Системный тег удалить нельзя",
+            detail=(
+                "Системный тег нельзя удалить. "
+                "При необходимости его можно скрыть."
+            ),
         )
 
-    speciality_links = session.exec(
-        select(SpecialityTagLink).where(
-            SpecialityTagLink.tag_id == tag.id
-        )
-    ).all()
+    usage_checks = [
+        (
+            SpecialityTagLink,
+            SpecialityTagLink.tag_id,
+            "специальностями",
+        ),
+        (
+            DoctorTagOverride,
+            DoctorTagOverride.tag_id,
+            "настройками врачей",
+        ),
+        (
+            ArticleTagLink,
+            ArticleTagLink.tag_id,
+            "статьями",
+        ),
+        (
+            ProgramTagLink,
+            ProgramTagLink.tag_id,
+            "программами",
+        ),
+        (
+            QuestionnaireTagLink,
+            QuestionnaireTagLink.tag_id,
+            "опросниками",
+        ),
+    ]
 
-    doctor_overrides = session.exec(
-        select(DoctorTagOverride).where(
-            DoctorTagOverride.tag_id == tag.id
-        )
-    ).all()
+    for model, field, usage_name in usage_checks:
+        usage = session.exec(
+            select(model).where(field == tag.id)
+        ).first()
 
-    for link in speciality_links:
-        session.delete(link)
-
-    for override in doctor_overrides:
-        session.delete(override)
+        if usage:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    f"Тег используется {usage_name}. "
+                    "Вместо удаления скройте его."
+                ),
+            )
 
     session.delete(tag)
     session.commit()
 
+@router.patch(
+    "/{tag_id}/visibility",
+    response_model=TagResponse,
+)
+async def set_tag_visibility(
+    tag_id: uuid.UUID,
+    payload: TagVisibilityRequest,
+    _: AuthContext = Depends(
+        require_roles(UserRole.SUPERUSER)
+    ),
+    session: Session = Depends(get_session),
+) -> Tag:
+    tag = session.get(Tag, tag_id)
+
+    if not tag:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Тег не найден",
+        )
+
+    now = utc_now()
+
+    tag.is_hidden = payload.is_hidden
+    tag.hidden_at = now if payload.is_hidden else None
+    tag.updated_at = now
+
+    session.add(tag)
+    session.commit()
+    session.refresh(tag)
+
+    return tag
 
 @router.get(
     "/specialities/{speciality_id}",
@@ -351,6 +427,12 @@ async def add_tag_to_speciality(
     if existing:
         return MessageResponse(
             message="Тег уже назначен специальности"
+        )
+
+    if tag.is_hidden:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Скрытый тег нельзя назначить специальности",
         )
 
     session.add(
@@ -454,6 +536,12 @@ async def set_my_doctor_tag_override(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Тег не найден",
+        )
+
+    if tag.is_hidden:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Скрытый тег нельзя использовать",
         )
 
     if tag.is_system:

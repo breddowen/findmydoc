@@ -320,123 +320,31 @@ const navigationGroups = computed(() => {
     title="Меню"
   >
     <nav>
-      <ul class="menu w-full gap-2 p-0 text-base">
-        <li>
-          <NuxtLink
-            to="/dashboard"
-            @click="closeMobileMenu"
-          >
-            <Icon
-              name="lucide:layout-dashboard"
-              class="size-5"
-            />
-            Главная
-          </NuxtLink>
-        </li>
+      <ul class="menu w-full gap-1 p-0 text-base">
+        <template
+          v-for="group in navigationGroups"
+          :key="group.key"
+        >
+          <li class="menu-title mt-2 first:mt-0">
+            <span>{{ group.label }}</span>
+          </li>
 
-        <li v-if="isStaff">
-          <NuxtLink
-            to="/patients"
-            @click="closeMobileMenu"
+          <li
+            v-for="link in group.links"
+            :key="link.to"
           >
-            <Icon
-              name="lucide:users"
-              class="size-5"
-            />
-            Пациенты
-          </NuxtLink>
-        </li>
-
-        <li v-if="canManageUsers">
-          <NuxtLink
-            to="/users"
-            @click="closeMobileMenu"
-          >
-            <Icon
-              name="lucide:user-cog"
-              class="size-5"
-            />
-            Пользователи
-          </NuxtLink>
-        </li>
-
-        <li>
-          <NuxtLink
-            to="/content/articles"
-            @click="closeMobileMenu"
-          >
-            <Icon
-              name="lucide:file-text"
-              class="size-5"
-            />
-            Статьи
-          </NuxtLink>
-        </li>
-
-        <li v-if="isPatient">
-          <NuxtLink
-            to="/questionnaires"
-            @click="closeMobileMenu"
-          >
-            <Icon
-              name="lucide:clipboard-list"
-              class="size-5"
-            />
-            Опросники
-          </NuxtLink>
-        </li>
-
-        <li v-if="canManageContent">
-          <NuxtLink
-            to="/content/questionnaires"
-            @click="closeMobileMenu"
-          >
-            <Icon
-              name="lucide:clipboard-list"
-              class="size-5"
-            />
-            Опросники
-          </NuxtLink>
-        </li>
-
-        <li>
-          <NuxtLink
-            to="/programs"
-            @click="closeMobileMenu"
-          >
-            <Icon
-              name="lucide:route"
-              class="size-5"
-            />
-            Программы
-          </NuxtLink>
-        </li>
-
-        <li v-if="canManageContent">
-          <NuxtLink
-            to="/programs/new"
-            @click="closeMobileMenu"
-          >
-            <Icon
-              name="lucide:workflow"
-              class="size-5"
-            />
-            Конфигуратор
-          </NuxtLink>
-        </li>
-
-        <li>
-          <NuxtLink
-            to="/settings/security"
-            @click="closeMobileMenu"
-          >
-            <Icon
-              name="lucide:shield-check"
-              class="size-5"
-            />
-            Безопасность
-          </NuxtLink>
-        </li>
+            <NuxtLink
+              :to="link.to"
+              @click="closeMobileMenu"
+            >
+              <Icon
+                :name="link.icon"
+                class="size-5"
+              />
+              {{ link.label }}
+            </NuxtLink>
+          </li>
+        </template>
       </ul>
     </nav>
 

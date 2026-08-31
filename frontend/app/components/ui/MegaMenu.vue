@@ -23,15 +23,52 @@ const emit = defineEmits([
   'navigate',
 ])
 
+const route = useRoute()
+
 const componentId = useId().replace(
   /[^a-zA-Z0-9_-]/g,
   '',
 )
 
+const openPopoverId = ref('')
+
+function normalizeKey(value) {
+  return String(value)
+    .replace(/[^a-zA-Z0-9_-]/g, '-')
+}
+
 function popoverId(group, index) {
-  const key = group.key || index
+  const key = normalizeKey(group.key || index)
 
   return `mega-${componentId}-${key}`
+}
+
+function isLinkActive(link) {
+  if (!link?.to) return false
+
+  if (route.path === link.to) {
+    return true
+  }
+
+  return (
+    link.to !== '/dashboard'
+    && route.path.startsWith(`${link.to}/`)
+  )
+}
+
+function isGroupActive(group) {
+  return group.links?.some(isLinkActive) || false
+}
+
+function handleToggle(event, id) {
+  if (event.newState === 'open') {
+    openPopoverId.value = id
+    return
+  }
+
+  if (openPopoverId.value === id) {
+    openPopoverId.value = ''
+  }
 }
 
 function closePopover(event) {
@@ -40,8 +77,27 @@ function closePopover(event) {
   )
 
   popover?.hidePopover?.()
+  openPopoverId.value = ''
+
   emit('navigate')
 }
+
+watch(
+  () => route.fullPath,
+  () => {
+    if (!import.meta.client) return
+
+    document
+      .querySelectorAll('[id^="mega-"][popover]')
+      .forEach((popover) => {
+        if (popover.matches(':popover-open')) {
+          popover.hidePopover?.()
+        }
+      })
+
+    openPopoverId.value = ''
+  },
+)
 </script>
 
 <template>
@@ -66,6 +122,12 @@ function closePopover(event) {
         type="button"
         :popovertarget="popoverId(group, index)"
         class="gap-2"
+        :class="{
+          'text-primary': isGroupActive(group),
+        }"
+        :aria-expanded="
+          openPopoverId === popoverId(group, index)
+        "
       >
         <Icon
           v-if="group.icon"
@@ -77,50 +139,67 @@ function closePopover(event) {
 
         <Icon
           name="lucide:chevron-down"
-          class="size-3.5"
+          class="size-3.5 transition-transform"
+          :class="{
+            'rotate-180':
+              openPopoverId
+              === popoverId(group, index),
+          }"
         />
       </button>
 
       <div
         :id="popoverId(group, index)"
-        popover
+        popover="auto"
         class="bg-base-100 border-base-300 w-80 max-w-[calc(100vw-2rem)] rounded-box border p-2 shadow-xl"
-        >
+        @toggle="
+          handleToggle(
+            $event,
+            popoverId(group, index),
+          )
+        "
+      >
         <ul class="menu w-full">
-            <li
+          <li
             v-for="link in group.links"
             :key="link.to"
-            >
+          >
             <NuxtLink
-                :to="link.to"
-                class="items-start gap-3 py-3"
-                @click="closePopover"
+              :to="link.to"
+              class="items-start gap-3 py-3"
+              :class="{
+                'menu-active': isLinkActive(link),
+              }"
+              :aria-current="
+                isLinkActive(link) ? 'page' : undefined
+              "
+              @click="closePopover"
             >
-                <span
+              <span
                 class="bg-base-200 flex size-9 shrink-0 items-center justify-center rounded-xl"
-                >
+              >
                 <Icon
-                    :name="link.icon || 'lucide:link'"
-                    class="size-4"
+                  :name="link.icon || 'lucide:link'"
+                  class="size-4"
                 />
-                </span>
+              </span>
 
-                <span class="min-w-0">
+              <span class="min-w-0">
                 <span class="block font-medium">
-                    {{ link.label }}
+                  {{ link.label }}
                 </span>
 
                 <span
-                    v-if="link.description"
-                    class="text-base-content/55 mt-0.5 block text-xs font-normal"
+                  v-if="link.description"
+                  class="text-base-content/55 mt-0.5 block text-xs font-normal"
                 >
-                    {{ link.description }}
+                  {{ link.description }}
                 </span>
-                </span>
+              </span>
             </NuxtLink>
-            </li>
+          </li>
         </ul>
-        </div>
+      </div>
     </template>
   </nav>
 </template>
