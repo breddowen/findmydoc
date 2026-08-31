@@ -54,6 +54,141 @@ const mobileMenuOpen = ref(false)
 function closeMobileMenu() {
   mobileMenuOpen.value = false
 }
+
+const canManageUsers = computed(() =>
+  isClientReady.value
+  && [
+    'superuser',
+    'med_assistant',
+  ].includes(auth.activeRole)
+)
+
+const canConfigurePrograms = computed(() =>
+  isClientReady.value
+  && [
+    'superuser',
+    'med_assistant',
+  ].includes(auth.activeRole)
+)
+
+const navigationGroups = computed(() => {
+  if (!isClientReady.value) {
+    return []
+  }
+
+  const mainLinks = [
+    {
+      to: '/dashboard',
+      label: 'Главная',
+      icon: 'lucide:layout-dashboard',
+      description: 'Обзор и последние действия',
+    },
+  ]
+
+  if (isStaff.value) {
+    mainLinks.push({
+      to: '/patients',
+      label: 'Пациенты',
+      icon: 'lucide:users',
+      description: 'Список и карточки пациентов',
+    })
+  }
+
+  if (canManageUsers.value) {
+    mainLinks.push({
+      to: '/users',
+      label: 'Пользователи',
+      icon: 'lucide:user-cog',
+      description: 'Аккаунты и приглашения',
+    })
+  }
+
+  const contentLinks = [
+    {
+      to: '/content/articles',
+      label: 'Статьи',
+      icon: 'lucide:file-text',
+      description: 'Материалы для пользователей',
+    },
+    {
+      to: '/programs',
+      label: 'Программы',
+      icon: 'lucide:route',
+      description: 'Программы сопровождения',
+    },
+  ]
+
+  if (isPatient.value) {
+    contentLinks.push({
+      to: '/questionnaires',
+      label: 'Опросники',
+      icon: 'lucide:clipboard-list',
+      description: 'Назначенные опросники',
+    })
+  }
+
+  if (canManageContent.value) {
+    contentLinks.push({
+      to: '/content/questionnaires',
+      label: 'Опросники',
+      icon: 'lucide:clipboard-list',
+      description: 'Редактор опросников',
+    })
+  }
+
+  const groups = [
+    {
+      key: 'main',
+      label: 'Работа',
+      icon: 'lucide:briefcase',
+      links: mainLinks,
+    },
+    {
+      key: 'content',
+      label: 'Контент',
+      icon: 'lucide:files',
+      links: contentLinks,
+    },
+  ]
+
+  if (canConfigurePrograms.value) {
+    groups.push({
+      key: 'management',
+      label: 'Управление',
+      icon: 'lucide:settings-2',
+      links: [
+        {
+          to: '/programs/new',
+          label: 'Конфигуратор',
+          icon: 'lucide:workflow',
+          description: 'Создание программ',
+        },
+        {
+          to: '/settings/directories',
+          label: 'Справочники',
+          icon: 'lucide:library',
+          description: 'Специальности и теги',
+        },
+      ],
+    })
+  }
+
+  groups.push({
+    key: 'settings',
+    label: 'Настройки',
+    icon: 'lucide:settings',
+    links: [
+      {
+        to: '/settings/security',
+        label: 'Безопасность',
+        icon: 'lucide:shield-check',
+        description: 'Пароль и passkey',
+      },
+    ],
+  })
+
+  return groups
+})
 </script>
 
 <template>
@@ -61,9 +196,10 @@ function closeMobileMenu() {
     class="bg-base-100 border-base-300 sticky top-0 z-30 border-b"
   >
     <div
-      class="navbar mx-auto min-h-16 max-w-7xl px-3 sm:px-4"
+      class="mx-auto grid min-h-16 w-full max-w-7xl grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 px-3 sm:px-4"
     >
-      <div class="navbar-start min-w-0">
+      <!-- Левая часть -->
+      <div class="flex min-w-0 items-center">
         <button
           type="button"
           class="btn btn-circle btn-ghost lg:hidden"
@@ -78,100 +214,26 @@ function closeMobileMenu() {
 
         <NuxtLink
           to="/dashboard"
-          class="btn btn-ghost px-2 text-lg font-bold"
+          class="btn btn-ghost shrink-0 px-2 text-lg font-bold"
         >
           MentalMe
         </NuxtLink>
       </div>
 
-      <nav class="navbar-center hidden lg:flex">
-        <ul class="menu menu-horizontal gap-1 px-1">
-          <li>
-            <NuxtLink to="/dashboard">
-              <Icon
-                name="lucide:layout-dashboard"
-                class="size-4"
-              />
-              Главная
-            </NuxtLink>
-          </li>
+      <!-- Центральная часть -->
+      <div
+        class="hidden min-w-0 items-center justify-center px-2 lg:flex"
+      >
+        <UiMegaMenu
+          :groups="navigationGroups"
+          size-class="megamenu-sm"
+        />
+      </div>
 
-          <li v-if="isStaff">
-            <NuxtLink to="/patients">
-              <Icon
-                name="lucide:users"
-                class="size-4"
-              />
-              Пациенты
-            </NuxtLink>
-          </li>
-
-          <li>
-            <NuxtLink to="/content/articles">
-              <Icon
-                name="lucide:file-text"
-                class="size-4"
-              />
-              Статьи
-            </NuxtLink>
-          </li>
-
-          <li v-if="isPatient">
-            <NuxtLink to="/questionnaires">
-              <Icon
-                name="lucide:clipboard-list"
-                class="size-4"
-              />
-              Опросники
-            </NuxtLink>
-          </li>
-
-          <li v-if="canManageContent">
-            <NuxtLink to="/content/questionnaires">
-              <Icon
-                name="lucide:clipboard-list"
-                class="size-4"
-              />
-              Опросники
-            </NuxtLink>
-          </li>
-
-          <!-- Программы доступны всем ролям -->
-          <li>
-            <NuxtLink to="/programs">
-              <Icon
-                name="lucide:route"
-                class="size-4"
-              />
-              Программы
-            </NuxtLink>
-          </li>
-
-          <!-- Конфигуратор только для ассистента
-               и суперпользователя -->
-          <li v-if="canManageContent">
-            <NuxtLink to="/programs/new">
-              <Icon
-                name="lucide:workflow"
-                class="size-4"
-              />
-              Конфигуратор
-            </NuxtLink>
-          </li>
-
-          <li>
-            <NuxtLink to="/settings/security">
-              <Icon
-                name="lucide:shield-check"
-                class="size-4"
-              />
-              Безопасность
-            </NuxtLink>
-          </li>
-        </ul>
-      </nav>
-
-      <div class="navbar-end gap-1">
+      <!-- Правая часть -->
+      <div
+        class="flex shrink-0 items-center justify-end gap-1"
+      >
         <NotificationsCenter />
 
         <LayoutThemeToggle />
@@ -182,9 +244,7 @@ function closeMobileMenu() {
             tabindex="0"
             class="btn btn-ghost gap-2 px-2"
           >
-            <div
-              class="avatar avatar-placeholder"
-            >
+            <div class="avatar avatar-placeholder">
               <div
                 class="bg-primary text-primary-content w-9 rounded-full"
               >
@@ -284,6 +344,19 @@ function closeMobileMenu() {
               class="size-5"
             />
             Пациенты
+          </NuxtLink>
+        </li>
+
+        <li v-if="canManageUsers">
+          <NuxtLink
+            to="/users"
+            @click="closeMobileMenu"
+          >
+            <Icon
+              name="lucide:user-cog"
+              class="size-5"
+            />
+            Пользователи
           </NuxtLink>
         </li>
 

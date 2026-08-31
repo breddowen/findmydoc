@@ -29,6 +29,9 @@ class Tag(SQLModel, table=True):
     # Системные теги нельзя удалить через обычный API.
     is_system: bool = Field(default=False, index=True)
 
+    is_hidden: bool = Field(default=False, index=True)
+    hidden_at: Optional[datetime] = Field(default=None)
+
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
 

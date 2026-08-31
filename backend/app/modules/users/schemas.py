@@ -87,3 +87,11 @@ class AdminUserListItem(BaseModel):
 
 class AdminBlockRequest(BaseModel):
     is_blocked: bool
+
+class AdminUserPageResponse(BaseModel):
+    items: list[AdminUserListItem]
+
+    page: int
+    page_size: int
+    total_items: int
+    total_pages: int

@@ -6,6 +6,8 @@ class InvitationType(str, Enum):
     DOCTOR = "doctor"
     PATIENT = "patient"
     RELATIVE = "relative"
+    MED_ASSISTANT = "med_assistant"
+    SUPERUSER = "superuser"
 
 
 class InvitationStatus(str, Enum):

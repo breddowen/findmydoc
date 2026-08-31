@@ -157,6 +157,8 @@ onMounted(fetchPasskeys)
       <span>{{ errorMessage }}</span>
     </div>
 
+    <AuthPasswordForm />
+
     <section
       class="card bg-base-100 border-base-300 border"
     >

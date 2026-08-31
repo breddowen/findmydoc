@@ -52,6 +52,7 @@ from app.modules.users.enums import (
 from app.modules.users.models import (
     DoctorPatientLink,
     DoctorProfile,
+    MedAssistantProfile,
     PatientProfile,
     RelativePatientLink,
     RelativeProfile,
@@ -500,6 +501,30 @@ async def accept_invitation(
 
     is_new_user = user is None
 
+    invitation_requires_new_account = (
+        invitation.invitation_type
+        in {
+            InvitationType.DOCTOR,
+            InvitationType.PATIENT,
+            InvitationType.MED_ASSISTANT,
+            InvitationType.SUPERUSER,
+        }
+        or (
+            invitation.invitation_type
+            == InvitationType.RELATIVE
+            and invitation.patient_profile_id is None
+        )
+    )
+
+    if user and invitation_requires_new_account:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Пользователь с таким email "
+                "уже зарегистрирован"
+            ),
+        )
+
     if user:
         ensure_user_can_authenticate(user)
 
@@ -632,10 +657,28 @@ async def accept_invitation(
                 detail="В приглашении отсутствует номер карты",
             )
 
+        normalized_record_id = (
+            invitation.record_id.strip().upper()
+        )
+
+        import re
+
+        if not re.fullmatch(
+            r"[A-Z]{1,2}[0-9]{6}",
+            normalized_record_id,
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "record_id в приглашении "
+                    "имеет неверный формат"
+                ),
+            )
+
         record_id_owner = session.exec(
             select(PatientProfile).where(
                 PatientProfile.record_id
-                == invitation.record_id
+                == normalized_record_id
             )
         ).first()
 
@@ -656,7 +699,7 @@ async def accept_invitation(
 
         patient_profile = PatientProfile(
             user_id=user.id,
-            record_id=invitation.record_id,
+            record_id=normalized_record_id,
             fullname=(
                 payload.fullname.strip()
                 if payload.fullname
@@ -698,35 +741,6 @@ async def accept_invitation(
     elif invitation.invitation_type == InvitationType.RELATIVE:
         role_added = UserRole.RELATIVE
 
-        if not invitation.patient_profile_id:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=(
-                    "В приглашении отсутствует "
-                    "профиль пациента"
-                ),
-            )
-
-        patient_profile = session.get(
-            PatientProfile,
-            invitation.patient_profile_id,
-        )
-
-        if not patient_profile:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Пациент больше не существует",
-            )
-
-        if patient_profile.user_id == user.id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=(
-                    "Нельзя привязать пользователя "
-                    "как родственника самого себя"
-                ),
-            )
-
         ensure_user_role(
             session=session,
             user=user,
@@ -741,40 +755,110 @@ async def accept_invitation(
 
         if not relative_profile:
             relative_profile = RelativeProfile(
-                user_id=user.id
+                user_id=user.id,
             )
             session.add(relative_profile)
             session.flush()
 
-        relative_link = session.exec(
-            select(RelativePatientLink).where(
-                RelativePatientLink.relative_id
-                == relative_profile.id,
-                RelativePatientLink.patient_id
-                == patient_profile.id,
+        if invitation.patient_profile_id is None:
+            # Административное приглашение родственника.
+            # Связь с пациентом будет создана позднее.
+            pass
+        else:
+            patient_profile = session.get(
+                PatientProfile,
+                invitation.patient_profile_id,
+            )
+
+            if not patient_profile:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Пациент больше не существует",
+                )
+
+            if patient_profile.user_id == user.id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        "Нельзя привязать пользователя "
+                        "как родственника самого себя"
+                    ),
+                )
+
+            relative_link = session.exec(
+                select(RelativePatientLink).where(
+                    RelativePatientLink.relative_id
+                    == relative_profile.id,
+                    RelativePatientLink.patient_id
+                    == patient_profile.id,
+                )
+            ).first()
+
+            if relative_link:
+                relative_link.status = (
+                    RelativePatientStatus.ACTIVE
+                )
+                relative_link.relationship_degree = (
+                    invitation.relationship_degree
+                )
+                relative_link.detached_at = None
+                relative_link.updated_at = now
+            else:
+                relative_link = RelativePatientLink(
+                    relative_id=relative_profile.id,
+                    patient_id=patient_profile.id,
+                    relationship_degree=(
+                        invitation.relationship_degree
+                    ),
+                    status=RelativePatientStatus.ACTIVE,
+                )
+
+            session.add(relative_link)
+
+    elif (
+        invitation.invitation_type
+        == InvitationType.MED_ASSISTANT
+    ):
+        role_added = UserRole.MED_ASSISTANT
+
+        ensure_user_role(
+            session=session,
+            user=user,
+            role=UserRole.MED_ASSISTANT,
+        )
+
+        existing_profile = session.exec(
+            select(MedAssistantProfile).where(
+                MedAssistantProfile.user_id == user.id
             )
         ).first()
 
-        if relative_link:
-            relative_link.status = (
-                RelativePatientStatus.ACTIVE
-            )
-            relative_link.relationship_degree = (
-                invitation.relationship_degree
-            )
-            relative_link.detached_at = None
-            relative_link.updated_at = now
-        else:
-            relative_link = RelativePatientLink(
-                relative_id=relative_profile.id,
-                patient_id=patient_profile.id,
-                relationship_degree=(
-                    invitation.relationship_degree
+        if existing_profile:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "Профиль медицинского ассистента "
+                    "уже существует"
                 ),
-                status=RelativePatientStatus.ACTIVE,
             )
 
-        session.add(relative_link)
+        session.add(
+            MedAssistantProfile(
+                user_id=user.id,
+            )
+        )
+
+    elif (
+        invitation.invitation_type
+        == InvitationType.SUPERUSER
+    ):
+        role_added = UserRole.SUPERUSER
+
+        ensure_user_role(
+            session=session,
+            user=user,
+            role=UserRole.SUPERUSER,
+        )
 
     else:
         raise HTTPException(
