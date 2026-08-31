@@ -1,3 +1,18 @@
+перезапуск конфига nginx
+
+docker compose \
+  --env-file /opt/findmydoc/production/compose.env \
+  -p findmydoc-prod \
+  -f /opt/findmydoc/deploy/docker-compose.yml \
+  --profile edge \
+  up -d --force-recreate nginx
+
+вывести директорию всего проекта:
+docker inspect findmydoc-prod-nginx-1 \
+  --format 'project={{ index .Config.Labels "com.docker.compose.project" }} working_dir={{ index .Config.Labels "com.docker.compose.project.working_dir" }} config={{ index .Config.Labels "com.docker.compose.project.config_files" }}'
+
+
+
 staging:
 # 1. Переключиться на develop ДО внесения изменений
 git switch develop
@@ -2420,7 +2435,7 @@ git status
 git diff --cached --stat
 
 # 8. Создать commit
-git commit -m "Описание изменений"
+git commit -m "nuxt_config fix for icons"
 
 # 9. Отправить текущий commit в develop
 # Это запустит deployment на STAGING

@@ -1,6 +1,6 @@
 ﻿# Project Structure
 
-> Generated: 2026-08-30 21:05
+> Generated: 2026-08-31 20:47
 
 ---
 
@@ -109,6 +109,7 @@ backend/app/modules/users/routers.py
 backend/app/modules/users/schemas.py
 backend/app/modules/users/utils.py
 backend/requirements.txt
+backend/seed/create_superuser.py
 backend/seed/data/tags.json
 backend/seed/data/users.json
 backend/seed/Readme.md
@@ -117,7 +118,7 @@ backend/seed/upload_users.py
 backend/test_database.db
 ```
 
-*Files: 108*
+*Files: 109*
 
 ---
 
