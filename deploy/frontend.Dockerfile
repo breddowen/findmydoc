@@ -1,14 +1,14 @@
 FROM node:24.15.0-bookworm-slim AS builder
 
-ENV NODE_ENV=production
-
 WORKDIR /app
 
 COPY frontend/package.json frontend/package-lock.json ./
 
-RUN npm ci
+RUN npm ci --include=dev
 
 COPY frontend/ ./
+
+ENV NODE_ENV=production
 
 RUN npm run build
 

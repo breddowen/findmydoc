@@ -14,10 +14,10 @@ export default defineNuxtConfig({
       ],
     },
 
-    // clientBundle: {
-    //   scan: true,
-    //   sizeLimitKb: 512,
-    // },
+    clientBundle: {
+      scan: true,
+      sizeLimitKb: 512,
+    },
   },
   vite: {
     plugins: [tailwindcss() as any],
