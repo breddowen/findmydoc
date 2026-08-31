@@ -65,7 +65,7 @@ def get_doctor_effective_tag_data(
     for link in default_links:
         tag = session.get(Tag, link.tag_id)
 
-        if not tag:
+        if not tag or tag.is_hidden:
             continue
 
         result[tag.id] = EffectiveTagData(
@@ -82,7 +82,7 @@ def get_doctor_effective_tag_data(
     for override in overrides:
         tag = session.get(Tag, override.tag_id)
 
-        if not tag:
+        if not tag or tag.is_hidden:
             continue
 
         if override.action == DoctorTagOverrideAction.REMOVE:
@@ -178,7 +178,7 @@ def get_relative_effective_tag_data(
         )
     ).first()
 
-    if relative_tag:
+    if relative_tag and not relative_tag.is_hidden:
         result[relative_tag.id] = EffectiveTagData(
             tag=relative_tag,
             sources={"system"},

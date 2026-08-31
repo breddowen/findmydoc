@@ -41,4 +41,10 @@ class SpecialityResponse(BaseModel):
     consultation_name: str | None
     consultation_description: str | None
 
+    is_hidden: bool
+    hidden_at: datetime | None
+
     created_at: datetime
+
+class SpecialityVisibilityRequest(BaseModel):
+    is_hidden: bool

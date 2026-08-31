@@ -71,3 +71,21 @@ class EffectiveTagsResponse(BaseModel):
 
 class MessageResponse(BaseModel):
     message: str
+
+class TagResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str
+    description: str | None
+
+    is_system: bool
+    is_hidden: bool
+    hidden_at: datetime | None
+
+    created_at: datetime
+    updated_at: datetime
+
+
+class TagVisibilityRequest(BaseModel):
+    is_hidden: bool
