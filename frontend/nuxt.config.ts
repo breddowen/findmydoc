@@ -14,27 +14,10 @@ export default defineNuxtConfig({
       ],
     },
 
-    clientBundle: {
-    scan: true,
-    sizeLimitKb: 512,
-    icons: [
-      'lucide:bell',
-      'lucide:brain-circuit',
-      'lucide:chevron-down',
-      'lucide:clipboard-list',
-      'lucide:file-text',
-      'lucide:key-round',
-      'lucide:layout-dashboard',
-      'lucide:log-out',
-      'lucide:menu',
-      'lucide:moon',
-      'lucide:route',
-      'lucide:shield-check',
-      'lucide:sun',
-      'lucide:users',
-      'lucide:workflow',
-    ],
-  },
+    // clientBundle: {
+    //   scan: true,
+    //   sizeLimitKb: 512,
+    // },
   },
   vite: {
     plugins: [tailwindcss() as any],
