@@ -49,18 +49,25 @@ def revoke_similar_pending_invitations(
     email: str,
     record_id: str | None = None,
 ) -> None:
-    statement = select(Invitation).where(
-        Invitation.invitation_type == invitation_type,
+    from sqlalchemy import or_
+
+    conditions = [
         Invitation.email == email,
-        Invitation.status == InvitationStatus.PENDING,
-    )
+    ]
 
     if record_id is not None:
-        statement = statement.where(
+        conditions.append(
             Invitation.record_id == record_id
         )
 
-    invitations = session.exec(statement).all()
+    invitations = session.exec(
+        select(Invitation).where(
+            Invitation.invitation_type == invitation_type,
+            Invitation.status == InvitationStatus.PENDING,
+            or_(*conditions),
+        )
+    ).all()
+
     now = utc_now()
 
     for invitation in invitations:

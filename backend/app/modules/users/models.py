@@ -113,6 +113,9 @@ class Speciality(SQLModel, table=True):
         default=None,
     )
 
+    is_hidden: bool = Field(default=False, index=True)
+    hidden_at: Optional[datetime] = Field(default=None)
+
     created_at: datetime = Field(default_factory=utc_now)
 
     doctors: list["DoctorProfile"] = Relationship(

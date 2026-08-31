@@ -12,6 +12,10 @@ const props = defineProps({
     type: String,
     default: '',
   },
+  email: {
+    type: String,
+    default: '',
+  },
   title: {
     type: String,
     default: 'Приглашение',
@@ -21,7 +25,23 @@ const props = defineProps({
     default:
       'Отсканируйте QR-код или скопируйте ссылку.',
   },
+  canSendEmail: {
+    type: Boolean,
+    default: false,
+  },
+  sendingEmail: {
+    type: Boolean,
+    default: false,
+  },
+  emailSent: {
+    type: Boolean,
+    default: false,
+  },
 })
+
+const emit = defineEmits([
+  'send-email',
+])
 
 const qrCodeDataUrl = ref('')
 const generatingQr = ref(false)
@@ -93,6 +113,28 @@ watch(
       </p>
 
       <div
+        v-if="email"
+        class="badge badge-outline max-w-full gap-2"
+      >
+        <Icon
+          name="lucide:mail"
+          class="size-3.5 shrink-0"
+        />
+        <span class="truncate">{{ email }}</span>
+      </div>
+
+      <div
+        v-if="emailSent"
+        class="alert alert-success w-full"
+      >
+        <Icon
+          name="lucide:circle-check"
+          class="size-5"
+        />
+        <span>Ссылка отправлена на email</span>
+      </div>
+
+      <div
         class="bg-white flex size-72 max-w-full items-center justify-center rounded-2xl p-3 shadow-sm"
       >
         <span
@@ -147,16 +189,51 @@ watch(
           </span>
         </button>
       </div>
+
+      <p
+        v-if="canSendEmail"
+        class="text-base-content/50 text-center text-xs"
+      >
+        При отправке будет сформирована новая ссылка.
+        Текущая ссылка перестанет действовать.
+      </p>
     </div>
 
     <template #footer>
-      <button
-        type="button"
-        class="btn btn-primary w-full"
-        @click="model = false"
-      >
-        Готово
-      </button>
+      <div class="flex flex-col gap-2 sm:flex-row">
+        <button
+          v-if="canSendEmail"
+          type="button"
+          class="btn btn-outline flex-1"
+          :disabled="sendingEmail"
+          @click="emit('send-email')"
+        >
+          <span
+            v-if="sendingEmail"
+            class="loading loading-spinner loading-sm"
+          />
+
+          <Icon
+            v-else
+            name="lucide:send"
+            class="size-4"
+          />
+
+          {{
+            emailSent
+              ? 'Отправить повторно'
+              : 'Отправить на email'
+          }}
+        </button>
+
+        <button
+          type="button"
+          class="btn btn-primary flex-1"
+          @click="model = false"
+        >
+          Готово
+        </button>
+      </div>
     </template>
   </UiResponsiveDialog>
 </template>

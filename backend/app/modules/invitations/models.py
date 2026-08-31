@@ -90,6 +90,12 @@ class Invitation(SQLModel, table=True):
     accepted_at: Optional[datetime] = Field(default=None)
     revoked_at: Optional[datetime] = Field(default=None)
 
+    email_sent_at: Optional[datetime] = Field(default=None)
+    email_send_error: Optional[str] = Field(
+        default=None,
+        max_length=1000,
+    )
+
     created_by_user: Optional[User] = Relationship(
         sa_relationship_kwargs={
             "foreign_keys": "[Invitation.created_by_user_id]",

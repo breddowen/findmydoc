@@ -3,15 +3,17 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func
 from sqlmodel import Session, select
 
 from app.core.db import get_session
 from app.core.security import AuthContext, get_current_auth, require_roles
 from app.modules.users.enums import UserRole
-from app.modules.users.models import User
+from app.modules.users.models import User, UserRoleLink
 from app.modules.users.schemas import (
     AdminBlockRequest,
     AdminUserListItem,
+    AdminUserPageResponse,
     UserResponse,
     UserUpdateRequest,
 )
@@ -66,7 +68,7 @@ async def update_me(
 
 @router.get(
     "",
-    response_model=list[AdminUserListItem],
+    response_model=AdminUserPageResponse,
     dependencies=[
         Depends(
             require_roles(
@@ -77,31 +79,86 @@ async def update_me(
     ],
 )
 async def list_users(
-    search: str | None = Query(default=None, max_length=200),
+    search: str | None = Query(
+        default=None,
+        max_length=200,
+    ),
+    role: UserRole | None = Query(default=None),
     include_deleted: bool = False,
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(
+        default=20,
+        ge=1,
+        le=100,
+    ),
     session: Session = Depends(get_session),
-) -> list[AdminUserListItem]:
-    statement = select(User)
+) -> AdminUserPageResponse:
+    filters = []
 
     if not include_deleted:
-        statement = statement.where(User.deleted_at.is_(None))
+        filters.append(User.deleted_at.is_(None))
 
     if search:
         normalized_search = search.strip().lower()
-        statement = statement.where(
-            User.email.contains(normalized_search)
+
+        if normalized_search:
+            filters.append(
+                User.email.contains(normalized_search)
+            )
+
+    count_statement = select(
+        func.count(func.distinct(User.id))
+    ).select_from(User)
+
+    users_statement = select(User)
+
+    if role is not None:
+        count_statement = count_statement.join(
+            UserRoleLink,
+            UserRoleLink.user_id == User.id,
+        ).where(
+            UserRoleLink.role == role,
         )
 
+        users_statement = users_statement.join(
+            UserRoleLink,
+            UserRoleLink.user_id == User.id,
+        ).where(
+            UserRoleLink.role == role,
+        )
+
+    if filters:
+        count_statement = count_statement.where(*filters)
+        users_statement = users_statement.where(*filters)
+
+    total_items = session.exec(
+        count_statement
+    ).one()
+
+    total_pages = max(
+        1,
+        (total_items + page_size - 1) // page_size,
+    )
+
+    normalized_page = min(page, total_pages)
+
     users = session.exec(
-        statement.order_by(User.created_at.desc())
+        users_statement
+        .distinct()
+        .order_by(User.created_at.desc())
+        .offset((normalized_page - 1) * page_size)
+        .limit(page_size)
     ).all()
 
-    response: list[AdminUserListItem] = []
+    items: list[AdminUserListItem] = []
 
     for user in users:
         roles = [
             role_link.role
-            for role_link in get_user_roles(session, user.id)
+            for role_link in get_user_roles(
+                session,
+                user.id,
+            )
         ]
 
         full_name = " ".join(
@@ -114,7 +171,7 @@ async def list_users(
             if part
         ) or user.email
 
-        response.append(
+        items.append(
             AdminUserListItem(
                 id=user.id,
                 email=user.email,
@@ -122,13 +179,21 @@ async def list_users(
                 roles=roles,
                 is_active=user.is_active,
                 is_blocked=user.is_blocked,
-                is_email_verified=user.email_verified_at is not None,
+                is_email_verified=(
+                    user.email_verified_at is not None
+                ),
                 deleted_at=user.deleted_at,
                 created_at=user.created_at,
             )
         )
 
-    return response
+    return AdminUserPageResponse(
+        items=items,
+        page=normalized_page,
+        page_size=page_size,
+        total_items=total_items,
+        total_pages=total_pages,
+    )
 
 
 @router.patch(

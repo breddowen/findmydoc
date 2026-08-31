@@ -26,6 +26,8 @@ from app.modules.questionnaires.routers import router as questionnaires_router
 from app.modules.patients.routers import router as patients_router
 from app.modules.assignments.routers import router as assignments_router
 from app.modules.notifications.routers import router as notifications_router
+from app.modules.invitations.admin_routers import router as admin_invitations_router
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -62,6 +64,7 @@ app.include_router(users_router)
 app.include_router(patients_router)
 app.include_router(specialities_router)
 app.include_router(invitations_router)
+app.include_router(admin_invitations_router)
 app.include_router(tags_router)
 app.include_router(relationships_router)
 

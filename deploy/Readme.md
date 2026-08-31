@@ -2435,7 +2435,7 @@ git status
 git diff --cached --stat
 
 # 8. Создать commit
-git commit -m "nuxt_config fix for icons"
+git commit -m "nginx fix for icons"
 
 # 9. Отправить текущий commit в develop
 # Это запустит deployment на STAGING
