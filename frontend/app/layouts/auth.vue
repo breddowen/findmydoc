@@ -14,12 +14,12 @@
       class="flex min-h-dvh items-center justify-center px-4 py-16"
     >
       <div class="w-full max-w-md">
-        <NuxtLink
-          to="/login"
-          class="mb-6 block text-center text-2xl font-bold"
-        >
-          MentalMe
-        </NuxtLink>
+        <div class="mb-7 flex justify-center">
+          <LayoutLogo
+            to="/login"
+            variant="auth"
+          />
+        </div>
 
         <slot />
       </div>

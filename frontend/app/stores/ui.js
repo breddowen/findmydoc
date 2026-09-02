@@ -37,6 +37,14 @@ export const useUiStore = defineStore('ui', () => {
       'data-theme',
       theme.value,
     )
+
+    const themeColor = theme.value === 'dark'
+      ? '#191514'
+      : '#f4f0eb'
+
+    document
+      .querySelector('meta[name="theme-color"]')
+      ?.setAttribute('content', themeColor)
   }
 
   function initTheme() {
