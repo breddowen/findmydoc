@@ -7,6 +7,7 @@ from sqlmodel import Session, select
 from app.modules.tags.enums import DoctorTagOverrideAction
 from app.modules.tags.models import (
     DoctorTagOverride,
+    PatientTagOverride,
     SpecialityTagLink,
     Tag,
 )
@@ -132,6 +133,37 @@ def get_patient_effective_tag_data(
             source=doctor_tags,
             source_prefix=f"doctor:{doctor.id}",
         )
+
+    # Настройки пациента перекрывают результат
+    # наследования от всех врачей.
+    patient_overrides = session.exec(
+        select(PatientTagOverride).where(
+            PatientTagOverride.patient_id
+            == patient.id
+        )
+    ).all()
+
+    for override in patient_overrides:
+        tag = session.get(Tag, override.tag_id)
+
+        if not tag or tag.is_hidden:
+            continue
+
+        if (
+            override.action
+            == DoctorTagOverrideAction.REMOVE
+        ):
+            result.pop(tag.id, None)
+            continue
+
+        if tag.id not in result:
+            result[tag.id] = EffectiveTagData(
+                tag=tag
+            )
+
+        result[tag.id].sources = {
+            "patient:custom",
+        }
 
     return result
 

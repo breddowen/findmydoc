@@ -209,6 +209,10 @@ onMounted(async () => {
       :patient-id="patient.patient_id"
     />
 
+    <PatientsTags
+      :patient-id="patient.patient_id"
+    />
+
     <!-- Врачи -->
     <section
       class="bg-base-100 border-base-300 rounded-2xl border p-5 sm:p-6"

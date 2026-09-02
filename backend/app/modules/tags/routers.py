@@ -21,6 +21,7 @@ from app.core.security import (
 from app.modules.tags.enums import DoctorTagOverrideAction
 from app.modules.tags.models import (
     DoctorTagOverride,
+    PatientTagOverride,
     SpecialityTagLink,
     Tag,
 )
@@ -34,6 +35,8 @@ from app.modules.tags.schemas import (
     TagResponse,
     TagUpdateRequest,
     TagVisibilityRequest,
+    PatientTagOverrideRequest,
+    PatientTagOverrideResponse,
 )
 from app.modules.tags.utils import (
     get_doctor_effective_tag_data,
@@ -54,7 +57,9 @@ from app.modules.programs.models import ProgramTagLink
 from app.modules.questionnaires.models import (
     QuestionnaireTagLink,
 )
-
+from app.modules.patients.utils import (
+    ensure_patient_access,
+)
 
 router = APIRouter(
     prefix="/api/v1/tags",
@@ -65,6 +70,33 @@ router = APIRouter(
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
+
+def get_patient_for_tag_management(
+    *,
+    session: Session,
+    auth: AuthContext,
+    patient_id: uuid.UUID,
+) -> PatientProfile:
+    patient = session.get(
+        PatientProfile,
+        patient_id,
+    )
+
+    if not patient:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Пациент не найден",
+        )
+
+    # Суперпользователь и ассистент имеют доступ
+    # ко всем пациентам. Врач — только к связанным.
+    ensure_patient_access(
+        session=session,
+        auth=auth,
+        patient_id=patient.id,
+    )
+
+    return patient
 
 def get_current_doctor_profile(
     *,
@@ -108,6 +140,33 @@ def serialize_override(
         updated_at=override.updated_at,
     )
 
+def serialize_patient_override(
+    *,
+    session: Session,
+    override: PatientTagOverride,
+) -> PatientTagOverrideResponse:
+    tag = session.get(
+        Tag,
+        override.tag_id,
+    )
+
+    if not tag:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Тег индивидуальной настройки "
+                "пациента не найден"
+            ),
+        )
+
+    return PatientTagOverrideResponse(
+        id=override.id,
+        patient_id=override.patient_id,
+        tag=TagResponse.model_validate(tag),
+        action=override.action,
+        created_at=override.created_at,
+        updated_at=override.updated_at,
+    )
 
 @router.get("", response_model=list[TagResponse])
 async def list_tags(
@@ -271,6 +330,11 @@ async def delete_tag(
             DoctorTagOverride,
             DoctorTagOverride.tag_id,
             "настройками врачей",
+        ),
+        (
+            PatientTagOverride,
+            PatientTagOverride.tag_id,
+            "настройками пациентов",
         ),
         (
             ArticleTagLink,
@@ -611,6 +675,201 @@ async def reset_my_doctor_tag_override(
     session.delete(override)
     session.commit()
 
+
+@router.get(
+    "/patients/{patient_id}/effective",
+    response_model=EffectiveTagsResponse,
+)
+async def get_patient_effective_tags_for_staff(
+    patient_id: uuid.UUID,
+    auth: AuthContext = Depends(
+        require_roles(
+            UserRole.DOCTOR,
+            UserRole.MED_ASSISTANT,
+            UserRole.SUPERUSER,
+        )
+    ),
+    session: Session = Depends(get_session),
+) -> EffectiveTagsResponse:
+    patient = get_patient_for_tag_management(
+        session=session,
+        auth=auth,
+        patient_id=patient_id,
+    )
+
+    tag_data = get_patient_effective_tag_data(
+        session=session,
+        patient=patient,
+    )
+
+    return serialize_effective_tags(
+        owner_type="patient",
+        owner_id=patient.id,
+        tag_data=tag_data,
+    )
+
+
+@router.get(
+    "/patients/{patient_id}/overrides",
+    response_model=list[PatientTagOverrideResponse],
+)
+async def list_patient_tag_overrides(
+    patient_id: uuid.UUID,
+    auth: AuthContext = Depends(
+        require_roles(
+            UserRole.DOCTOR,
+            UserRole.MED_ASSISTANT,
+            UserRole.SUPERUSER,
+        )
+    ),
+    session: Session = Depends(get_session),
+) -> list[PatientTagOverrideResponse]:
+    patient = get_patient_for_tag_management(
+        session=session,
+        auth=auth,
+        patient_id=patient_id,
+    )
+
+    overrides = session.exec(
+        select(PatientTagOverride)
+        .where(
+            PatientTagOverride.patient_id
+            == patient.id
+        )
+        .order_by(
+            PatientTagOverride.created_at
+        )
+    ).all()
+
+    return [
+        serialize_patient_override(
+            session=session,
+            override=override,
+        )
+        for override in overrides
+    ]
+
+
+@router.put(
+    "/patients/{patient_id}/overrides",
+    response_model=PatientTagOverrideResponse,
+)
+async def set_patient_tag_override(
+    patient_id: uuid.UUID,
+    payload: PatientTagOverrideRequest,
+    auth: AuthContext = Depends(
+        require_roles(
+            UserRole.DOCTOR,
+            UserRole.MED_ASSISTANT,
+            UserRole.SUPERUSER,
+        )
+    ),
+    session: Session = Depends(get_session),
+) -> PatientTagOverrideResponse:
+    patient = get_patient_for_tag_management(
+        session=session,
+        auth=auth,
+        patient_id=patient_id,
+    )
+
+    tag = session.get(
+        Tag,
+        payload.tag_id,
+    )
+
+    if not tag:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Тег не найден",
+        )
+
+    if tag.is_hidden:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Скрытый тег нельзя использовать",
+        )
+
+    if tag.is_system:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Системный тег нельзя "
+                "изменять вручную"
+            ),
+        )
+
+    override = session.exec(
+        select(PatientTagOverride).where(
+            PatientTagOverride.patient_id
+            == patient.id,
+            PatientTagOverride.tag_id
+            == tag.id,
+        )
+    ).first()
+
+    now = utc_now()
+
+    if override:
+        override.action = payload.action
+        override.updated_at = now
+    else:
+        override = PatientTagOverride(
+            patient_id=patient.id,
+            tag_id=tag.id,
+            action=payload.action,
+        )
+
+    session.add(override)
+    session.commit()
+    session.refresh(override)
+
+    return serialize_patient_override(
+        session=session,
+        override=override,
+    )
+
+
+@router.delete(
+    "/patients/{patient_id}/overrides/{tag_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def reset_patient_tag_override(
+    patient_id: uuid.UUID,
+    tag_id: uuid.UUID,
+    auth: AuthContext = Depends(
+        require_roles(
+            UserRole.DOCTOR,
+            UserRole.MED_ASSISTANT,
+            UserRole.SUPERUSER,
+        )
+    ),
+    session: Session = Depends(get_session),
+) -> None:
+    patient = get_patient_for_tag_management(
+        session=session,
+        auth=auth,
+        patient_id=patient_id,
+    )
+
+    override = session.exec(
+        select(PatientTagOverride).where(
+            PatientTagOverride.patient_id
+            == patient.id,
+            PatientTagOverride.tag_id == tag_id,
+        )
+    ).first()
+
+    if not override:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=(
+                "Индивидуальная настройка "
+                "тега пациента не найдена"
+            ),
+        )
+
+    session.delete(override)
+    session.commit()
 
 @router.get(
     "/me/effective",

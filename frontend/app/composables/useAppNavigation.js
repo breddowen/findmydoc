@@ -149,24 +149,36 @@ export function useAppNavigation() {
       })
     }
 
+    const settingsLinks = [
+      {
+        to: '/settings/profile',
+        label: 'Личные данные',
+        icon: 'lucide:user-round',
+        description: 'ФИО и данные аккаунта',
+      },
+    ]
+
+    if (auth.activeRole === 'doctor') {
+      settingsLinks.push({
+        to: '/settings/tags',
+        label: 'Мои теги',
+        icon: 'lucide:tags',
+        description: 'Индивидуальные настройки тегов',
+      })
+    }
+
+    settingsLinks.push({
+      to: '/settings/security',
+      label: 'Безопасность',
+      icon: 'lucide:shield-check',
+      description: 'Пароль и passkey',
+    })
+
     groups.push({
       key: 'settings',
       label: 'Настройки',
       icon: 'lucide:settings',
-      links: [
-        {
-            to: '/settings/profile',
-            label: 'Личные данные',
-            icon: 'lucide:user-round',
-            description: 'ФИО и данные аккаунта',
-        },
-        {
-            to: '/settings/security',
-            label: 'Безопасность',
-            icon: 'lucide:shield-check',
-            description: 'Пароль и passkey',
-        },
-        ],
+      links: settingsLinks,
     })
 
     return groups

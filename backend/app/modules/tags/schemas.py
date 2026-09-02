@@ -89,3 +89,16 @@ class TagResponse(BaseModel):
 
 class TagVisibilityRequest(BaseModel):
     is_hidden: bool
+
+class PatientTagOverrideRequest(BaseModel):
+    tag_id: uuid.UUID
+    action: DoctorTagOverrideAction
+
+
+class PatientTagOverrideResponse(BaseModel):
+    id: uuid.UUID
+    patient_id: uuid.UUID
+    tag: TagResponse
+    action: DoctorTagOverrideAction
+    created_at: datetime
+    updated_at: datetime
