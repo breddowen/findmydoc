@@ -7,6 +7,7 @@ const notificationsStore = useNotificationsStore()
 
 onMounted(async () => {
   ui.initTheme()
+  ui.initSidebar()
   auth.initFromStorage()
 
   if (auth.isAuthenticated && !userStore.user) {

@@ -38,7 +38,9 @@ watch(
   () => isStaff.value,
   (value) => {
     if (!value) {
-      ui.closeSidebar()
+      // Закрываем только временный мобильный drawer.
+      // Desktop-предпочтение пользователя сохраняется.
+      ui.closeMobileSidebar()
     }
   },
 )

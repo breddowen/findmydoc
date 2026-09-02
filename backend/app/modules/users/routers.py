@@ -9,7 +9,11 @@ from sqlmodel import Session, select
 from app.core.db import get_session
 from app.core.security import AuthContext, get_current_auth, require_roles
 from app.modules.users.enums import UserRole
-from app.modules.users.models import User, UserRoleLink
+from app.modules.users.models import (
+    PatientProfile,
+    User,
+    UserRoleLink,
+)
 from app.modules.users.schemas import (
     AdminBlockRequest,
     AdminUserListItem,
@@ -48,10 +52,62 @@ async def update_me(
     auth: AuthContext = Depends(get_current_auth),
     session: Session = Depends(get_session),
 ) -> UserResponse:
-    update_data = payload.model_dump(exclude_unset=True)
+    update_data = payload.model_dump(
+        exclude_unset=True
+    )
+
+    dob_was_provided = "dob" in update_data
+    dob = update_data.pop("dob", None)
 
     for field_name, value in update_data.items():
         setattr(auth.user, field_name, value)
+
+    patient = session.exec(
+        select(PatientProfile).where(
+            PatientProfile.user_id == auth.user.id
+        )
+    ).first()
+
+    if dob_was_provided:
+        if not patient:
+            raise HTTPException(
+                status_code=(
+                    status.HTTP_422_UNPROCESSABLE_ENTITY
+                ),
+                detail=(
+                    "Дата рождения доступна "
+                    "только для пациента"
+                ),
+            )
+
+        patient.dob = dob
+
+    name_fields = {
+        "first_name",
+        "last_name",
+        "middle_name",
+    }
+
+    if patient and name_fields.intersection(
+        update_data
+    ):
+        # PatientProfile.fullname пока остаётся
+        # в модели, поэтому синхронизируем его
+        # со структурированным ФИО пользователя.
+        patient.fullname = (
+            " ".join(
+                part
+                for part in [
+                    auth.user.last_name,
+                    auth.user.first_name,
+                    auth.user.middle_name,
+                ]
+                if part
+            )
+            or None
+        )
+        patient.updated_at = utc_now()
+        session.add(patient)
 
     auth.user.updated_at = utc_now()
 

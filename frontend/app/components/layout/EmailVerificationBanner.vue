@@ -6,6 +6,10 @@ const loading = ref(false)
 const message = ref('')
 const errorMessage = ref('')
 
+const shouldShowBanner = computed(() =>
+  userStore.user?.is_email_verified === false,
+)
+
 async function resend() {
   loading.value = true
   message.value = ''
@@ -28,10 +32,7 @@ async function resend() {
 
 <template>
   <div
-    v-if="
-      userStore.user
-      && !userStore.isEmailVerified
-    "
+    v-if="shouldShowBanner"
     class="bg-warning text-warning-content"
   >
     <div
@@ -50,7 +51,7 @@ async function resend() {
 
           <p class="text-sm opacity-80">
             Мы отправили ссылку на
-            {{ userStore.user.email }}.
+            {{ userStore.user?.email }}.
           </p>
 
           <p

@@ -51,6 +51,9 @@ class ExistingPatientConfirmation(BaseModel):
     patient_id: uuid.UUID
     record_id: str
 
+    # Врач увидит зарегистрированный email,
+    # чтобы исправить возможную опечатку.
+    registered_email: EmailStr
     email_matches: bool
     already_linked: bool
 
@@ -71,6 +74,12 @@ class InvitationCreatedResponse(BaseModel):
     email: EmailStr
     expires_at: datetime
     registration_url: str
+
+class InvitationEmailResponse(
+    InvitationCreatedResponse
+):
+    email_sent_at: datetime | None = None
+    email_send_error: str | None = None
 
 
 class InvitationPreviewResponse(BaseModel):

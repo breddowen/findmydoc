@@ -688,5 +688,115 @@ class ProgramEnrollment(SQLModel, table=True):
 
 
 ---------------
-1. Поведение бесплатной программы: да, бесплатная программа доступна без покупки. Но если внутри нее есть Pro контент (статьи или опросники, они остаются недоступны, пока ассистент не даст пациенту доступ"). по сути, платная или бесплатная программа - условное понятие - оно нужно для того, чтобы пациент увилед цену и нажал на купить. Тогда ассистент увидит, что пациент хочет приобрести программу и после этого ассистент свяжется с пациентом и пациент произведет оплату (не на данном сервисе), и после этого ассистент откроет доступ к Pro контенту. Как бы, так... Вообще, в 90% случаев, программы будут платными: там будут бесплатные материалы для ознакомления и остальные платные, которые откроются после того, как ассистент откроет доступ. И программа - это не только статьи и опросники, но и консультации, которые входят пакетом. В программе консультации - только обозначаются, чтобы пациент понимал, из чего строится стоимость программы. Но, например, программы в рамках чекапов - будут бесплатные программы, которые пациент делает, чтобы вовлечь его в работу с сервисом
-2. 
+Поведение бесплатной программы: да, бесплатная программа доступна без покупки. Но если внутри нее есть Pro контент (статьи или опросники, они остаются недоступны, пока ассистент не даст пациенту доступ"). по сути, платная или бесплатная программа - условное понятие - оно нужно для того, чтобы пациент увилед цену и нажал на купить. Тогда ассистент увидит, что пациент хочет приобрести программу и после этого ассистент свяжется с пациентом и пациент произведет оплату (не на данном сервисе), и после этого ассистент откроет доступ к Pro контенту. Как бы, так... Вообще, в 90% случаев, программы будут платными: там будут бесплатные материалы для ознакомления и остальные платные, которые откроются после того, как ассистент откроет доступ. И программа - это не только статьи и опросники, но и консультации, которые входят пакетом. В программе консультации - только обозначаются, чтобы пациент понимал, из чего строится стоимость программы. Но, например, программы в рамках чекапов - будут бесплатные программы, которые пациент делает, чтобы вовлечь его в работу с сервисом
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+--------------
+PS F:\Soft\!Laptops\~~EMC_projects\COMMERCIAL\COMMERCIAL_PROJ_0\frontend> Get-ChildItem -Path "app" -Recurse -File | 
+>>     Where-Object { $_.FullName -notmatch '\\(node_modules|\.nuxt)\\' } | 
+>>     Select-String -Pattern "price_amount|discount_percent|currency|formatFinalPrice|formatOriginalPrice"
+
+app\components\programs\PatientAccess.vue:19:  if (program.price_amount === null) {
+app\components\programs\PatientAccess.vue:24:    `${program.price_amount} `
+app\components\programs\PatientAccess.vue:26:      program.currency === 'RUB'
+app\components\programs\configurator\Editor.vue:32:  price_amount: null,
+app\components\programs\configurator\Editor.vue:33:  currency: 'RUB',
+app\components\programs\configurator\Editor.vue:35:  discount_percent: 0,
+app\components\programs\configurator\Editor.vue:120:  form.price_amount =
+app\components\programs\configurator\Editor.vue:121:    program.price_amount ?? null
+app\components\programs\configurator\Editor.vue:123:  form.currency = program.currency || 'RUB'
+app\components\programs\configurator\Editor.vue:129:  form.discount_percent =
+app\components\programs\configurator\Editor.vue:130:    program.discount_percent || 0
+app\components\programs\configurator\Editor.vue:301:    price_amount:
+app\components\programs\configurator\Editor.vue:302:      form.price_amount === ''
+app\components\programs\configurator\Editor.vue:303:      || form.price_amount === null
+app\components\programs\configurator\Editor.vue:305:        : Number(form.price_amount),
+app\components\programs\configurator\Editor.vue:307:    currency:
+app\components\programs\configurator\Editor.vue:308:      form.price_amount === ''
+app\components\programs\configurator\Editor.vue:309:      || form.price_amount === null
+app\components\programs\configurator\Editor.vue:311:        : form.currency,
+app\components\programs\configurator\Editor.vue:315:    discount_percent:
+app\components\programs\configurator\Editor.vue:316:        form.price_amount === ''
+app\components\programs\configurator\Editor.vue:317:        || form.price_amount === null
+app\components\programs\configurator\Editor.vue:319:            : Number(form.discount_percent || 0),
+app\components\programs\configurator\Editor.vue:404:  () => form.price_amount,
+app\components\programs\configurator\Editor.vue:407:      form.discount_percent = 0
+app\components\programs\configurator\Editor.vue:520:                v-model="form.price_amount"
+app\components\programs\configurator\Editor.vue:535:                v-model="form.currency"
+app\components\programs\configurator\Editor.vue:538:                    form.price_amount === ''
+app\components\programs\configurator\Editor.vue:539:                    || form.price_amount === null
+app\components\programs\configurator\Editor.vue:558:                v-model.number="form.discount_percent"
+app\components\programs\configurator\Editor.vue:565:                    form.price_amount === ''
+app\components\programs\configurator\Editor.vue:566:                    || form.price_amount === null
+app\composables\useProgramPrice.js:3:  function getCurrencySuffix(currency) {
+app\composables\useProgramPrice.js:4:    return currency === 'RUB'
+app\composables\useProgramPrice.js:10:    if (program.price_amount === null) {
+app\composables\useProgramPrice.js:14:    const price = Number(program.price_amount)
+app\composables\useProgramPrice.js:16:      program.discount_percent || 0,
+app\composables\useProgramPrice.js:27:    currency,
+app\composables\useProgramPrice.js:40:    return `${formatted} ${getCurrencySuffix(currency)}`
+app\composables\useProgramPrice.js:43:  function formatOriginalPrice(program) {
+app\composables\useProgramPrice.js:44:    if (program.price_amount === null) {
+app\composables\useProgramPrice.js:49:      Number(program.price_amount),
+app\composables\useProgramPrice.js:50:      program.currency,
+app\composables\useProgramPrice.js:54:  function formatFinalPrice(program) {
+app\composables\useProgramPrice.js:57:      program.currency,
+app\composables\useProgramPrice.js:64:    formatOriginalPrice,
+app\composables\useProgramPrice.js:65:    formatFinalPrice,
+app\pages\programs\index.vue:7:  formatOriginalPrice,
+app\pages\programs\index.vue:8:  formatFinalPrice,
+app\pages\programs\index.vue:148:                v-if="program.discount_percent"
+app\pages\programs\index.vue:155:                −{{ program.discount_percent }}%
+app\pages\programs\index.vue:192:                {{ formatFinalPrice(program) }}
+app\pages\programs\index.vue:196:                v-if="program.discount_percent"
+app\pages\programs\index.vue:199:                {{ formatOriginalPrice(program) }}
+app\pages\programs\[id]\index.vue:10:  formatOriginalPrice,
+app\pages\programs\[id]\index.vue:11:  formatFinalPrice,
+app\pages\programs\[id]\index.vue:179:                    {{ formatFinalPrice(program) }}
+app\pages\programs\[id]\index.vue:183:                    v-if="program.discount_percent"
+app\pages\programs\[id]\index.vue:186:                    {{ formatOriginalPrice(program) }}
+app\pages\programs\[id]\index.vue:190:                    v-if="program.discount_percent"
+app\pages\programs\[id]\index.vue:193:                    −{{ program.discount_percent }}%
+
+1. Sidebar на компьютере: на компьютере — узкая панель только с иконками - да, на телефоне полностью скрыт
+2. Размещение услуг - да, давай на отдельной
+
+
+
+
+
+
+
+
+
+----------------
+
+
+
+Важный момент с отправкой email - да, ок. Но суперпользователь и ассистенты также имеют доступ к любому пациенту
+1. Отправка email: 
+при создании письмо автоматически не отправляется - да
+сразу открывается QR-код - да
+врач сам нажимает «Отправить на email» - да
+после отправки формируется новая ссылка, а старая становится недействительной - да
+
+Наследование тегов: да, отлично!
+
+Заодно, давай еще добавим возможность для пользователей добавлять/изменять ФИО, Дату рождения, пол на странице settings/ну, тут придумай название для страницы
+Вроде, все необходмиые для этого файлы я отправлял и работы там немного
+
+И было бы злорово, если суперпольователь и медассистенты в списке пациентов у каждого пациента будут видеть, напримеп, количество врачей (просто какую-нибудь иконку и рядом с ней цифру, 0-количество врачей, к которым пациент прикреплен). Ведь, если врач хочет прикрепить пациента, но record_id уже есть в базе, то автоматически будет вылезать что пациент уже есть в базе и просто кнопка Прикрепить пациента. и данный врач также будет прикреплен к пациенту.

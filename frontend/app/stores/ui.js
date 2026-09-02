@@ -3,13 +3,32 @@ export const useUiStore = defineStore('ui', () => {
   const theme = ref('light')
   const initialized = ref(false)
 
-  // false: узкая панель на компьютере
-  // и полностью скрытая панель на телефоне.
-  const sidebarOpen = ref(false)
+  const sidebarInitialized = ref(false)
+  const isDesktopViewport = ref(false)
+
+  // Сохраняем только предпочтение для компьютера.
+  const desktopSidebarOpen = ref(false)
+
+  // Мобильное состояние всегда временное.
+  const mobileSidebarOpen = ref(false)
+
+  let desktopMediaQuery = null
 
   const isDark = computed(
     () => theme.value === 'dark',
   )
+
+  const sidebarOpen = computed({
+    get() {
+      return isDesktopViewport.value
+        ? desktopSidebarOpen.value
+        : mobileSidebarOpen.value
+    },
+
+    set(value) {
+      setSidebarOpen(value)
+    },
+  })
 
   function applyTheme() {
     if (!import.meta.client) return
@@ -39,7 +58,9 @@ export const useUiStore = defineStore('ui', () => {
         '(prefers-color-scheme: dark)',
       ).matches
 
-      theme.value = prefersDark ? 'dark' : 'light'
+      theme.value = prefersDark
+        ? 'dark'
+        : 'light'
     }
 
     applyTheme()
@@ -72,16 +93,83 @@ export const useUiStore = defineStore('ui', () => {
     )
   }
 
+  function persistDesktopSidebar() {
+    if (!import.meta.client) return
+
+    localStorage.setItem(
+      'mentalme_sidebar_open',
+      desktopSidebarOpen.value
+        ? '1'
+        : '0',
+    )
+  }
+
+  function handleViewportChange(event) {
+    isDesktopViewport.value = event.matches
+
+    // Мобильное меню никогда не открывается
+    // автоматически при изменении ширины окна.
+    mobileSidebarOpen.value = false
+  }
+
+  function initSidebar() {
+    if (
+      !import.meta.client
+      || sidebarInitialized.value
+    ) {
+      return
+    }
+
+    desktopMediaQuery = window.matchMedia(
+      '(min-width: 1024px)',
+    )
+
+    isDesktopViewport.value =
+      desktopMediaQuery.matches
+
+    desktopSidebarOpen.value =
+      localStorage.getItem(
+        'mentalme_sidebar_open',
+      ) === '1'
+
+    // На телефоне sidebar после перезагрузки закрыт,
+    // независимо от desktop-предпочтения.
+    mobileSidebarOpen.value = false
+
+    desktopMediaQuery.addEventListener(
+      'change',
+      handleViewportChange,
+    )
+
+    sidebarInitialized.value = true
+  }
+
+  function setSidebarOpen(value) {
+    const normalized = Boolean(value)
+
+    if (isDesktopViewport.value) {
+      desktopSidebarOpen.value = normalized
+      persistDesktopSidebar()
+      return
+    }
+
+    mobileSidebarOpen.value = normalized
+  }
+
   function openSidebar() {
-    sidebarOpen.value = true
+    setSidebarOpen(true)
   }
 
   function closeSidebar() {
-    sidebarOpen.value = false
+    setSidebarOpen(false)
+  }
+
+  function closeMobileSidebar() {
+    mobileSidebarOpen.value = false
   }
 
   function toggleSidebar() {
-    sidebarOpen.value = !sidebarOpen.value
+    setSidebarOpen(!sidebarOpen.value)
   }
 
   return {
@@ -89,14 +177,19 @@ export const useUiStore = defineStore('ui', () => {
     initialized,
     isDark,
 
+    sidebarInitialized,
+    isDesktopViewport,
     sidebarOpen,
 
     initTheme,
     setTheme,
     toggleTheme,
 
+    initSidebar,
+    setSidebarOpen,
     openSidebar,
     closeSidebar,
+    closeMobileSidebar,
     toggleSidebar,
   }
 })

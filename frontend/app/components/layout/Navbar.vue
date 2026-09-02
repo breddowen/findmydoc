@@ -15,6 +15,69 @@ const mobileMenuOpen = ref(false)
 function closeMobileMenu() {
   mobileMenuOpen.value = false
 }
+
+const invitationsStore = useInvitationsStore()
+
+const patientInviteOpen = ref(false)
+const invitationLinkOpen = ref(false)
+
+const createdPatientInvitation = ref(null)
+const invitationEmailSent = ref(false)
+const invitationEmailError = ref('')
+
+const { isClientReady } = useClientReady()
+
+const isDoctor = computed(() =>
+  isClientReady.value
+  && auth.activeRole === 'doctor',
+)
+
+function handlePatientInvitationCreated(
+  invitation,
+) {
+  createdPatientInvitation.value = invitation
+  invitationEmailSent.value = false
+  invitationEmailError.value = ''
+  invitationLinkOpen.value = true
+}
+
+async function sendPatientInvitationEmail() {
+  if (!createdPatientInvitation.value) return
+
+  invitationEmailError.value = ''
+
+  try {
+    const response =
+      await invitationsStore
+        .sendPatientInvitation(
+          createdPatientInvitation.value
+            .invitation_id,
+        )
+
+    // При отправке создаётся новая ссылка,
+    // поэтому обновляем и QR-код, и ID.
+    createdPatientInvitation.value = response
+
+    invitationEmailSent.value = Boolean(
+      response.email_sent_at
+      && !response.email_send_error,
+    )
+
+    invitationEmailError.value =
+      response.email_send_error || ''
+  } catch (error) {
+    invitationEmailSent.value = false
+    invitationEmailError.value =
+      error?.data?.detail
+      || 'Не удалось отправить приглашение'
+  }
+}
+
+async function handlePatientAttached(response) {
+  await navigateTo(
+    `/patients/${response.patient_id}`,
+  )
+}
 </script>
 
 <template>
@@ -80,9 +143,30 @@ function closeMobileMenu() {
 
       <div
         v-else
-        class="text-base-content/60 min-w-0 truncate px-2 text-sm"
+        class="flex min-w-0 items-center px-2"
       >
-        Рабочее пространство
+        <button
+          v-if="isDoctor"
+          type="button"
+          class="btn btn-primary btn-sm"
+          @click="patientInviteOpen = true"
+        >
+          <Icon
+            name="lucide:user-plus"
+            class="size-4"
+          />
+
+          <span class="hidden sm:inline">
+            Пригласить пациента
+          </span>
+        </button>
+
+        <span
+          v-else
+          class="text-base-content/60 truncate text-sm"
+        >
+          Рабочее пространство
+        </span>
       </div>
 
       <div
@@ -136,6 +220,16 @@ function closeMobileMenu() {
               <span class="truncate">
                 {{ userStore.user?.email }}
               </span>
+            </li>
+
+            <li>
+              <NuxtLink to="/settings/profile">
+                <Icon
+                  name="lucide:user-round"
+                  class="size-4"
+                />
+                Личные данные
+              </NuxtLink>
             </li>
 
             <li>
@@ -215,4 +309,32 @@ function closeMobileMenu() {
       </button>
     </template>
   </UiBottomSheet>
+
+  <InvitationsPatientDialog
+    v-if="isDoctor"
+    v-model="patientInviteOpen"
+    @created="handlePatientInvitationCreated"
+    @attached="handlePatientAttached"
+  />
+
+  <InvitationsLinkDialog
+    v-if="isDoctor"
+    v-model="invitationLinkOpen"
+    :url="
+      createdPatientInvitation
+        ?.registration_url || ''
+    "
+    :email="
+      createdPatientInvitation?.email || ''
+    "
+    title="Приглашение пациента"
+    description="Покажите пациенту QR-код, скопируйте ссылку или отправьте её на email."
+    can-send-email
+    :sending-email="
+      invitationsStore.sendingEmail
+    "
+    :email-sent="invitationEmailSent"
+    :email-error="invitationEmailError"
+    @send-email="sendPatientInvitationEmail"
+  />
 </template>

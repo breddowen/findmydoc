@@ -1,5 +1,15 @@
 # ./backend/app/modules/content/utils.py
+
+
+# Важное выражение для будущей смены логики
+
+# CONTENT_TAG_MATCH_MODE: TagMatchMode = "all"
+# Для возврата к OR достаточно изменить его на:
+# CONTENT_TAG_MATCH_MODE: TagMatchMode = "any"
+# Наследование тегов уже реализовано правильно и динамически, поэтому tags/utils.py не меняем.
+
 import uuid
+from typing import Literal
 
 from fastapi import HTTPException, status
 from sqlmodel import Session, select
@@ -8,6 +18,20 @@ from app.modules.tags.utils import (
     get_patient_effective_tag_data,
 )
 from app.modules.users.models import PatientProfile
+
+
+TagMatchMode = Literal["all", "any"]
+
+
+# ВАЖНО: основная стратегия фильтрации контента.
+#
+# "all" — AND: пациент должен иметь все теги контента.
+#         Дополнительные теги пациента не мешают.
+#
+# "any" — OR: достаточно хотя бы одного общего тега.
+#
+# Для кастомной логики измените функцию tags_match().
+CONTENT_TAG_MATCH_MODE: TagMatchMode = "all"
 
 
 def get_patient_profile_by_user_id(
@@ -42,6 +66,43 @@ def get_patient_effective_tag_ids(
 
     return set(tag_data.keys())
 
+
+def tags_match(
+    *,
+    patient_tag_ids: set[uuid.UUID],
+    content_tag_ids: set[uuid.UUID],
+    mode: TagMatchMode = CONTENT_TAG_MATCH_MODE,
+) -> bool:
+    """
+    Централизованное правило сопоставления тегов.
+
+    Контент без тегов является общим независимо
+    от выбранного режима.
+    """
+    if not content_tag_ids:
+        return True
+
+    if mode == "all":
+        # Нестрогий AND:
+        # все теги контента должны быть у пациента,
+        # но у пациента могут быть дополнительные теги.
+        return content_tag_ids.issubset(
+            patient_tag_ids
+        )
+
+    if mode == "any":
+        # OR: достаточно одного совпавшего тега.
+        return bool(
+            patient_tag_ids.intersection(
+                content_tag_ids
+            )
+        )
+
+    raise ValueError(
+        f"Неизвестный режим фильтрации тегов: {mode}"
+    )
+
+
 def patient_can_see_content(
     *,
     session: Session,
@@ -52,18 +113,16 @@ def patient_can_see_content(
     if is_hidden:
         return False
 
-    # Контент без тегов считается общим.
-    if not content_tag_ids:
-        return True
-
     patient_tag_ids = get_patient_effective_tag_ids(
         session=session,
         patient=patient,
     )
 
-    return bool(
-        patient_tag_ids.intersection(content_tag_ids)
+    return tags_match(
+        patient_tag_ids=patient_tag_ids,
+        content_tag_ids=content_tag_ids,
     )
+
 
 def patient_can_access_content(
     *,

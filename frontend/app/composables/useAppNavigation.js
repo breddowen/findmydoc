@@ -155,12 +155,18 @@ export function useAppNavigation() {
       icon: 'lucide:settings',
       links: [
         {
-          to: '/settings/security',
-          label: 'Безопасность',
-          icon: 'lucide:shield-check',
-          description: 'Пароль и passkey',
+            to: '/settings/profile',
+            label: 'Личные данные',
+            icon: 'lucide:user-round',
+            description: 'ФИО и данные аккаунта',
         },
-      ],
+        {
+            to: '/settings/security',
+            label: 'Безопасность',
+            icon: 'lucide:shield-check',
+            description: 'Пароль и passkey',
+        },
+        ],
     })
 
     return groups

@@ -126,6 +126,7 @@ onBeforeUnmount(() => {
               <th>Регистрация</th>
               <th>Последняя активность</th>
               <th>Контакт</th>
+              <th>Врачи</th>
               <th>Доступ</th>
               <th />
             </tr>
@@ -186,6 +187,20 @@ onBeforeUnmount(() => {
                   :do-not-call="patient.do_not_call"
                   :show-text="false"
                 />
+              </td>
+
+              <td>
+                <span
+                  class="badge badge-outline gap-1"
+                  title="Количество прикреплённых врачей"
+                >
+                  <Icon
+                    name="lucide:stethoscope"
+                    class="size-4"
+                  />
+
+                  {{ patient.doctors_count || 0 }}
+                </span>
               </td>
 
               <td>

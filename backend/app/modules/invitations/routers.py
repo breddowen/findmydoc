@@ -1,4 +1,6 @@
 # ./backend/app/modules/invitations/routers.py
+import re
+
 import uuid
 from datetime import datetime, timezone
 
@@ -30,6 +32,7 @@ from app.modules.invitations.schemas import (
     InvitationAcceptRequest,
     InvitationAcceptResponse,
     InvitationCreatedResponse,
+    InvitationEmailResponse,
     InvitationListItem,
     InvitationPreviewResponse,
     MessageResponse,
@@ -69,12 +72,36 @@ from app.modules.events.service import record_event
 from app.modules.referrals.enums import ReferralStatus
 from app.modules.referrals.models import Referral
 
+from app.core.email import send_console_email
+
 router = APIRouter(
     prefix="/api/v1/invitations",
     tags=["Invitations"],
 )
 
 
+PATIENT_RECORD_ID_PATTERN = re.compile(
+    r"^[A-Z]{1,2}[0-9]{6}$"
+)
+def normalize_patient_record_id(
+    value: str,
+) -> str:
+    normalized = value.strip().upper()
+
+    if not PATIENT_RECORD_ID_PATTERN.fullmatch(
+        normalized
+    ):
+        raise HTTPException(
+            status_code=(
+                status.HTTP_422_UNPROCESSABLE_ENTITY
+            ),
+            detail=(
+                "Номер карты должен содержать одну "
+                "или две латинские буквы и шесть цифр"
+            ),
+        )
+
+    return normalized
 def get_authenticated_doctor_profile(
     *,
     session: Session,
@@ -184,12 +211,19 @@ async def prepare_patient_invitation(
         auth=auth,
     )
 
-    normalized_record_id = payload.record_id.strip()
-    normalized_email = normalize_email(str(payload.email))
+    normalized_record_id = (
+        normalize_patient_record_id(
+            payload.record_id
+        )
+    )
+    normalized_email = normalize_email(
+        str(payload.email)
+    )
 
     existing_patient = session.exec(
         select(PatientProfile).where(
-            PatientProfile.record_id == normalized_record_id
+            PatientProfile.record_id
+            == normalized_record_id
         )
     ).first()
 
@@ -202,13 +236,25 @@ async def prepare_patient_invitation(
         if not patient_user:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="У профиля пациента отсутствует аккаунт",
+                detail=(
+                    "У профиля пациента "
+                    "отсутствует аккаунт"
+                ),
             )
+
+        registered_email = normalize_email(
+            patient_user.email
+        )
+        email_matches = (
+            registered_email == normalized_email
+        )
 
         existing_link = session.exec(
             select(DoctorPatientLink).where(
-                DoctorPatientLink.doctor_id == doctor_profile.id,
-                DoctorPatientLink.patient_id == existing_patient.id,
+                DoctorPatientLink.doctor_id
+                == doctor_profile.id,
+                DoctorPatientLink.patient_id
+                == existing_patient.id,
             )
         ).first()
 
@@ -223,18 +269,31 @@ async def prepare_patient_invitation(
                 status="confirmation_required",
                 message=(
                     "Пациент уже зарегистрирован. "
-                    "Добавить его к текущему врачу?"
+                    "Проверьте email и подтвердите "
+                    "прикрепление."
                 ),
                 patient_id=existing_patient.id,
                 record_id=existing_patient.record_id,
-                email_matches=(
-                    patient_user.email == normalized_email
-                ),
+                registered_email=registered_email,
+                email_matches=email_matches,
                 already_linked=already_linked,
             )
 
+        # Не разрешаем привязку по одному номеру карты,
+        # если врач ошибся в email.
+        if not email_matches:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "Введённый email не совпадает "
+                    "с email зарегистрированного пациента"
+                ),
+            )
+
         if existing_link:
-            existing_link.status = DoctorPatientStatus.ACTIVE
+            existing_link.status = (
+                DoctorPatientStatus.ACTIVE
+            )
             existing_link.detached_at = None
             existing_link.updated_at = utc_now()
             session.add(existing_link)
@@ -250,9 +309,31 @@ async def prepare_patient_invitation(
 
         return ExistingPatientAttachedResponse(
             status="patient_attached",
-            message="Пациент привязан к врачу",
+            message=(
+                "Пациент уже был прикреплён к врачу"
+                if already_linked
+                else "Пациент прикреплён к врачу"
+            ),
             patient_id=existing_patient.id,
             record_id=existing_patient.record_id,
+        )
+
+    # Приглашение пациента предполагает создание
+    # нового аккаунта. Поэтому существующий аккаунт
+    # с этим email использовать нельзя.
+    existing_user = get_user_by_email(
+        session,
+        normalized_email,
+    )
+
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Аккаунт с таким email уже существует. "
+                "Проверьте номер медицинской карты "
+                "или обратитесь к медицинскому ассистенту."
+            ),
         )
 
     invitation, raw_token = create_invitation(
@@ -265,11 +346,166 @@ async def prepare_patient_invitation(
         dob=payload.dob,
         gender=payload.gender,
         doctor_profile_id=doctor_profile.id,
+
+        # Письмо врач отправит вручную после
+        # просмотра ссылки и QR-кода.
+        send_email=False,
     )
 
     return build_invitation_created_response(
         invitation,
         raw_token,
+    )
+
+@router.post(
+    "/patients/{invitation_id}/send",
+    response_model=InvitationEmailResponse,
+)
+async def send_patient_invitation_email(
+    invitation_id: uuid.UUID,
+    auth: AuthContext = Depends(
+        require_roles(UserRole.DOCTOR)
+    ),
+    session: Session = Depends(get_session),
+) -> InvitationEmailResponse:
+    doctor_profile = get_authenticated_doctor_profile(
+        session=session,
+        auth=auth,
+    )
+
+    source = session.get(
+        Invitation,
+        invitation_id,
+    )
+
+    if (
+        not source
+        or source.invitation_type
+        != InvitationType.PATIENT
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Приглашение пациента не найдено",
+        )
+
+    if (
+        source.created_by_user_id != auth.user.id
+        or source.doctor_profile_id
+        != doctor_profile.id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Нельзя отправлять чужое приглашение"
+            ),
+        )
+
+    if source.status == InvitationStatus.ACCEPTED:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Приглашение уже принято",
+        )
+
+    if not source.record_id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "В приглашении отсутствует "
+                "номер медицинской карты"
+            ),
+        )
+
+    normalized_record_id = (
+        normalize_patient_record_id(
+            source.record_id
+        )
+    )
+
+    registered_patient = session.exec(
+        select(PatientProfile).where(
+            PatientProfile.record_id
+            == normalized_record_id
+        )
+    ).first()
+
+    if registered_patient:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Пациент уже зарегистрирован. "
+                "Вместо отправки приглашения "
+                "прикрепите его к врачу."
+            ),
+        )
+
+    if get_user_by_email(session, source.email):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Аккаунт с таким email "
+                "уже зарегистрирован"
+            ),
+        )
+
+    # При повторной отправке создаётся новый токен.
+    # create_invitation() автоматически отзывает
+    # старые похожие активные приглашения.
+    invitation, raw_token = create_invitation(
+        session=session,
+        invitation_type=InvitationType.PATIENT,
+        created_by_user_id=auth.user.id,
+        email=source.email,
+        record_id=normalized_record_id,
+        first_name=source.first_name,
+        last_name=source.last_name,
+        middle_name=source.middle_name,
+        fullname=source.fullname,
+        gender=source.gender,
+        dob=source.dob,
+        doctor_profile_id=doctor_profile.id,
+        send_email=False,
+    )
+
+    registration_url = build_registration_url(
+        raw_token
+    )
+
+    email_error = None
+
+    try:
+        send_console_email(
+            recipient=invitation.email,
+            subject="Приглашение в MentalMe",
+            message=(
+                "Для регистрации в MentalMe "
+                "перейдите по ссылке:"
+            ),
+            action_url=registration_url,
+        )
+
+        invitation.email_sent_at = utc_now()
+        invitation.email_send_error = None
+    except Exception as error:
+        # Возвращаем новую ссылку даже при ошибке
+        # отправки: врач всё равно сможет скопировать
+        # её или показать QR-код.
+        email_error = str(error)[:1000]
+        invitation.email_sent_at = None
+        invitation.email_send_error = email_error
+
+    session.add(invitation)
+    session.commit()
+    session.refresh(invitation)
+
+    return InvitationEmailResponse(
+        status="invitation_created",
+        invitation_id=invitation.id,
+        invitation_type=invitation.invitation_type,
+        email=invitation.email,
+        expires_at=invitation.expires_at,
+        registration_url=registration_url,
+        email_sent_at=invitation.email_sent_at,
+        email_send_error=email_error,
     )
 
 @router.post(
