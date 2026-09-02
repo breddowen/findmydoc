@@ -84,11 +84,111 @@ from app.modules.users.models import (
     User,
 )
 
+from app.modules.services.models import MedicalService
+from app.modules.services.schemas import (
+    MedicalServicePatientResponse,
+    MedicalServiceStaffResponse,
+)
 
 router = APIRouter(
     prefix="/api/v1/programs",
     tags=["Programs"],
 )
+
+def get_program_service(
+    *,
+    session: Session,
+    program: Program,
+) -> MedicalService | None:
+    if program.service_id is None:
+        return None
+
+    service = session.get(
+        MedicalService,
+        program.service_id,
+    )
+
+    if not service:
+        # Такая ситуация возможна только при нарушении
+        # целостности базы или ручном изменении данных.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Связанная услуга программы не найдена",
+        )
+
+    return service
+
+
+def serialize_program_service_for_patient(
+    *,
+    session: Session,
+    program: Program,
+) -> MedicalServicePatientResponse | None:
+    service = get_program_service(
+        session=session,
+        program=program,
+    )
+
+    if not service:
+        return None
+
+    return MedicalServicePatientResponse.model_validate(
+        service
+    )
+
+
+def serialize_program_service_for_staff(
+    *,
+    session: Session,
+    program: Program,
+) -> MedicalServiceStaffResponse | None:
+    service = get_program_service(
+        session=session,
+        program=program,
+    )
+
+    if not service:
+        return None
+
+    return MedicalServiceStaffResponse.model_validate(
+        service
+    )
+
+
+def validate_program_service_choice(
+    *,
+    session: Session,
+    service_id: uuid.UUID | None,
+    current_service_id: uuid.UUID | None = None,
+) -> MedicalService | None:
+    if service_id is None:
+        return None
+
+    service = session.get(
+        MedicalService,
+        service_id,
+    )
+
+    if not service:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Услуга не найдена",
+        )
+
+    # Скрытая услуга остаётся рабочей для уже связанной
+    # программы, но её нельзя назначить заново.
+    if (
+        service.is_hidden
+        and service.id != current_service_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Скрытую услугу нельзя назначить программе"
+            ),
+        )
+
+    return service
 
 def fill_program_structure(
     *,
@@ -497,10 +597,10 @@ def serialize_patient_program(
         title=program.title,
         description=program.description,
 
-        price_amount=program.price_amount,
-        currency=program.currency,
-
-        discount_percent=program.discount_percent,
+        service=serialize_program_service_for_patient(
+            session=session,
+            program=program,
+        ),
         is_popular=program.is_popular,
 
         tags=[
@@ -578,10 +678,10 @@ def serialize_clinical_program(
         title=program.title,
         description=program.description,
 
-        price_amount=program.price_amount,
-        currency=program.currency,
-
-        discount_percent=program.discount_percent,
+        service=serialize_program_service_for_staff(
+            session=session,
+            program=program,
+        ),
         is_popular=program.is_popular,
 
         is_hidden=program.is_hidden,
@@ -620,12 +720,13 @@ async def create_program(
     session: Session = Depends(get_session),
 ) -> ProgramClinicalResponse:
     try:
+        validate_program_service_choice(
+            session=session,
+            service_id=payload.service_id,
+        )
         program = Program(
             title=payload.title.strip(),
             description=payload.description,
-            price_amount=payload.price_amount,
-            currency=payload.currency,
-            discount_percent=payload.discount_percent,
             is_popular=payload.is_popular,
             pro_content=False,
             created_by_user_id=auth.user.id,
@@ -886,6 +987,12 @@ async def update_program(
             detail="Программа не найдена",
         )
 
+    validate_program_service_choice(
+        session=session,
+        service_id=payload.service_id,
+        current_service_id=program.service_id,
+    )
+
     old_tag_links = session.exec(
         select(ProgramTagLink).where(
             ProgramTagLink.program_id == program.id
@@ -908,11 +1015,9 @@ async def update_program(
 
     program.title = payload.title.strip()
     program.description = payload.description
-    program.price_amount = payload.price_amount
-    program.currency = payload.currency
+    program.service_id = payload.service_id
     program.pro_content = False
     program.updated_at = utc_now()
-    program.discount_percent = payload.discount_percent
     program.is_popular = payload.is_popular
 
     session.add(program)
@@ -1189,11 +1294,13 @@ async def list_patient_program_access(
             PatientProgramAccessItem(
                 program_id=program.id,
                 title=program.title,
-                price_amount=program.price_amount,
-                currency=program.currency,
 
-                discount_percent=program.discount_percent,
+                service=serialize_program_service_for_staff(
+                    session=session,
+                    program=program,
+                ),
                 is_popular=program.is_popular,
+
                 purchase_requested=bool(
                     access
                     and access.purchase_requested
@@ -1328,11 +1435,10 @@ async def update_patient_program_access(
     return PatientProgramAccessItem(
         program_id=program.id,
         title=program.title,
-        price_amount=program.price_amount,
-        currency=program.currency,
 
-        discount_percent=(
-            program.discount_percent
+        service=serialize_program_service_for_staff(
+            session=session,
+            program=program,
         ),
         is_popular=program.is_popular,
 
@@ -1397,11 +1503,11 @@ def serialize_patient_clinical_program(
         title=patient_response.title,
         description=patient_response.description,
 
-        price_amount=patient_response.price_amount,
-        currency=patient_response.currency,
-
-        discount_percent=(
-            patient_response.discount_percent
+        # Этот ответ предназначен для сотрудников,
+        # поэтому содержит технический код услуги.
+        service=serialize_program_service_for_staff(
+            session=session,
+            program=program,
         ),
         is_popular=patient_response.is_popular,
 

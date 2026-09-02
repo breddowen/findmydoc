@@ -9,26 +9,17 @@ const props = defineProps({
 
 const store = useProgramsStore()
 
+const {
+  formatFinalPrice,
+  formatOriginalPrice,
+  hasDiscount,
+} = useProgramPrice()
+
 const loading = ref(true)
 const confirmOpen = ref(false)
 const selectedProgram = ref(null)
 
 const errorMessage = ref('')
-
-function formatPrice(program) {
-  if (program.price_amount === null) {
-    return 'Бесплатно'
-  }
-
-  return (
-    `${program.price_amount} `
-    + (
-      program.currency === 'RUB'
-        ? '₽'
-        : 'у. е.'
-    )
-  )
-}
 
 function requestToggle(program) {
   selectedProgram.value = program
@@ -54,19 +45,6 @@ async function confirmToggle() {
   }
 }
 
-onMounted(async () => {
-  try {
-    await store.fetchPatientProgramAccess(
-      props.patientId,
-    )
-  } catch (error) {
-    errorMessage.value =
-      error?.data?.detail
-      || 'Не удалось загрузить программы'
-  } finally {
-    loading.value = false
-  }
-})
 const sortedPrograms = computed(() =>
   [...store.patientAccessPrograms].sort(
     (first, second) => {
@@ -86,6 +64,20 @@ const sortedPrograms = computed(() =>
     },
   ),
 )
+
+onMounted(async () => {
+  try {
+    await store.fetchPatientProgramAccess(
+      props.patientId,
+    )
+  } catch (error) {
+    errorMessage.value =
+      error?.data?.detail
+      || 'Не удалось загрузить программы'
+  } finally {
+    loading.value = false
+  }
+})
 </script>
 
 <template>
@@ -125,10 +117,10 @@ const sortedPrograms = computed(() =>
         :key="program.program_id"
         class="border-base-300 flex flex-col gap-4 rounded-2xl border p-4 sm:flex-row sm:items-center"
         :class="{
-            'border-warning bg-warning/5 ring-warning/10 ring-4':
+          'border-warning bg-warning/5 ring-warning/10 ring-4':
             program.purchase_requested,
         }"
-        >
+      >
         <div class="min-w-0 flex-1">
           <div class="flex flex-wrap items-center gap-2">
             <p class="font-medium">
@@ -136,16 +128,15 @@ const sortedPrograms = computed(() =>
             </p>
 
             <span
-                v-if="program.purchase_requested"
-                class="badge badge-warning badge-sm gap-1"
-                >
-                <Icon
-                    name="lucide:shopping-cart"
-                    class="size-3"
-                />
-
-                Пациент хочет приобрести
-                </span>
+              v-if="program.purchase_requested"
+              class="badge badge-warning badge-sm gap-1"
+            >
+              <Icon
+                name="lucide:shopping-cart"
+                class="size-3"
+              />
+              Пациент запросил доступ
+            </span>
 
             <span
               v-if="program.is_hidden"
@@ -155,9 +146,27 @@ const sortedPrograms = computed(() =>
             </span>
           </div>
 
-          <p class="text-base-content/50 mt-1 text-sm">
-            {{ formatPrice(program) }}
-          </p>
+          <div
+            class="text-base-content/60 mt-2 flex flex-wrap items-center gap-2 text-sm"
+          >
+            <span
+              v-if="program.service?.code"
+              class="font-mono"
+            >
+              {{ program.service.code }}
+            </span>
+
+            <strong>
+              {{ formatFinalPrice(program) }}
+            </strong>
+
+            <span
+              v-if="hasDiscount(program)"
+              class="text-base-content/40 line-through"
+            >
+              {{ formatOriginalPrice(program) }}
+            </span>
+          </div>
         </div>
 
         <label

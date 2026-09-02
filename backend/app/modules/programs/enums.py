@@ -8,11 +8,6 @@ class ProgramItemType(str, Enum):
     CONSULTATION = "consultation"
 
 
-class ProgramCurrency(str, Enum):
-    RUB = "RUB"
-    UNIT = "UNIT"
-
-
 class ProgramEnrollmentStatus(str, Enum):
     ACTIVE = "active"
     COMPLETED = "completed"

@@ -1,18 +1,21 @@
 # ./backend/app/modules/programs/schemas.py
 import uuid
 from datetime import datetime
-from decimal import Decimal
 
 from pydantic import BaseModel, Field, model_validator
 
 from app.modules.programs.enums import (
-    ProgramCurrency,
     ProgramEnrollmentStatus,
     ProgramItemType,
     ProgramStageStatus,
 )
 from app.modules.questionnaires.enums import (
     QuestionnaireSubmissionStatus,
+)
+
+from app.modules.services.schemas import (
+    MedicalServicePatientResponse,
+    MedicalServiceStaffResponse,
 )
 
 class ProgramStageItemCreateRequest(BaseModel):
@@ -89,56 +92,22 @@ class ProgramStageCreateRequest(BaseModel):
 
 
 class ProgramCreateRequest(BaseModel):
-    title: str = Field(min_length=1, max_length=300)
+    title: str = Field(
+        min_length=1,
+        max_length=300,
+    )
     description: str | None = None
 
-    price_amount: Decimal | None = Field(
-        default=None,
-        ge=0,
-        decimal_places=2,
-    )
-    currency: ProgramCurrency | None = None
+    # NULL означает бесплатную программу
+    # без связанной медицинской услуги.
+    service_id: uuid.UUID | None = None
 
-    discount_percent: int = Field(
-        default=0,
-        ge=0,
-        le=100,
-    )
     is_popular: bool = False
 
     tag_ids: list[uuid.UUID] = []
     stages: list[ProgramStageCreateRequest] = Field(
         min_length=1
     )
-
-    @model_validator(mode="after")
-    def validate_price(self):
-        if (
-            self.price_amount is not None
-            and self.currency is None
-        ):
-            raise ValueError(
-                "Для стоимости необходимо указать валюту"
-            )
-
-        if (
-            self.price_amount is None
-            and self.currency is not None
-        ):
-            raise ValueError(
-                "Валюта не может быть указана без стоимости"
-            )
-
-        if (
-            self.price_amount is None
-            and self.discount_percent > 0
-        ):
-            raise ValueError(
-                "Нельзя установить скидку "
-                "для бесплатной программы"
-            )
-
-        return self
 
 class ProgramUpdateRequest(ProgramCreateRequest):
     pass
@@ -220,10 +189,7 @@ class ProgramPatientResponse(BaseModel):
     title: str
     description: str | None
 
-    price_amount: Decimal | None
-    currency: ProgramCurrency | None
-
-    discount_percent: int
+    service: MedicalServicePatientResponse | None
     is_popular: bool
 
     tags: list[ProgramTagResponse]
@@ -242,10 +208,7 @@ class ProgramClinicalResponse(BaseModel):
     title: str
     description: str | None
 
-    price_amount: Decimal | None
-    currency: ProgramCurrency | None
-
-    discount_percent: int
+    service: MedicalServiceStaffResponse | None
     is_popular: bool
 
     is_hidden: bool
@@ -276,10 +239,7 @@ class PatientProgramAccessItem(BaseModel):
     program_id: uuid.UUID
     title: str
 
-    price_amount: Decimal | None
-    currency: ProgramCurrency | None
-
-    discount_percent: int
+    service: MedicalServiceStaffResponse | None
     is_popular: bool
 
     is_hidden: bool
@@ -292,5 +252,6 @@ class PatientProgramAccessItem(BaseModel):
 class PatientProgramClinicalResponse(
     ProgramPatientResponse
 ):
+    service: MedicalServiceStaffResponse | None
     is_hidden: bool
     stages: list[ProgramStageClinicalResponse]

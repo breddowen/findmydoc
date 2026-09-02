@@ -1,18 +1,13 @@
 # ./backend/app/modules/programs/models.py
 import uuid
 from datetime import datetime, timezone
-from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import Column, Numeric, UniqueConstraint
 from sqlmodel import Field, Relationship, SQLModel
+from sqlalchemy import UniqueConstraint
 
 from app.modules.articles.models import Article
-from app.modules.programs.enums import (
-    ProgramCurrency,
-    ProgramEnrollmentStatus,
-    ProgramItemType,
-)
+from app.modules.services.models import MedicalService
 from app.modules.questionnaires.models import Questionnaire
 from app.modules.tags.models import Tag
 from app.modules.users.models import (
@@ -20,7 +15,10 @@ from app.modules.users.models import (
     Speciality,
     User,
 )
-
+from app.modules.programs.enums import (
+    ProgramEnrollmentStatus,
+    ProgramItemType,
+)
 
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)
@@ -29,35 +27,37 @@ def utc_now() -> datetime:
 class Program(SQLModel, table=True):
     __tablename__ = "programs"
 
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        primary_key=True,
+    )
 
-    title: str = Field(index=True, max_length=300)
+    title: str = Field(
+        index=True,
+        max_length=300,
+    )
     description: Optional[str] = Field(default=None)
 
-    pro_content: bool = Field(default=False, index=True)
-
-    price_amount: Optional[Decimal] = Field(
+    service_id: Optional[uuid.UUID] = Field(
         default=None,
-        sa_column=Column(
-            Numeric(12, 2),
-            nullable=True,
-        ),
-    )
-    currency: Optional[ProgramCurrency] = Field(
-        default=None,
+        foreign_key="medical_services.id",
+        index=True,
     )
 
-    discount_percent: int = Field(
-        default=0,
-        ge=0,
-        le=100,
+    pro_content: bool = Field(
+        default=False,
+        index=True,
     )
+
     is_popular: bool = Field(
         default=False,
         index=True,
     )
 
-    is_hidden: bool = Field(default=False, index=True)
+    is_hidden: bool = Field(
+        default=False,
+        index=True,
+    )
 
     created_by_user_id: uuid.UUID = Field(
         foreign_key="users.id",
@@ -67,6 +67,13 @@ class Program(SQLModel, table=True):
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
     hidden_at: Optional[datetime] = Field(default=None)
+
+    service: Optional[MedicalService] = Relationship(
+        back_populates="programs",
+        sa_relationship_kwargs={
+            "foreign_keys": "[Program.service_id]",
+        },
+    )
 
     stages: list["ProgramStage"] = Relationship(
         back_populates="program",

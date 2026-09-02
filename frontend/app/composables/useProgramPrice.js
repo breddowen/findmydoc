@@ -1,19 +1,79 @@
 // ./frontend/app/composables/useProgramPrice.js
 export function useProgramPrice() {
-  function getCurrencySuffix(currency) {
-    return currency === 'RUB'
-      ? '₽'
-      : 'у. е.'
+  function resolveService(source) {
+    if (!source) return null
+
+    // Если передана программа, цена находится
+    // внутри связанной услуги.
+    if (
+      Object.prototype.hasOwnProperty.call(
+        source,
+        'service',
+      )
+    ) {
+      return source.service
+    }
+
+    // Это позволяет использовать composable
+    // непосредственно в конструкторе услуг.
+    return source
   }
 
-  function getDiscountedPrice(program) {
-    if (program.price_amount === null) {
+  function getCurrencySuffix(currency) {
+    if (currency === 'RUB') {
+      return '₽'
+    }
+
+    if (currency === 'UNIT') {
+      return 'у. е.'
+    }
+
+    return ''
+  }
+
+  function getPriceKind(source) {
+    const service = resolveService(source)
+
+    if (!service) {
+      return 'free'
+    }
+
+    if (
+      service.price_amount === null
+      || service.price_amount === undefined
+    ) {
+      return 'request'
+    }
+
+    if (Number(service.price_amount) === 0) {
+      return 'free'
+    }
+
+    return 'paid'
+  }
+
+  function getDiscountedPrice(source) {
+    const service = resolveService(source)
+
+    if (
+      !service
+      || service.price_amount === null
+      || service.price_amount === undefined
+    ) {
       return null
     }
 
-    const price = Number(program.price_amount)
+    // Предпочитаем рассчитанную backend-ом цену.
+    if (
+      service.final_price_amount !== null
+      && service.final_price_amount !== undefined
+    ) {
+      return Number(service.final_price_amount)
+    }
+
+    const price = Number(service.price_amount)
     const discount = Number(
-      program.discount_percent || 0,
+      service.discount_percent || 0,
     )
 
     return Math.max(
@@ -22,12 +82,22 @@ export function useProgramPrice() {
     )
   }
 
-  function formatAmount(
-    amount,
-    currency,
-  ) {
-    if (amount === null) {
-      return 'Бесплатно'
+  function hasDiscount(source) {
+    const service = resolveService(source)
+
+    return (
+      getPriceKind(source) === 'paid'
+      && Number(service?.discount_percent || 0) > 0
+    )
+  }
+
+  function formatAmount(amount, currency) {
+    if (
+      amount === null
+      || amount === undefined
+      || Number.isNaN(Number(amount))
+    ) {
+      return '—'
     }
 
     const formatted = new Intl.NumberFormat(
@@ -35,33 +105,76 @@ export function useProgramPrice() {
       {
         maximumFractionDigits: 2,
       },
-    ).format(amount)
+    ).format(Number(amount))
 
-    return `${formatted} ${getCurrencySuffix(currency)}`
+    const suffix = getCurrencySuffix(currency)
+
+    return suffix
+      ? `${formatted} ${suffix}`
+      : formatted
   }
 
-  function formatOriginalPrice(program) {
-    if (program.price_amount === null) {
+  function formatOriginalPrice(source) {
+    const kind = getPriceKind(source)
+
+    if (kind === 'free') {
       return 'Бесплатно'
     }
 
+    if (kind === 'request') {
+      return 'Цена по запросу'
+    }
+
+    const service = resolveService(source)
+
     return formatAmount(
-      Number(program.price_amount),
-      program.currency,
+      service.price_amount,
+      service.currency,
     )
   }
 
-  function formatFinalPrice(program) {
+  function formatFinalPrice(source) {
+    const kind = getPriceKind(source)
+
+    if (kind === 'free') {
+      return 'Бесплатно'
+    }
+
+    if (kind === 'request') {
+      return 'Цена по запросу'
+    }
+
+    const service = resolveService(source)
+
     return formatAmount(
-      getDiscountedPrice(program),
-      program.currency,
+      getDiscountedPrice(source),
+      service.currency,
     )
+  }
+
+  function getPurchaseActionLabel(source) {
+    const kind = getPriceKind(source)
+
+    if (kind === 'request') {
+      return 'Узнать стоимость'
+    }
+
+    if (kind === 'free') {
+      return 'Запросить полный доступ'
+    }
+
+    return 'Купить программу'
   }
 
   return {
+    resolveService,
+    getCurrencySuffix,
+    getPriceKind,
     getDiscountedPrice,
+    hasDiscount,
     formatAmount,
     formatOriginalPrice,
     formatFinalPrice,
+    getPurchaseActionLabel,
   }
 }

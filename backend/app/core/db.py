@@ -80,6 +80,7 @@ def import_all_models() -> None:
     # Контент сначала импортируется от простого к составному.
     from app.modules.articles import models as article_models  # noqa: F401
     from app.modules.questionnaires import models as questionnaire_models  # noqa: F401
+    from app.modules.services import models as service_models  # noqa: F401
     from app.modules.programs import models as program_models  # noqa: F401
 
     # Клинический и аналитический маршрут.
