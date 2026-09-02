@@ -1,6 +1,7 @@
 <!-- ./frontend/app/pages/patients/index.vue -->
 <script setup>
 const auth = useAuthStore()
+const { isClientReady } = useClientReady()
 
 const titles = {
   doctor: 'Мои пациенты',
@@ -8,9 +9,15 @@ const titles = {
   superuser: 'Пациенты',
 }
 
-const title = computed(
-  () => titles[auth.activeRole] || 'Пациенты',
-)
+const title = computed(() => {
+  // Сервер и клиент до завершения hydration
+  // должны вернуть одинаковый заголовок.
+  if (!isClientReady.value) {
+    return 'Пациенты'
+  }
+
+  return titles[auth.activeRole] || 'Пациенты'
+})
 </script>
 
 <template>

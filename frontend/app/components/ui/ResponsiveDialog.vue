@@ -29,62 +29,71 @@ const emit = defineEmits([
   'opened',
 ])
 
+const { isClientReady } = useClientReady()
+
 const { matches: isDesktop } = useBreakpoint(
   '(min-width: 768px)',
 )
 </script>
 
 <template>
-  <UiModal
-    v-if="isDesktop"
-    v-model="model"
-    :title="title"
-    :close-on-backdrop="closeOnBackdrop"
-    :show-close-button="showCloseButton"
-    :max-width-class="maxWidthClass"
-    @close="emit('close')"
-    @opened="emit('opened')"
-  >
-    <template
-      v-if="$slots.header"
-      #header
+  <!--
+    Modal и BottomSheet появляются только после
+    завершения hydration. Это предотвращает отличие
+    серверного DOM от клиентского.
+  -->
+  <template v-if="isClientReady">
+    <UiModal
+      v-if="isDesktop"
+      v-model="model"
+      :title="title"
+      :close-on-backdrop="closeOnBackdrop"
+      :show-close-button="showCloseButton"
+      :max-width-class="maxWidthClass"
+      @close="emit('close')"
+      @opened="emit('opened')"
     >
-      <slot name="header" />
-    </template>
+      <template
+        v-if="$slots.header"
+        #header
+      >
+        <slot name="header" />
+      </template>
 
-    <slot />
+      <slot />
 
-    <template
-      v-if="$slots.footer"
-      #footer
+      <template
+        v-if="$slots.footer"
+        #footer
+      >
+        <slot name="footer" />
+      </template>
+    </UiModal>
+
+    <UiBottomSheet
+      v-else
+      v-model="model"
+      :title="title"
+      :close-on-backdrop="closeOnBackdrop"
+      :show-close-button="showCloseButton"
+      @close="emit('close')"
+      @opened="emit('opened')"
     >
-      <slot name="footer" />
-    </template>
-  </UiModal>
+      <template
+        v-if="$slots.header"
+        #header
+      >
+        <slot name="header" />
+      </template>
 
-  <UiBottomSheet
-    v-else
-    v-model="model"
-    :title="title"
-    :close-on-backdrop="closeOnBackdrop"
-    :show-close-button="showCloseButton"
-    @close="emit('close')"
-    @opened="emit('opened')"
-  >
-    <template
-      v-if="$slots.header"
-      #header
-    >
-      <slot name="header" />
-    </template>
+      <slot />
 
-    <slot />
-
-    <template
-      v-if="$slots.footer"
-      #footer
-    >
-      <slot name="footer" />
-    </template>
-  </UiBottomSheet>
+      <template
+        v-if="$slots.footer"
+        #footer
+      >
+        <slot name="footer" />
+      </template>
+    </UiBottomSheet>
+  </template>
 </template>

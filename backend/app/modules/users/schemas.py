@@ -2,7 +2,13 @@
 import uuid
 from datetime import date, datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    field_validator,
+)
 
 from app.modules.users.enums import Gender, UserRole
 
@@ -67,10 +73,52 @@ class UserResponse(BaseModel):
 
 
 class UserUpdateRequest(BaseModel):
-    first_name: str | None = Field(default=None, max_length=100)
-    last_name: str | None = Field(default=None, max_length=100)
-    middle_name: str | None = Field(default=None, max_length=100)
+    first_name: str | None = Field(
+        default=None,
+        max_length=100,
+    )
+    last_name: str | None = Field(
+        default=None,
+        max_length=100,
+    )
+    middle_name: str | None = Field(
+        default=None,
+        max_length=100,
+    )
     gender: Gender | None = None
+
+    # Используется только для пациента.
+    dob: date | None = None
+
+    @field_validator(
+        "first_name",
+        "last_name",
+        "middle_name",
+        mode="before",
+    )
+    @classmethod
+    def normalize_name(
+        cls,
+        value,
+    ):
+        if value is None:
+            return None
+
+        normalized = str(value).strip()
+        return normalized or None
+
+    @field_validator("dob")
+    @classmethod
+    def validate_dob(
+        cls,
+        value: date | None,
+    ) -> date | None:
+        if value and value > date.today():
+            raise ValueError(
+                "Дата рождения не может быть в будущем"
+            )
+
+        return value
 
 
 class AdminUserListItem(BaseModel):

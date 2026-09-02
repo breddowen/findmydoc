@@ -98,8 +98,12 @@ function formatDate(value) {
           Pro
         </span>
 
-        <span class="badge badge-outline">
-          Врачей: {{ patient.doctors_count }}
+        <span class="badge badge-outline gap-1">
+          <Icon
+            name="lucide:stethoscope"
+            class="size-3.5"
+          />
+          {{ patient.doctors_count || 0 }}
         </span>
       </div>
     </div>

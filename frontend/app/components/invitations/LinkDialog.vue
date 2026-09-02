@@ -37,6 +37,10 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  emailError: {
+    type: String,
+    default: '',
+  },
 })
 
 const emit = defineEmits([
@@ -132,6 +136,20 @@ watch(
           class="size-5"
         />
         <span>Ссылка отправлена на email</span>
+      </div>
+
+      <div
+        v-if="emailError"
+        class="alert alert-error w-full"
+      >
+        <Icon
+          name="lucide:circle-alert"
+          class="size-5"
+        />
+
+        <span>
+          {{ emailError }}
+        </span>
       </div>
 
       <div

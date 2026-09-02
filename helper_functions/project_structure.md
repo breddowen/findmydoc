@@ -1,6 +1,6 @@
 ﻿# Project Structure
 
-> Generated: 2026-09-02 21:12
+> Generated: 2026-09-02 22:24
 
 ---
 
@@ -127,7 +127,7 @@ backend/seed/data/users.json (149 lines)
 backend/seed/Readme.md (1 lines)
 backend/seed/upload_tags.py (123 lines)
 backend/seed/upload_users.py (381 lines)
-backend/test_database.db (?)
+backend/test_database.db (938 lines)
 ```
 
 *Files: 121*
@@ -157,26 +157,32 @@ frontend/app/components/directories/Tags.vue (311 lines)
 frontend/app/components/invitations/LinkDialog.vue (239 lines)
 frontend/app/components/layout/EmailVerificationBanner.vue (87 lines)
 frontend/app/components/layout/Footer.vue (48 lines)
-frontend/app/components/layout/Navbar.vue (365 lines)
+frontend/app/components/layout/Navbar.vue (218 lines)
+frontend/app/components/layout/Sidebar.vue (190 lines)
 frontend/app/components/layout/ThemeToggle.vue (28 lines)
 frontend/app/components/notifications/Center.vue (181 lines)
 frontend/app/components/patients/ContactStatus.vue (66 lines)
 frontend/app/components/patients/Item.vue (107 lines)
 frontend/app/components/patients/List.vue (242 lines)
 frontend/app/components/patients/ProAccess.vue (107 lines)
-frontend/app/components/programs/configurator/Editor.vue (694 lines)
+frontend/app/components/programs/configurator/Editor.vue (633 lines)
 frontend/app/components/programs/configurator/Item.vue (143 lines)
 frontend/app/components/programs/configurator/Library.vue (272 lines)
+frontend/app/components/programs/configurator/ServiceSelect.vue (170 lines)
 frontend/app/components/programs/configurator/Stage.vue (251 lines)
-frontend/app/components/programs/PatientAccess.vue (231 lines)
+frontend/app/components/programs/PatientAccess.vue (240 lines)
 frontend/app/components/programs/PatientOverview.vue (154 lines)
 frontend/app/components/programs/PatientProgress.vue (208 lines)
-frontend/app/components/programs/viewer/Stage.vue (380 lines)
+frontend/app/components/programs/viewer/Stage.vue (384 lines)
 frontend/app/components/programs/VisibilityDialog.vue (128 lines)
 frontend/app/components/questionnaires/Editor.vue (529 lines)
 frontend/app/components/questionnaires/JsonImporter.vue (264 lines)
 frontend/app/components/questionnaires/QuestionField.vue (157 lines)
 frontend/app/components/questionnaires/QuestionItem.vue (314 lines)
+frontend/app/components/services/DeleteDialog.vue (95 lines)
+frontend/app/components/services/FormDialog.vue (463 lines)
+frontend/app/components/services/List.vue (181 lines)
+frontend/app/components/services/VisibilityDialog.vue (98 lines)
 frontend/app/components/ui/BottomSheet.vue (203 lines)
 frontend/app/components/ui/ContentSkeleton.vue (73 lines)
 frontend/app/components/ui/MegaMenu.vue (205 lines)
@@ -188,7 +194,7 @@ frontend/app/components/users/InviteDialog.vue (29 lines)
 frontend/app/components/users/InviteForm.vue (367 lines)
 frontend/app/components/users/List.vue (182 lines)
 ```
-*Files: 48*
+*Files: 54*
 
 ### pages
 
@@ -208,39 +214,41 @@ frontend/app/pages/patients/[id]/index.vue (465 lines)
 frontend/app/pages/patients/[id]/questionnaires/[submissionId].vue (184 lines)
 frontend/app/pages/patients/index.vue (30 lines)
 frontend/app/pages/programs/[id]/edit.vue (16 lines)
-frontend/app/pages/programs/[id]/index.vue (359 lines)
-frontend/app/pages/programs/index.vue (284 lines)
+frontend/app/pages/programs/[id]/index.vue (391 lines)
+frontend/app/pages/programs/index.vue (285 lines)
 frontend/app/pages/programs/new.vue (12 lines)
 frontend/app/pages/questionnaires/[id].vue (375 lines)
 frontend/app/pages/questionnaires/index.vue (151 lines)
 frontend/app/pages/register/invitation.vue (321 lines)
 frontend/app/pages/reset-password.vue (122 lines)
+frontend/app/pages/services/index.vue (205 lines)
 frontend/app/pages/settings/directories.vue (90 lines)
 frontend/app/pages/settings/security.vue (325 lines)
 frontend/app/pages/users/index.vue (529 lines)
 frontend/app/pages/verify-email.vue (81 lines)
 ```
-*Files: 26*
+*Files: 27*
 
 ### layouts
 
 ```
 frontend/app/layouts/auth.vue (28 lines)
-frontend/app/layouts/default.vue (18 lines)
+frontend/app/layouts/default.vue (22 lines)
 ```
 *Files: 2*
 
 ### composables
 
 ```
+frontend/app/composables/useAppNavigation.js (175 lines)
 frontend/app/composables/useBodyScrollLock.js (48 lines)
 frontend/app/composables/useBreakpoint.js (30 lines)
 frontend/app/composables/useClientReady.js (12 lines)
-frontend/app/composables/useProgramPrice.js (67 lines)
+frontend/app/composables/useProgramPrice.js (180 lines)
 frontend/app/composables/useReadingProgress.js (178 lines)
 frontend/app/composables/useWebAuthn.js (172 lines)
 ```
-*Files: 6*
+*Files: 7*
 
 ### stores
 
@@ -253,20 +261,22 @@ frontend/app/stores/notifications.js (312 lines)
 frontend/app/stores/patients.js (105 lines)
 frontend/app/stores/programs.js (237 lines)
 frontend/app/stores/questionnaires.js (174 lines)
-frontend/app/stores/ui.js (62 lines)
+frontend/app/stores/services.js (159 lines)
+frontend/app/stores/ui.js (102 lines)
 frontend/app/stores/user.js (71 lines)
 frontend/app/stores/users.js (266 lines)
 ```
-*Files: 11*
+*Files: 12*
 
 ### middleware
 
 ```
 frontend/app/middleware/auth.global.js (39 lines)
 frontend/app/middleware/program-manager.js (19 lines)
+frontend/app/middleware/service-manager.js (19 lines)
 frontend/app/middleware/user-manager.js (19 lines)
 ```
-*Files: 3*
+*Files: 4*
 
 ### plugins
 
