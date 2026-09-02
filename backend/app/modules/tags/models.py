@@ -7,7 +7,11 @@ from sqlalchemy import UniqueConstraint
 from sqlmodel import Field, Relationship, SQLModel
 
 from app.modules.tags.enums import DoctorTagOverrideAction
-from app.modules.users.models import DoctorProfile, Speciality
+from app.modules.users.models import (
+    DoctorProfile,
+    PatientProfile,
+    Speciality,
+)
 
 
 def utc_now() -> datetime:
@@ -43,6 +47,13 @@ class Tag(SQLModel, table=True):
     )
 
     doctor_overrides: list["DoctorTagOverride"] = Relationship(
+        back_populates="tag",
+        sa_relationship_kwargs={
+            "cascade": "all, delete-orphan",
+        },
+    )
+
+    patient_overrides: list["PatientTagOverride"] = Relationship(
         back_populates="tag",
         sa_relationship_kwargs={
             "cascade": "all, delete-orphan",
@@ -123,5 +134,59 @@ class DoctorTagOverride(SQLModel, table=True):
         back_populates="doctor_overrides",
         sa_relationship_kwargs={
             "foreign_keys": "[DoctorTagOverride.tag_id]",
+        },
+    )
+
+class PatientTagOverride(SQLModel, table=True):
+    __tablename__ = "patient_tag_overrides"
+    __table_args__ = (
+        UniqueConstraint(
+            "patient_id",
+            "tag_id",
+            name="uq_patient_tag_override",
+        ),
+    )
+
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        primary_key=True,
+    )
+
+    patient_id: uuid.UUID = Field(
+        foreign_key="patient_profiles.id",
+        index=True,
+    )
+    tag_id: uuid.UUID = Field(
+        foreign_key="tags.id",
+        index=True,
+    )
+
+    # Используем тот же enum ADD/REMOVE,
+    # что и для индивидуальных тегов врача.
+    action: DoctorTagOverrideAction = Field(
+        index=True,
+    )
+
+    created_at: datetime = Field(
+        default_factory=utc_now,
+    )
+    updated_at: datetime = Field(
+        default_factory=utc_now,
+    )
+
+    patient: Optional[PatientProfile] = Relationship(
+        sa_relationship_kwargs={
+            "foreign_keys": (
+                "[PatientTagOverride.patient_id]"
+            ),
+        }
+    )
+
+    tag: Optional[Tag] = Relationship(
+        back_populates="patient_overrides",
+        sa_relationship_kwargs={
+            "foreign_keys": (
+                "[PatientTagOverride.tag_id]"
+            ),
         },
     )
