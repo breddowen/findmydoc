@@ -21,6 +21,7 @@ from app.modules.specialities.routers import router as specialities_router
 from app.modules.tags.routers import router as tags_router
 from app.modules.users.routers import router as users_router
 from app.modules.articles.routers import router as articles_router
+from app.modules.services.routers import router as services_router
 from app.modules.programs.routers import router as programs_router
 from app.modules.questionnaires.routers import router as questionnaires_router
 from app.modules.patients.routers import router as patients_router
@@ -74,6 +75,7 @@ app.include_router(events_router)
 
 app.include_router(articles_router)
 app.include_router(questionnaires_router)
+app.include_router(services_router)
 app.include_router(programs_router)
 
 app.include_router(assignments_router)

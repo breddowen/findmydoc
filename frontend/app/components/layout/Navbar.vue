@@ -2,193 +2,19 @@
 <script setup>
 const auth = useAuthStore()
 const userStore = useUserStore()
+const ui = useUiStore()
 
-const roleNames = {
-  superuser: 'Суперпользователь',
-  med_assistant: 'Медицинский ассистент',
-  doctor: 'Врач',
-  patient: 'Пациент',
-  relative: 'Родственник',
-}
-
-const staffRoles = [
-  'doctor',
-  'med_assistant',
-  'superuser',
-]
-
-const { isClientReady } = useClientReady()
-
-const activeRoleName = computed(() => {
-  if (!isClientReady.value) {
-    return ''
-  }
-
-  return (
-    roleNames[auth.activeRole]
-    || auth.activeRole
-    || ''
-  )
-})
-
-const isStaff = computed(() =>
-  isClientReady.value
-  && staffRoles.includes(auth.activeRole)
-)
-
-const isPatient = computed(() =>
-  isClientReady.value
-  && auth.activeRole === 'patient'
-)
-
-const canManageContent = computed(() =>
-  isClientReady.value
-  && [
-    'superuser',
-    'med_assistant',
-  ].includes(auth.activeRole)
-)
+const {
+  isStaff,
+  activeRoleName,
+  navigationGroups,
+} = useAppNavigation()
 
 const mobileMenuOpen = ref(false)
 
 function closeMobileMenu() {
   mobileMenuOpen.value = false
 }
-
-const canManageUsers = computed(() =>
-  isClientReady.value
-  && [
-    'superuser',
-    'med_assistant',
-  ].includes(auth.activeRole)
-)
-
-const canConfigurePrograms = computed(() =>
-  isClientReady.value
-  && [
-    'superuser',
-    'med_assistant',
-  ].includes(auth.activeRole)
-)
-
-const navigationGroups = computed(() => {
-  if (!isClientReady.value) {
-    return []
-  }
-
-  const mainLinks = [
-    {
-      to: '/dashboard',
-      label: 'Главная',
-      icon: 'lucide:layout-dashboard',
-      description: 'Обзор и последние действия',
-    },
-  ]
-
-  if (isStaff.value) {
-    mainLinks.push({
-      to: '/patients',
-      label: 'Пациенты',
-      icon: 'lucide:users',
-      description: 'Список и карточки пациентов',
-    })
-  }
-
-  if (canManageUsers.value) {
-    mainLinks.push({
-      to: '/users',
-      label: 'Пользователи',
-      icon: 'lucide:user-cog',
-      description: 'Аккаунты и приглашения',
-    })
-  }
-
-  const contentLinks = [
-    {
-      to: '/content/articles',
-      label: 'Статьи',
-      icon: 'lucide:file-text',
-      description: 'Материалы для пользователей',
-    },
-    {
-      to: '/programs',
-      label: 'Программы',
-      icon: 'lucide:route',
-      description: 'Программы сопровождения',
-    },
-  ]
-
-  if (isPatient.value) {
-    contentLinks.push({
-      to: '/questionnaires',
-      label: 'Опросники',
-      icon: 'lucide:clipboard-list',
-      description: 'Назначенные опросники',
-    })
-  }
-
-  if (canManageContent.value) {
-    contentLinks.push({
-      to: '/content/questionnaires',
-      label: 'Опросники',
-      icon: 'lucide:clipboard-list',
-      description: 'Редактор опросников',
-    })
-  }
-
-  const groups = [
-    {
-      key: 'main',
-      label: 'Работа',
-      icon: 'lucide:briefcase',
-      links: mainLinks,
-    },
-    {
-      key: 'content',
-      label: 'Контент',
-      icon: 'lucide:files',
-      links: contentLinks,
-    },
-  ]
-
-  if (canConfigurePrograms.value) {
-    groups.push({
-      key: 'management',
-      label: 'Управление',
-      icon: 'lucide:settings-2',
-      links: [
-        {
-          to: '/programs/new',
-          label: 'Конфигуратор',
-          icon: 'lucide:workflow',
-          description: 'Создание программ',
-        },
-        {
-          to: '/settings/directories',
-          label: 'Справочники',
-          icon: 'lucide:library',
-          description: 'Специальности и теги',
-        },
-      ],
-    })
-  }
-
-  groups.push({
-    key: 'settings',
-    label: 'Настройки',
-    icon: 'lucide:settings',
-    links: [
-      {
-        to: '/settings/security',
-        label: 'Безопасность',
-        icon: 'lucide:shield-check',
-        description: 'Пароль и passkey',
-      },
-    ],
-  })
-
-  return groups
-})
 </script>
 
 <template>
@@ -198,9 +24,30 @@ const navigationGroups = computed(() => {
     <div
       class="mx-auto grid min-h-16 w-full max-w-7xl grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 px-3 sm:px-4"
     >
-      <!-- Левая часть -->
       <div class="flex min-w-0 items-center">
         <button
+          v-if="isStaff"
+          type="button"
+          class="btn btn-circle btn-ghost"
+          :aria-label="
+            ui.sidebarOpen
+              ? 'Свернуть боковое меню'
+              : 'Открыть боковое меню'
+          "
+          @click="ui.toggleSidebar"
+        >
+          <Icon
+            :name="
+              ui.sidebarOpen
+                ? 'lucide:panel-left-close'
+                : 'lucide:menu'
+            "
+            class="size-5"
+          />
+        </button>
+
+        <button
+          v-else
           type="button"
           class="btn btn-circle btn-ghost lg:hidden"
           aria-label="Открыть меню"
@@ -213,6 +60,7 @@ const navigationGroups = computed(() => {
         </button>
 
         <NuxtLink
+          v-if="!isStaff"
           to="/dashboard"
           class="btn btn-ghost shrink-0 px-2 text-lg font-bold"
         >
@@ -220,8 +68,8 @@ const navigationGroups = computed(() => {
         </NuxtLink>
       </div>
 
-      <!-- Центральная часть -->
       <div
+        v-if="!isStaff"
         class="hidden min-w-0 items-center justify-center px-2 lg:flex"
       >
         <UiMegaMenu
@@ -230,7 +78,13 @@ const navigationGroups = computed(() => {
         />
       </div>
 
-      <!-- Правая часть -->
+      <div
+        v-else
+        class="text-base-content/60 min-w-0 truncate px-2 text-sm"
+      >
+        Рабочее пространство
+      </div>
+
       <div
         class="flex shrink-0 items-center justify-end gap-1"
       >
@@ -264,9 +118,7 @@ const navigationGroups = computed(() => {
               <p
                 class="text-base-content/60 min-h-4 truncate text-xs"
               >
-                <span v-if="isClientReady">
-                  {{ activeRoleName }}
-                </span>
+                {{ activeRoleName }}
               </p>
             </div>
 
@@ -316,6 +168,7 @@ const navigationGroups = computed(() => {
   </header>
 
   <UiBottomSheet
+    v-if="!isStaff"
     v-model="mobileMenuOpen"
     title="Меню"
   >

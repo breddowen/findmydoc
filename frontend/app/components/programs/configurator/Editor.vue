@@ -11,6 +11,7 @@ const props = defineProps({
 
 const { $api } = useNuxtApp()
 const store = useProgramsStore()
+const servicesStore = useServicesStore()
 
 const articles = ref([])
 const questionnaires = ref([])
@@ -29,10 +30,7 @@ const form = reactive({
   title: '',
   description: '',
 
-  price_amount: null,
-  currency: 'RUB',
-
-  discount_percent: 0,
+  service_id: null,
   is_popular: false,
 
   tag_ids: [],
@@ -117,17 +115,12 @@ function mapProgramToForm(program) {
   form.title = program.title || ''
   form.description = program.description || ''
 
-  form.price_amount =
-    program.price_amount ?? null
-
-  form.currency = program.currency || 'RUB'
+  form.service_id = program.service?.id || null
 
   form.tag_ids = (program.tags || []).map(
     (tag) => tag.id,
   )
 
-  form.discount_percent =
-    program.discount_percent || 0
 
   form.is_popular = Boolean(
     program.is_popular,
@@ -207,6 +200,10 @@ async function loadSources() {
       $api('/api/v1/questionnaires'),
       $api('/api/v1/specialities'),
       $api('/api/v1/tags'),
+
+      // Скрытые услуги нужны, чтобы корректно
+      // отобразить старую связь при редактировании.
+      servicesStore.fetchServices(true),
     ])
 
     articles.value = articleItems
@@ -297,6 +294,8 @@ function buildPayload() {
   return {
     title: form.title.trim(),
     description: form.description.trim() || null,
+
+    service_id: form.service_id || null,
 
     price_amount:
       form.price_amount === ''
@@ -400,15 +399,6 @@ async function save() {
   }
 }
 
-watch(
-  () => form.price_amount,
-  (value) => {
-    if (value === '' || value === null) {
-      form.discount_percent = 0
-    }
-  },
-)
-
 onMounted(async () => {
   await Promise.all([
     loadSources(),
@@ -511,62 +501,11 @@ onMounted(async () => {
                 />
             </label>
 
-            <label class="form-control block">
-                <span class="label-text mb-2">
-                Стоимость
-                </span>
-
-                <input
-                v-model="form.price_amount"
-                type="number"
-                min="0"
-                step="0.01"
-                class="input input-bordered w-full"
-                placeholder="Оставьте пустым для бесплатной"
-                >
-            </label>
-
-            <label class="form-control block">
-                <span class="label-text mb-2">
-                Валюта
-                </span>
-
-                <select
-                v-model="form.currency"
-                class="select select-bordered w-full"
-                :disabled="
-                    form.price_amount === ''
-                    || form.price_amount === null
-                "
-                >
-                <option value="RUB">
-                    Рубли
-                </option>
-
-                <option value="UNIT">
-                    Условные единицы
-                </option>
-                </select>
-            </label>
-
-            <label class="form-control block">
-                <span class="label-text mb-2">
-                Скидка, %
-                </span>
-
-                <input
-                v-model.number="form.discount_percent"
-                type="number"
-                min="0"
-                max="100"
-                step="1"
-                class="input input-bordered w-full"
-                :disabled="
-                    form.price_amount === ''
-                    || form.price_amount === null
-                "
-                >
-            </label>
+            <ProgramsConfiguratorServiceSelect
+              v-model="form.service_id"
+              :services="servicesStore.services"
+              :loading="loadingSources"
+            />
 
             <label
                 class="border-base-300 flex cursor-pointer items-center justify-between gap-4 rounded-2xl border p-4"

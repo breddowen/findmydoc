@@ -17,6 +17,10 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  purchaseLabel: {
+    type: String,
+    default: 'Купить программу',
+  },
 })
 
 const emit = defineEmits([
@@ -327,7 +331,7 @@ function getActionText(item) {
                         class="size-4"
                     />
 
-                    Купить программу
+                    {{ purchaseLabel }}
                     </button>
                 </template>
 

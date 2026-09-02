@@ -9,7 +9,13 @@ const selectedStageIndex = ref(0)
 const {
   formatOriginalPrice,
   formatFinalPrice,
+  hasDiscount,
+  getPurchaseActionLabel,
 } = useProgramPrice()
+
+const purchaseActionLabel = computed(() =>
+  getPurchaseActionLabel(program.value),
+)
 
 const loading = ref(true)
 const starting = ref(false)
@@ -180,17 +186,17 @@ onMounted(loadProgram)
                 </span>
 
                 <span
-                    v-if="program.discount_percent"
+                    v-if="hasDiscount(program)"
                     class="text-base-content/40 line-through"
                 >
                     {{ formatOriginalPrice(program) }}
                 </span>
 
                 <span
-                    v-if="program.discount_percent"
+                    v-if="hasDiscount(program)"
                     class="badge badge-error font-bold"
                 >
-                    −{{ program.discount_percent }}%
+                    −{{ program.service?.discount_percent }}%
                 </span>
 
                 <span
@@ -225,6 +231,31 @@ onMounted(loadProgram)
           >
             {{ program.description }}
           </p>
+
+          <div
+            v-if="program.service"
+            class="border-base-300 mt-5 rounded-2xl border p-4"
+          >
+            <div class="flex flex-wrap items-center gap-2">
+              <span
+                v-if="program.service.code"
+                class="badge badge-neutral font-mono"
+              >
+                {{ program.service.code }}
+              </span>
+
+              <span class="font-medium">
+                {{ program.service.title }}
+              </span>
+            </div>
+
+            <p
+              v-if="program.service.description"
+              class="text-base-content/60 mt-2 text-sm"
+            >
+              {{ program.service.description }}
+            </p>
+          </div>
 
           <div class="mt-4 flex flex-wrap gap-1">
             <span
@@ -353,7 +384,8 @@ onMounted(loadProgram)
         :stage="selectedStage"
         :program-id="program.id"
         :is-patient="isPatient"
+        :purchase-label="purchaseActionLabel"
         @purchase="requestPurchase"
-        />
+      />
   </div>
 </template>

@@ -6,6 +6,7 @@ const store = useProgramsStore()
 const {
   formatOriginalPrice,
   formatFinalPrice,
+  hasDiscount,
 } = useProgramPrice()
 
 const loading = ref(true)
@@ -145,14 +146,14 @@ onMounted(async () => {
           <div class="card-body">
             <div class="flex flex-wrap gap-2 pr-24">
               <span
-                v-if="program.discount_percent"
+                v-if="hasDiscount(program)"
                 class="badge badge-error gap-1 font-bold"
               >
                 <Icon
                   name="lucide:badge-percent"
                   class="size-3"
                 />
-                −{{ program.discount_percent }}%
+                −{{ program.service?.discount_percent }}%
               </span>
 
               <span
@@ -193,7 +194,7 @@ onMounted(async () => {
               </span>
 
               <span
-                v-if="program.discount_percent"
+                v-if="hasDiscount(program)"
                 class="text-base-content/40 text-sm line-through"
               >
                 {{ formatOriginalPrice(program) }}
