@@ -84,28 +84,14 @@ watch(
         class="bg-base-100 border-base-300 flex min-h-full flex-col border-r transition-[width] duration-200 is-drawer-close:w-16 is-drawer-open:w-72"
       >
         <div
-          class="border-base-300 flex h-16 shrink-0 items-center border-b px-2"
+          class="border-base-300 flex h-16 shrink-0 items-center justify-center border-b px-2 transition-[height] duration-200 is-drawer-open:h-24"
         >
-          <NuxtLink
+          <LayoutLogo
             to="/dashboard"
-            class="btn btn-ghost w-full justify-start overflow-hidden px-2"
+            variant="sidebar"
+            class="hover:bg-base-200 w-full overflow-hidden rounded-box px-2 py-1.5 transition-colors"
             @click="handleNavigation"
-          >
-            <span
-              class="bg-primary text-primary-content flex size-9 shrink-0 items-center justify-center rounded-xl"
-            >
-              <Icon
-                name="lucide:brain-circuit"
-                class="size-5"
-              />
-            </span>
-
-            <span
-              class="ml-2 whitespace-nowrap text-lg font-bold is-drawer-close:hidden"
-            >
-              MentalMe
-            </span>
-          </NuxtLink>
+          />
         </div>
 
         <nav

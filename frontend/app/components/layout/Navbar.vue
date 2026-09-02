@@ -85,8 +85,8 @@ async function handlePatientAttached(response) {
     class="bg-base-100 border-base-300 sticky top-0 z-30 border-b"
   >
     <div
-      class="mx-auto grid min-h-16 w-full max-w-7xl grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 px-3 sm:px-4"
-    >
+        class="mx-auto grid min-h-16 w-full max-w-7xl grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 px-3 py-1 sm:min-h-20 sm:px-4"
+      >
       <div class="flex min-w-0 items-center">
         <button
           v-if="isStaff"
@@ -122,13 +122,11 @@ async function handlePatientAttached(response) {
           />
         </button>
 
-        <NuxtLink
+        <LayoutLogo
           v-if="!isStaff"
           to="/dashboard"
-          class="btn btn-ghost shrink-0 px-2 text-lg font-bold"
-        >
-          MentalMe
-        </NuxtLink>
+          variant="navbar"
+        />
       </div>
 
       <div
@@ -165,7 +163,7 @@ async function handlePatientAttached(response) {
           v-else
           class="text-base-content/60 truncate text-sm"
         >
-          Рабочее пространство
+          ...
         </span>
       </div>
 
