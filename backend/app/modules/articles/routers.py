@@ -2,7 +2,10 @@
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func
+from app.modules.events.models import Event
+
 from sqlmodel import Session, select
 
 from app.core.db import get_session
@@ -24,6 +27,10 @@ from app.modules.articles.schemas import (
     ArticleResponse,
     ArticleUpdateRequest,
     ArticleVisibilityRequest,
+    ArticleOpenRequest,
+    ArticleOpenResponse,
+    ArticleProgressUpdateRequest,
+
 )
 from app.modules.articles.utils import (
     get_article_tag_ids,
@@ -55,16 +62,129 @@ router = APIRouter(
     tags=["Articles"],
 )
 
+# ============================================================
+# НАСТРОЙКА ФИЛЬТРАЦИИ СТАТЕЙ ДЛЯ ПАЦИЕНТОВ
+#
+# False:
+#   пациент видит все нескрытые статьи;
+#   подходящие по тегам статьи находятся выше.
+#
+# True:
+#   пациент видит только статьи по своим тегам
+#   либо статьи с активным назначением.
+# ============================================================
+STRICT_PATIENT_ARTICLE_TAG_FILTER = False
+
+ARTICLE_COMPLETION_THRESHOLD = 90.0
+MIN_TRACKABLE_SCROLL_DISTANCE = 240
 
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
+def get_article_event_counts(
+    *,
+    session: Session,
+    before: datetime | None = None,
+) -> dict[uuid.UUID, dict[str, int]]:
+    statement = (
+        select(
+            Event.subject_id,
+            Event.event_type,
+            func.count(Event.id),
+        )
+        .where(
+            Event.subject_type == "article",
+            Event.subject_id.is_not(None),
+            Event.event_type.in_(
+                [
+                    EventType.ARTICLE_OPENED,
+                    EventType.ARTICLE_READ,
+                ]
+            ),
+        )
+    )
 
+    if before is not None:
+        statement = statement.where(
+            Event.occurred_at < before
+        )
+
+    statement = statement.group_by(
+        Event.subject_id,
+        Event.event_type,
+    )
+
+    result: dict[uuid.UUID, dict[str, int]] = {}
+
+    for subject_id, event_type, count in session.exec(
+        statement
+    ).all():
+        if subject_id not in result:
+            result[subject_id] = {
+                "opened": 0,
+                "read": 0,
+            }
+
+        if event_type == EventType.ARTICLE_OPENED:
+            result[subject_id]["opened"] = count
+        elif event_type == EventType.ARTICLE_READ:
+            result[subject_id]["read"] = count
+
+    return result
+
+
+def calculate_article_score(
+    *,
+    opened_count: int,
+    read_count: int,
+) -> float:
+    """
+    Сглаженный рейтинг.
+
+    Новая статья с одним открытием и одним прочтением
+    не должна сразу обгонять статью с большой статистикой.
+    """
+    if opened_count <= 0:
+        return 0.0
+
+    # Сглаживание с условным предварительным значением 50%
+    # и весом 10 открытий.
+    return (
+        read_count + 5
+    ) / (
+        opened_count + 10
+    )
+
+
+def ensure_patient_can_access_article(
+    *,
+    article: Article,
+    patient,
+    is_assigned: bool,
+) -> None:
+    if article.is_hidden:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Статья скрыта",
+        )
+
+    if (
+        article.pro_content
+        and not patient.pro_enabled
+        and not is_assigned
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Требуется Pro-доступ",
+        )
+    
 @router.get(
     "",
     response_model=list[ArticleListItem],
 )
 async def list_articles(
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=20, ge=1, le=100),
     auth: AuthContext = Depends(get_current_auth),
     session: Session = Depends(get_session),
 ) -> list[ArticleListItem]:
@@ -74,25 +194,79 @@ async def list_articles(
         )
     ).all()
 
+    ranking_cutoff = datetime.now(
+        timezone.utc
+    ).replace(
+        hour=0,
+        minute=0,
+        second=0,
+        microsecond=0,
+    )
+
+    event_counts = get_article_event_counts(
+        session=session,
+        before=ranking_cutoff,
+    )
+
     if auth.active_role != UserRole.PATIENT:
-        return [
-            serialize_article_list_item(
+        result: list[ArticleListItem] = []
+
+        can_see_analytics = auth.active_role in {
+            UserRole.SUPERUSER,
+            UserRole.MED_ASSISTANT,
+        }
+
+        for article in articles:
+            item = serialize_article_list_item(
                 session=session,
                 article=article,
             )
-            for article in articles
-        ]
+
+            if can_see_analytics:
+                counts = event_counts.get(
+                    article.id,
+                    {
+                        "opened": 0,
+                        "read": 0,
+                    },
+                )
+
+                opened_count = counts["opened"]
+                read_count = counts["read"]
+
+                item.opened_count = opened_count
+                item.read_count = read_count
+                item.read_rate = round(
+                    (
+                        read_count
+                        / opened_count
+                        * 100
+                    )
+                    if opened_count > 0
+                    else 0,
+                    2,
+                )
+
+            result.append(item)
+
+        return result[offset:offset + limit]
 
     patient = get_patient_profile_by_user_id(
         session=session,
         user_id=auth.user.id,
     )
 
-    result: list[ArticleListItem] = []
+    ranked_articles: list[
+        tuple[
+            bool,
+            bool,
+            float,
+            datetime,
+            ArticleListItem,
+        ]
+    ] = []
 
     for article in articles:
-        # Скрытые статьи не показываются даже в случае
-        # активного назначения.
         if article.is_hidden:
             continue
 
@@ -108,37 +282,78 @@ async def list_articles(
             content_id=article.id,
         )
 
-        # Назначенная статья доступна независимо
-        # от тегов пациента.
-        if (
-            not is_assigned
-            and not patient_can_see_content(
+        matches_patient_tags = (
+            patient_can_see_content(
                 session=session,
                 patient=patient,
                 content_tag_ids=tag_ids,
-                is_hidden=article.is_hidden,
+                is_hidden=False,
             )
+        )
+
+        # ====================================================
+        # МЕСТО СТРОГОЙ ФИЛЬТРАЦИИ СТАТЕЙ ПО ТЕГАМ
+        # ====================================================
+        if (
+            STRICT_PATIENT_ARTICLE_TAG_FILTER
+            and not is_assigned
+            and not matches_patient_tags
         ):
             continue
 
-        # Назначение также даёт доступ к Pro-контенту
-        # независимо от статуса Pro пациента.
+        # Теги больше не запрещают чтение.
+        # Они используются только для ранжирования.
         can_access = (
             is_assigned
             or not article.pro_content
             or patient.pro_enabled
         )
 
-        result.append(
-            serialize_article_list_item(
-                session=session,
-                article=article,
-                can_access=can_access,
+        counts = event_counts.get(
+            article.id,
+            {
+                "opened": 0,
+                "read": 0,
+            },
+        )
+
+        score = calculate_article_score(
+            opened_count=counts["opened"],
+            read_count=counts["read"],
+        )
+
+        item = serialize_article_list_item(
+            session=session,
+            article=article,
+            can_access=can_access,
+        )
+
+        ranked_articles.append(
+            (
+                is_assigned,
+                matches_patient_tags,
+                score,
+                article.created_at,
+                item,
             )
         )
 
-    return result
+    ranked_articles.sort(
+        key=lambda row: (
+            row[0],  # Назначенные.
+            row[1],  # Подходящие по тегам.
+            row[2],  # Эффективность статьи.
+            row[3],  # Более новые.
+        ),
+        reverse=True,
+    )
 
+    items = [
+        row[4]
+        for row in ranked_articles
+    ]
+
+    return items[offset:offset + limit]
 
 @router.get(
     "/{article_id}",
@@ -170,29 +385,70 @@ async def get_article(
             content_id=article.id,
         )
 
-        # Скрытие имеет приоритет над назначением.
-        if article.is_hidden:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Статья скрыта",
-            )
-
-        if not is_assigned:
-            ensure_patient_content_access(
-                session=session,
-                patient=patient,
-                content_tag_ids=get_article_tag_ids(
-                    session=session,
-                    article_id=article.id,
-                ),
-                pro_content=article.pro_content,
-                is_hidden=article.is_hidden,
-            )
+        ensure_patient_can_access_article(
+            article=article,
+            patient=patient,
+            is_assigned=is_assigned,
+        )
 
     return serialize_article(
         session=session,
         article=article,
     )
+
+# @router.get(
+#     "/{article_id}",
+#     response_model=ArticleResponse,
+# )
+# async def get_article(
+#     article_id: uuid.UUID,
+#     auth: AuthContext = Depends(get_current_auth),
+#     session: Session = Depends(get_session),
+# ) -> ArticleResponse:
+#     article = session.get(Article, article_id)
+
+#     if not article:
+#         raise HTTPException(
+#             status_code=status.HTTP_404_NOT_FOUND,
+#             detail="Статья не найдена",
+#         )
+
+#     if auth.active_role == UserRole.PATIENT:
+#         patient = get_patient_profile_by_user_id(
+#             session=session,
+#             user_id=auth.user.id,
+#         )
+
+#         is_assigned = patient_has_active_assignment(
+#             session=session,
+#             patient_id=patient.id,
+#             assignment_type=AssignmentType.ARTICLE,
+#             content_id=article.id,
+#         )
+
+#         # Скрытие имеет приоритет над назначением.
+#         if article.is_hidden:
+#             raise HTTPException(
+#                 status_code=status.HTTP_403_FORBIDDEN,
+#                 detail="Статья скрыта",
+#             )
+
+#         if not is_assigned:
+#             ensure_patient_content_access(
+#                 session=session,
+#                 patient=patient,
+#                 content_tag_ids=get_article_tag_ids(
+#                     session=session,
+#                     article_id=article.id,
+#                 ),
+#                 pro_content=article.pro_content,
+#                 is_hidden=article.is_hidden,
+#             )
+
+#     return serialize_article(
+#         session=session,
+#         article=article,
+#     )
 
 
 @router.post(
@@ -358,57 +614,57 @@ async def change_article_visibility(
     )
 
 
-@router.post(
-    "/{article_id}/read",
-    response_model=ArticleReadResponse,
-)
-async def mark_article_as_read(
-    article_id: uuid.UUID,
-    auth: AuthContext = Depends(
-        require_roles(UserRole.PATIENT)
-    ),
-    session: Session = Depends(get_session),
-) -> ArticleReadResponse:
-    article = session.get(Article, article_id)
+# @router.post(
+#     "/{article_id}/read",
+#     response_model=ArticleReadResponse,
+# )
+# async def mark_article_as_read(
+#     article_id: uuid.UUID,
+#     auth: AuthContext = Depends(
+#         require_roles(UserRole.PATIENT)
+#     ),
+#     session: Session = Depends(get_session),
+# ) -> ArticleReadResponse:
+#     article = session.get(Article, article_id)
 
-    if not article:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Статья не найдена",
-        )
+#     if not article:
+#         raise HTTPException(
+#             status_code=status.HTTP_404_NOT_FOUND,
+#             detail="Статья не найдена",
+#         )
 
-    patient = get_patient_profile_by_user_id(
-        session=session,
-        user_id=auth.user.id,
-    )
+#     patient = get_patient_profile_by_user_id(
+#         session=session,
+#         user_id=auth.user.id,
+#     )
 
-    ensure_patient_content_access(
-        session=session,
-        patient=patient,
-        content_tag_ids=get_article_tag_ids(
-            session=session,
-            article_id=article.id,
-        ),
-        pro_content=article.pro_content,
-        is_hidden=article.is_hidden,
-    )
+#     ensure_patient_content_access(
+#         session=session,
+#         patient=patient,
+#         content_tag_ids=get_article_tag_ids(
+#             session=session,
+#             article_id=article.id,
+#         ),
+#         pro_content=article.pro_content,
+#         is_hidden=article.is_hidden,
+#     )
 
-    event = record_event(
-        session=session,
-        event_type=EventType.ARTICLE_READ,
-        patient_id=patient.id,
-        actor_user_id=auth.user.id,
-        subject_type="article",
-        subject_id=article.id,
-    )
+#     event = record_event(
+#         session=session,
+#         event_type=EventType.ARTICLE_READ,
+#         patient_id=patient.id,
+#         actor_user_id=auth.user.id,
+#         subject_type="article",
+#         subject_id=article.id,
+#     )
 
-    session.commit()
-    session.refresh(event)
+#     session.commit()
+#     session.refresh(event)
 
-    return ArticleReadResponse(
-        message="Чтение статьи зарегистрировано",
-        event_id=event.id,
-    )
+#     return ArticleReadResponse(
+#         message="Чтение статьи зарегистрировано",
+#         event_id=event.id,
+#     )
 
 @router.get(
     "/{article_id}/progress",
@@ -567,13 +823,7 @@ async def save_article_progress(
             patient_id=patient.id,
         )
 
-    was_completed = (
-        progress.completed_at is not None
-    )
-
-    progress.progress_percent = (
-        normalized_percent
-    )
+    progress.progress_percent = normalized_percent
 
     progress.max_progress_percent = max(
         progress.max_progress_percent,
@@ -582,8 +832,11 @@ async def save_article_progress(
 
     progress.updated_at = now
 
+    # Статья считается прочитанной при достижении
+    # порога завершения (например, 90%).
     if (
-        progress.max_progress_percent >= 100
+        progress.max_progress_percent
+        >= ARTICLE_COMPLETION_THRESHOLD
         and progress.completed_at is None
     ):
         progress.completed_at = now
@@ -591,26 +844,63 @@ async def save_article_progress(
     session.add(progress)
     session.flush()
 
-    # Событие создаётся только один раз
-    # при первом достижении 100%.
-    if (
-        not was_completed
-        and progress.completed_at is not None
-    ):
-        record_event(
-            session=session,
-            event_type=EventType.ARTICLE_READ,
-            patient_id=patient.id,
-            actor_user_id=auth.user.id,
-            subject_type="article",
-            subject_id=article.id,
-            metadata={
-                "progress_percent": 100,
-            },
-        )
+    # ARTICLE_READ создаётся отдельно для каждого
+    # trackable-открытия статьи при достижении порога.
+    should_register_read = (
+        normalized_percent
+        >= ARTICLE_COMPLETION_THRESHOLD
+        and payload.is_trackable
+        and payload.interaction_id is not None
+    )
 
-    # При достижении 100% завершаем
-    # активное назначение статьи.
+    if should_register_read:
+        opening_event = session.exec(
+            select(Event).where(
+                Event.event_type
+                == EventType.ARTICLE_OPENED,
+                Event.interaction_id
+                == payload.interaction_id,
+                Event.patient_id
+                == patient.id,
+                Event.subject_type
+                == "article",
+                Event.subject_id
+                == article.id,
+            )
+        ).first()
+
+        if opening_event:
+            existing_read_event = session.exec(
+                select(Event).where(
+                    Event.event_type
+                    == EventType.ARTICLE_READ,
+                    Event.interaction_id
+                    == payload.interaction_id,
+                )
+            ).first()
+
+            if not existing_read_event:
+                record_event(
+                    session=session,
+                    event_type=EventType.ARTICLE_READ,
+                    patient_id=patient.id,
+                    actor_user_id=auth.user.id,
+                    program_id=opening_event.program_id,
+                    assignment_id=opening_event.assignment_id,
+                    interaction_id=payload.interaction_id,
+                    source=opening_event.source,
+                    subject_type="article",
+                    subject_id=article.id,
+                    metadata={
+                        "progress_percent": (
+                            normalized_percent
+                        ),
+                    },
+                )
+
+    # completed_at — пожизненное состояние пациента.
+    # При первом достижении порога завершаем активное
+    # назначение и синхронизируем программы.
     if progress.completed_at is not None:
         mark_assignment_completed(
             session=session,
@@ -619,8 +909,6 @@ async def save_article_progress(
             content_id=article.id,
         )
 
-        # Синхронизируем программы пациента,
-        # в которые входит эта статья.
         sync_patient_program_enrollments(
             session=session,
             patient_id=patient.id,
@@ -641,4 +929,90 @@ async def save_article_progress(
         started_at=progress.started_at,
         updated_at=progress.updated_at,
         completed_at=progress.completed_at,
+    )
+
+@router.post(
+    "/{article_id}/open",
+    response_model=ArticleOpenResponse,
+)
+async def register_article_open(
+    article_id: uuid.UUID,
+    payload: ArticleOpenRequest,
+    auth: AuthContext = Depends(
+        require_roles(UserRole.PATIENT)
+    ),
+    session: Session = Depends(get_session),
+) -> ArticleOpenResponse:
+    article = session.get(Article, article_id)
+
+    if not article:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Статья не найдена",
+        )
+
+    patient = get_patient_profile_by_user_id(
+        session=session,
+        user_id=auth.user.id,
+    )
+
+    is_assigned = patient_has_active_assignment(
+        session=session,
+        patient_id=patient.id,
+        assignment_type=AssignmentType.ARTICLE,
+        content_id=article.id,
+    )
+
+    ensure_patient_can_access_article(
+        article=article,
+        patient=patient,
+        is_assigned=is_assigned,
+    )
+
+    existing_event = session.exec(
+        select(Event).where(
+            Event.event_type
+            == EventType.ARTICLE_OPENED,
+            Event.interaction_id
+            == payload.interaction_id,
+        )
+    ).first()
+
+    if existing_event:
+        if (
+            existing_event.patient_id != patient.id
+            or existing_event.subject_id != article.id
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "Идентификатор открытия уже "
+                    "используется"
+                ),
+            )
+
+        return ArticleOpenResponse(
+            event_id=existing_event.id,
+            interaction_id=payload.interaction_id,
+        )
+
+    event = record_event(
+        session=session,
+        event_type=EventType.ARTICLE_OPENED,
+        patient_id=patient.id,
+        actor_user_id=auth.user.id,
+        program_id=payload.program_id,
+        assignment_id=payload.assignment_id,
+        interaction_id=payload.interaction_id,
+        source=payload.source,
+        subject_type="article",
+        subject_id=article.id,
+    )
+
+    session.commit()
+    session.refresh(event)
+
+    return ArticleOpenResponse(
+        event_id=event.id,
+        interaction_id=payload.interaction_id,
     )

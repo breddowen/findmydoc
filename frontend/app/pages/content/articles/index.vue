@@ -4,6 +4,9 @@ const auth = useAuthStore()
 const store = useArticlesStore()
 
 const errorMessage = ref('')
+const loadMoreElement = ref(null)
+
+let observer = null
 
 const canManage = computed(() =>
   [
@@ -21,7 +24,10 @@ async function toggleVisibility(article) {
       !article.is_hidden,
     )
 
-    await store.fetchArticles()
+    await store.fetchArticles({
+      reset: true,
+      limit: 5,
+    })
   } catch (error) {
     errorMessage.value =
       error?.data?.detail
@@ -29,7 +35,50 @@ async function toggleVisibility(article) {
   }
 }
 
-onMounted(store.fetchArticles)
+async function loadInitialArticles() {
+  await store.fetchArticles({
+    reset: true,
+    limit: 5,
+  })
+}
+
+async function loadMoreArticles() {
+  if (
+    store.loading
+    || !store.hasMore
+  ) {
+    return
+  }
+
+  await store.fetchArticles({
+    limit: 10,
+  })
+}
+
+onMounted(async () => {
+  await loadInitialArticles()
+
+  observer = new IntersectionObserver(
+    entries => {
+      if (entries[0]?.isIntersecting) {
+        loadMoreArticles()
+      }
+    },
+    {
+      rootMargin: '300px',
+    },
+  )
+
+  if (loadMoreElement.value) {
+    observer.observe(
+      loadMoreElement.value,
+    )
+  }
+})
+
+onBeforeUnmount(() => {
+  observer?.disconnect()
+})
 </script>
 
 <template>
@@ -67,8 +116,9 @@ onMounted(store.fetchArticles)
       {{ errorMessage }}
     </div>
 
+    <!-- Полноэкранный loader только при первой загрузке. -->
     <div
-      v-if="store.loading"
+      v-if="store.loading && !store.articles.length"
       class="flex justify-center py-16"
     >
       <span
@@ -164,6 +214,27 @@ onMounted(store.fetchArticles)
       <p class="mt-4 font-medium">
         Статей пока нет
       </p>
+    </div>
+
+    <!-- Sentinel для автоматической подгрузки. -->
+    <div
+      v-if="store.hasMore"
+      ref="loadMoreElement"
+      class="flex justify-center py-8"
+    >
+      <span
+        v-if="store.loading"
+        class="loading loading-spinner text-primary"
+      />
+
+      <button
+        v-else
+        type="button"
+        class="btn btn-ghost btn-sm"
+        @click="loadMoreArticles"
+      >
+        Загрузить ещё
+      </button>
     </div>
   </div>
 </template>
