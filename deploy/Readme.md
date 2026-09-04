@@ -2477,8 +2477,7 @@ git branch --show-current
 git pull --ff-only origin main
 
 # 6. Влить проверенный develop в main
-git merge --no-ff origin/develop `
-  -m "Promote develop to production"
+git merge --no-ff origin/develop ` -m "Promote develop to production"
 
 # 7. Проверить результат merge
 git status
