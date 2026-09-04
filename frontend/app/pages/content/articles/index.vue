@@ -15,6 +15,13 @@ const canManage = computed(() =>
   ].includes(auth.activeRole),
 )
 
+const canViewAnalytics = computed(() =>
+  [
+    'superuser',
+    'med_assistant',
+  ].includes(auth.activeRole),
+)
+
 async function toggleVisibility(article) {
   errorMessage.value = ''
 
@@ -95,18 +102,19 @@ onBeforeUnmount(() => {
           Материалы для пациентов.
         </p>
       </div>
-
-      <NuxtLink
-        v-if="canManage"
-        to="/content/articles/new"
-        class="btn btn-primary"
-      >
-        <Icon
-          name="lucide:plus"
-          class="size-4"
-        />
-        Новая статья
-      </NuxtLink>
+      <ClientOnly>
+        <NuxtLink
+          v-if="canManage"
+          to="/content/articles/new"
+          class="btn btn-primary"
+        >
+          <Icon
+            name="lucide:plus"
+            class="size-4"
+          />
+          Новая статья
+        </NuxtLink>
+      </ClientOnly>
     </header>
 
     <div
@@ -128,78 +136,16 @@ onBeforeUnmount(() => {
 
     <div
       v-else-if="store.articles.length"
-      class="grid gap-4 md:grid-cols-2 xl:grid-cols-3"
+      class="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3"
     >
-      <article
+      <ArticlesCard
         v-for="article in store.articles"
         :key="article.id"
-        class="card bg-base-100 border-base-300 border"
-        :class="{
-          'opacity-60': article.is_hidden,
-        }"
-      >
-        <div class="card-body">
-          <div class="flex flex-wrap gap-2">
-            <span
-              v-if="article.pro_content"
-              class="badge badge-secondary"
-            >
-              Pro
-            </span>
-
-            <span
-              v-if="article.is_hidden"
-              class="badge badge-warning"
-            >
-              Скрыта
-            </span>
-          </div>
-
-          <h2 class="card-title">
-            {{ article.title }}
-          </h2>
-
-          <div class="flex flex-wrap gap-1">
-            <span
-              v-for="tag in article.tags"
-              :key="tag.id"
-              class="badge badge-outline badge-sm"
-            >
-              {{ tag.name }}
-            </span>
-          </div>
-
-          <div class="card-actions mt-4">
-            <NuxtLink
-              :to="`/content/articles/${article.id}`"
-              class="btn btn-sm"
-            >
-              Открыть
-            </NuxtLink>
-
-            <NuxtLink
-              v-if="canManage"
-              :to="`/content/articles/${article.id}/edit`"
-              class="btn btn-sm btn-outline"
-            >
-              Редактировать
-            </NuxtLink>
-
-            <button
-              v-if="canManage"
-              type="button"
-              class="btn btn-sm btn-ghost"
-              @click="toggleVisibility(article)"
-            >
-              {{
-                article.is_hidden
-                  ? 'Показать'
-                  : 'Скрыть'
-              }}
-            </button>
-          </div>
-        </div>
-      </article>
+        :article="article"
+        :can-manage="canManage"
+        :show-analytics="canViewAnalytics"
+        @toggle-visibility="toggleVisibility"
+      />
     </div>
 
     <div
