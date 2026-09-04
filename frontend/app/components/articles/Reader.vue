@@ -7,7 +7,7 @@ const props = defineProps({
   },
   interactionId: {
     type: String,
-    required: true,
+    default: null,
   },
 })
 
@@ -82,26 +82,37 @@ async function loadProgress() {
   }
 }
 
-async function saveProgress(value = progress.value) {
+async function saveProgress(
+  value = progress.value,
+) {
   if (!isPatient.value || saving.value) return
 
   saving.value = true
 
   try {
+    const body = {
+      progress_percent: value,
+    }
+
+    if (props.interactionId) {
+      body.interaction_id =
+        props.interactionId
+
+      body.is_trackable =
+        isTrackable.value
+    }
+
     const response = await $api(
       `/api/v1/articles/${props.article.id}/progress`,
       {
         method: 'PUT',
-        body: {
-          progress_percent: value,
-          interaction_id: props.interactionId,
-          is_trackable: isTrackable.value,
-        },
+        body,
       },
     )
 
     lastSentProgress = value
     savedProgress.value = value
+
     completed.value = Boolean(
       response.completed_at,
     )
@@ -134,6 +145,18 @@ function saveWithKeepalive() {
 
   if (!token) return
 
+  const body = {
+    progress_percent: progress.value,
+  }
+
+  if (props.interactionId) {
+    body.interaction_id =
+      props.interactionId
+
+    body.is_trackable =
+      isTrackable.value
+  }
+
   fetch(
     `${config.public.apiBase}/api/v1/articles/${props.article.id}/progress`,
     {
@@ -143,11 +166,7 @@ function saveWithKeepalive() {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-      progress_percent: progress.value,
-      interaction_id: props.interactionId,
-      is_trackable: isTrackable.value,
-    }),
+      body: JSON.stringify(body),
     },
   ).catch(() => {})
 }
