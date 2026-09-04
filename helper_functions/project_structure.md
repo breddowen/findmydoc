@@ -1,6 +1,6 @@
 ﻿# Project Structure
 
-> Generated: 2026-09-02 22:24
+> Generated: 2026-09-04 21:36
 
 ---
 
@@ -14,6 +14,7 @@ backend/alembic/versions/4a9d77a6cc23_initial_schema.py (887 lines)
 backend/alembic/versions/6eb4582e2464_add_new_field_to_users.py (33 lines)
 backend/alembic/versions/7c21a6d4ef10_admin_invitations_and_hidden_directories.py (170 lines)
 backend/alembic/versions/9f31b8c4d2e7_medical_services.py (454 lines)
+backend/alembic/versions/c8d174f29a31_patient_tag_overrides.py (141 lines)
 backend/app/.env (14 lines)
 backend/app/__init__.py (0 lines)
 backend/app/core/__init__.py (0 lines)
@@ -48,7 +49,7 @@ backend/app/modules/consents/routers.py (277 lines)
 backend/app/modules/consents/schemas.py (38 lines)
 backend/app/modules/consents/utils.py (37 lines)
 backend/app/modules/content/__init__.py (0 lines)
-backend/app/modules/content/utils.py (108 lines)
+backend/app/modules/content/utils.py (167 lines)
 backend/app/modules/events/__init__.py (0 lines)
 backend/app/modules/events/enums.py (31 lines)
 backend/app/modules/events/models.py (83 lines)
@@ -61,8 +62,8 @@ backend/app/modules/invitations/admin_schemas.py (93 lines)
 backend/app/modules/invitations/admin_utils.py (224 lines)
 backend/app/modules/invitations/enums.py (17 lines)
 backend/app/modules/invitations/models.py (127 lines)
-backend/app/modules/invitations/routers.py (1041 lines)
-backend/app/modules/invitations/schemas.py (143 lines)
+backend/app/modules/invitations/routers.py (1277 lines)
+backend/app/modules/invitations/schemas.py (152 lines)
 backend/app/modules/invitations/utils.py (222 lines)
 backend/app/modules/notifications/__init__.py (0 lines)
 backend/app/modules/notifications/enums.py (30 lines)
@@ -110,15 +111,15 @@ backend/app/modules/specialities/routers.py (331 lines)
 backend/app/modules/specialities/schemas.py (50 lines)
 backend/app/modules/tags/__init__.py (0 lines)
 backend/app/modules/tags/enums.py (7 lines)
-backend/app/modules/tags/models.py (127 lines)
-backend/app/modules/tags/routers.py (698 lines)
-backend/app/modules/tags/schemas.py (91 lines)
-backend/app/modules/tags/utils.py (214 lines)
+backend/app/modules/tags/models.py (192 lines)
+backend/app/modules/tags/routers.py (957 lines)
+backend/app/modules/tags/schemas.py (104 lines)
+backend/app/modules/tags/utils.py (246 lines)
 backend/app/modules/users/__init__.py (0 lines)
 backend/app/modules/users/enums.py (29 lines)
 backend/app/modules/users/models.py (334 lines)
-backend/app/modules/users/routers.py (304 lines)
-backend/app/modules/users/schemas.py (97 lines)
+backend/app/modules/users/routers.py (360 lines)
+backend/app/modules/users/schemas.py (145 lines)
 backend/app/modules/users/utils.py (126 lines)
 backend/requirements.txt (47 lines)
 backend/seed/create_superuser.py (153 lines)
@@ -127,10 +128,10 @@ backend/seed/data/users.json (149 lines)
 backend/seed/Readme.md (1 lines)
 backend/seed/upload_tags.py (123 lines)
 backend/seed/upload_users.py (381 lines)
-backend/test_database.db (938 lines)
+backend/test_database.db (968 lines)
 ```
 
-*Files: 121*
+*Files: 122*
 
 ---
 
@@ -154,17 +155,20 @@ frontend/app/components/content/RichTextRenderer.vue (136 lines)
 frontend/app/components/content/TagSelector.vue (80 lines)
 frontend/app/components/directories/Specialities.vue (471 lines)
 frontend/app/components/directories/Tags.vue (311 lines)
-frontend/app/components/invitations/LinkDialog.vue (239 lines)
-frontend/app/components/layout/EmailVerificationBanner.vue (87 lines)
-frontend/app/components/layout/Footer.vue (48 lines)
-frontend/app/components/layout/Navbar.vue (218 lines)
-frontend/app/components/layout/Sidebar.vue (190 lines)
+frontend/app/components/invitations/LinkDialog.vue (257 lines)
+frontend/app/components/invitations/PatientDialog.vue (435 lines)
+frontend/app/components/layout/EmailVerificationBanner.vue (88 lines)
+frontend/app/components/layout/Footer.vue (52 lines)
+frontend/app/components/layout/Logo.vue (86 lines)
+frontend/app/components/layout/Navbar.vue (338 lines)
+frontend/app/components/layout/Sidebar.vue (178 lines)
 frontend/app/components/layout/ThemeToggle.vue (28 lines)
 frontend/app/components/notifications/Center.vue (181 lines)
 frontend/app/components/patients/ContactStatus.vue (66 lines)
-frontend/app/components/patients/Item.vue (107 lines)
-frontend/app/components/patients/List.vue (242 lines)
+frontend/app/components/patients/Item.vue (111 lines)
+frontend/app/components/patients/List.vue (257 lines)
 frontend/app/components/patients/ProAccess.vue (107 lines)
+frontend/app/components/patients/Tags.vue (105 lines)
 frontend/app/components/programs/configurator/Editor.vue (633 lines)
 frontend/app/components/programs/configurator/Item.vue (143 lines)
 frontend/app/components/programs/configurator/Library.vue (272 lines)
@@ -183,18 +187,19 @@ frontend/app/components/services/DeleteDialog.vue (95 lines)
 frontend/app/components/services/FormDialog.vue (463 lines)
 frontend/app/components/services/List.vue (181 lines)
 frontend/app/components/services/VisibilityDialog.vue (98 lines)
+frontend/app/components/tags/OverrideEditor.vue (231 lines)
 frontend/app/components/ui/BottomSheet.vue (203 lines)
 frontend/app/components/ui/ContentSkeleton.vue (73 lines)
 frontend/app/components/ui/MegaMenu.vue (205 lines)
 frontend/app/components/ui/Modal.vue (150 lines)
 frontend/app/components/ui/Pagination.vue (69 lines)
-frontend/app/components/ui/ResponsiveDialog.vue (90 lines)
+frontend/app/components/ui/ResponsiveDialog.vue (99 lines)
 frontend/app/components/users/InvitationList.vue (231 lines)
 frontend/app/components/users/InviteDialog.vue (29 lines)
 frontend/app/components/users/InviteForm.vue (367 lines)
 frontend/app/components/users/List.vue (182 lines)
 ```
-*Files: 54*
+*Files: 58*
 
 ### pages
 
@@ -210,9 +215,9 @@ frontend/app/pages/dashboard.vue (168 lines)
 frontend/app/pages/forgot-password.vue (102 lines)
 frontend/app/pages/index.vue (3 lines)
 frontend/app/pages/login.vue (238 lines)
-frontend/app/pages/patients/[id]/index.vue (465 lines)
+frontend/app/pages/patients/[id]/index.vue (469 lines)
 frontend/app/pages/patients/[id]/questionnaires/[submissionId].vue (184 lines)
-frontend/app/pages/patients/index.vue (30 lines)
+frontend/app/pages/patients/index.vue (37 lines)
 frontend/app/pages/programs/[id]/edit.vue (16 lines)
 frontend/app/pages/programs/[id]/index.vue (391 lines)
 frontend/app/pages/programs/index.vue (285 lines)
@@ -223,11 +228,13 @@ frontend/app/pages/register/invitation.vue (321 lines)
 frontend/app/pages/reset-password.vue (122 lines)
 frontend/app/pages/services/index.vue (205 lines)
 frontend/app/pages/settings/directories.vue (90 lines)
+frontend/app/pages/settings/profile.vue (265 lines)
 frontend/app/pages/settings/security.vue (325 lines)
+frontend/app/pages/settings/tags.vue (123 lines)
 frontend/app/pages/users/index.vue (529 lines)
 frontend/app/pages/verify-email.vue (81 lines)
 ```
-*Files: 27*
+*Files: 29*
 
 ### layouts
 
@@ -240,7 +247,7 @@ frontend/app/layouts/default.vue (22 lines)
 ### composables
 
 ```
-frontend/app/composables/useAppNavigation.js (175 lines)
+frontend/app/composables/useAppNavigation.js (193 lines)
 frontend/app/composables/useBodyScrollLock.js (48 lines)
 frontend/app/composables/useBreakpoint.js (30 lines)
 frontend/app/composables/useClientReady.js (12 lines)
@@ -257,26 +264,29 @@ frontend/app/stores/articles.js (106 lines)
 frontend/app/stores/assignments.js (99 lines)
 frontend/app/stores/auth.js (205 lines)
 frontend/app/stores/directories.js (208 lines)
+frontend/app/stores/invitations.js (53 lines)
 frontend/app/stores/notifications.js (312 lines)
 frontend/app/stores/patients.js (105 lines)
 frontend/app/stores/programs.js (237 lines)
 frontend/app/stores/questionnaires.js (174 lines)
 frontend/app/stores/services.js (159 lines)
-frontend/app/stores/ui.js (102 lines)
-frontend/app/stores/user.js (71 lines)
+frontend/app/stores/tag-access.js (210 lines)
+frontend/app/stores/ui.js (203 lines)
+frontend/app/stores/user.js (111 lines)
 frontend/app/stores/users.js (266 lines)
 ```
-*Files: 12*
+*Files: 14*
 
 ### middleware
 
 ```
 frontend/app/middleware/auth.global.js (39 lines)
+frontend/app/middleware/doctor-only.js (14 lines)
 frontend/app/middleware/program-manager.js (19 lines)
 frontend/app/middleware/service-manager.js (19 lines)
 frontend/app/middleware/user-manager.js (19 lines)
 ```
-*Files: 4*
+*Files: 5*
 
 ### plugins
 

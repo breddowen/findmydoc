@@ -6,15 +6,51 @@ export const useArticlesStore = defineStore(
     const currentArticle = ref(null)
     const loading = ref(false)
 
-    async function fetchArticles() {
+    const hasMore = ref(true)
+
+    async function fetchArticles({
+      reset = false,
+      limit = 5,
+    } = {}) {
       const { $api } = useNuxtApp()
+
+      if (loading.value) return articles.value
+
+      if (reset) {
+        articles.value = []
+        hasMore.value = true
+      }
+
+      if (!hasMore.value) {
+        return articles.value
+      }
 
       loading.value = true
 
       try {
-        articles.value = await $api(
+        const page = await $api(
           '/api/v1/articles',
+          {
+            query: {
+              offset: articles.value.length,
+              limit,
+            },
+          },
         )
+
+        const existingIds = new Set(
+          articles.value.map(
+            article => article.id,
+          ),
+        )
+
+        const newItems = page.filter(
+          article => !existingIds.has(article.id),
+        )
+
+        articles.value.push(...newItems)
+
+        hasMore.value = page.length === limit
 
         return articles.value
       } finally {
@@ -90,13 +126,30 @@ export const useArticlesStore = defineStore(
       )
     }
 
+    async function registerOpen(
+      articleId,
+      payload,
+    ) {
+      const { $api } = useNuxtApp()
+
+      return await $api(
+        `/api/v1/articles/${articleId}/open`,
+        {
+          method: 'POST',
+          body: payload,
+        },
+      )
+    }
+
     return {
       articles,
       currentArticle,
       loading,
 
+      hasMore,
       fetchArticles,
       fetchArticle,
+      registerOpen,
       createArticle,
       updateArticle,
       setVisibility,

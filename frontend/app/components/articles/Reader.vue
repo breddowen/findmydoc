@@ -5,6 +5,10 @@ const props = defineProps({
     type: Object,
     required: true,
   },
+  interactionId: {
+    type: String,
+    required: true,
+  },
 })
 
 const auth = useAuthStore()
@@ -21,6 +25,7 @@ const completed = ref(false)
 
 const {
   progress,
+  isTrackable,
   restoreProgress,
 } = useReadingProgress(articleElement)
 
@@ -67,9 +72,11 @@ async function loadProgress() {
 
     await nextTick()
 
-    window.setTimeout(() => {
-      restoreProgress(savedProgress.value)
-    }, 100)
+    if (!completed.value) {
+      window.setTimeout(() => {
+        restoreProgress(savedProgress.value)
+      }, 100)
+    }
   } catch {
     // Отсутствие прогресса не должно мешать чтению.
   }
@@ -87,6 +94,8 @@ async function saveProgress(value = progress.value) {
         method: 'PUT',
         body: {
           progress_percent: value,
+          interaction_id: props.interactionId,
+          is_trackable: isTrackable.value,
         },
       },
     )
@@ -135,8 +144,10 @@ function saveWithKeepalive() {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        progress_percent: progress.value,
-      }),
+      progress_percent: progress.value,
+      interaction_id: props.interactionId,
+      is_trackable: isTrackable.value,
+    }),
     },
   ).catch(() => {})
 }
@@ -160,7 +171,7 @@ watch(progress, (value) => {
 
   if (
     Math.abs(value - lastSentProgress) >= 5
-    || value >= 100
+    || value >= 90
   ) {
     scheduleSave()
   }

@@ -25,18 +25,21 @@ export function useReadingProgress(target) {
       0,
     )
 
-    const articleEndScroll =
-      elementTop
-      + elementHeight
-      - window.innerHeight
+    const articleEndScroll = elementTop + elementHeight - window.innerHeight
+
+    const rawReadableHeight = endPosition - elementTop
 
     const endPosition = Math.min(
       articleEndScroll,
       maxPageScroll,
     )
 
+    isTrackable.value =
+      rawReadableHeight
+      >= MIN_TRACKABLE_SCROLL_DISTANCE
+
     const readableHeight = Math.max(
-      endPosition - elementTop,
+      rawReadableHeight,
       1,
     )
 
@@ -172,6 +175,7 @@ export function useReadingProgress(target) {
 
   return {
     progress: readonly(progress),
+    isTrackable: readonly(isTrackable),
     calculate,
     restoreProgress,
   }

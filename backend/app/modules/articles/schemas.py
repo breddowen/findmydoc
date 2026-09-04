@@ -1,6 +1,7 @@
 # ./backend/app/modules/articles/schemas.py
 import uuid
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -66,6 +67,11 @@ class ArticleListItem(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+    # Возвращаются только администраторам и медассистентам.
+    opened_count: int | None = None
+    read_count: int | None = None
+    read_rate: float | None = None
+
 class ArticleReadResponse(BaseModel):
     message: str
     event_id: uuid.UUID
@@ -87,3 +93,36 @@ class ArticleProgressResponse(BaseModel):
     started_at: datetime
     updated_at: datetime
     completed_at: datetime | None
+
+ArticleOpenSource = Literal[
+    "library",
+    "program",
+    "assignment",
+    "direct",
+]
+
+
+class ArticleOpenRequest(BaseModel):
+    interaction_id: uuid.UUID
+
+    source: ArticleOpenSource = "direct"
+
+    program_id: uuid.UUID | None = None
+    assignment_id: uuid.UUID | None = None
+
+
+class ArticleOpenResponse(BaseModel):
+    event_id: uuid.UUID
+    interaction_id: uuid.UUID
+
+
+class ArticleProgressUpdateRequest(BaseModel):
+    progress_percent: float = Field(
+        ge=0,
+        le=100,
+    )
+
+    # Если параметры не переданы, прогресс сохранится,
+    # но аналитическое событие не создастся.
+    interaction_id: uuid.UUID | None = None
+    is_trackable: bool = False

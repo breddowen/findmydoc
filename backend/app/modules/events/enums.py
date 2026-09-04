@@ -12,7 +12,10 @@ class EventType(str, Enum):
 
     QUESTIONNAIRE_STARTED = "questionnaire_started"
     QUESTIONNAIRE_COMPLETED = "questionnaire_completed"
+
+    ARTICLE_OPENED = "article_opened"
     ARTICLE_READ = "article_read"
+    ARTICLE_ASSIGNED = "article_assigned"
 
     CONTACT_REQUESTED = "contact_requested"
     ASSISTANT_CALL_ATTEMPTED = "assistant_call_attempted"
