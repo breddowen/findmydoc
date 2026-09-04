@@ -1,7 +1,10 @@
 // ./frontend/app/composables/useReadingProgress.js
 
+const MIN_TRACKABLE_SCROLL_DISTANCE = 240
+
 export function useReadingProgress(target) {
   const progress = ref(0)
+  const isTrackable = ref(false)
 
   let animationFrame = null
   let resizeObserver = null
@@ -9,9 +12,13 @@ export function useReadingProgress(target) {
   function getMetrics() {
     const element = target.value
 
-    if (!element) return null
+    if (!element) {
+      isTrackable.value = false
+      return null
+    }
 
-    const rect = element.getBoundingClientRect()
+    const rect =
+      element.getBoundingClientRect()
 
     const elementTop =
       rect.top + window.scrollY
@@ -25,14 +32,21 @@ export function useReadingProgress(target) {
       0,
     )
 
-    const articleEndScroll = elementTop + elementHeight - window.innerHeight
+    const articleEndScroll =
+      elementTop
+      + elementHeight
+      - window.innerHeight
 
-    const rawReadableHeight = endPosition - elementTop
-
+    // Сначала рассчитываем конечную позицию.
     const endPosition = Math.min(
       articleEndScroll,
       maxPageScroll,
     )
+
+    // И только после этого доступную для чтения
+    // дистанцию прокрутки.
+    const rawReadableHeight =
+      endPosition - elementTop
 
     isTrackable.value =
       rawReadableHeight
@@ -46,6 +60,7 @@ export function useReadingProgress(target) {
     return {
       elementTop,
       readableHeight,
+      rawReadableHeight,
       endPosition,
     }
   }
@@ -64,15 +79,16 @@ export function useReadingProgress(target) {
     const currentPosition =
       window.scrollY - elementTop
 
-    // Важный момент: сначала проверяем начало.
-    // Иначе при временно маленькой высоте страницы
-    // endPosition может оказаться <= elementTop
-    // и мы ошибочно получим 100%.
+    // До начала статьи прогресс равен нулю.
     if (currentPosition <= 0) {
       progress.value = 0
       return
     }
 
+    // Для слишком короткой статьи допускаем
+    // визуальное отображение прогресса, но
+    // isTrackable останется false, поэтому
+    // ARTICLE_READ зарегистрирован не будет.
     if (window.scrollY >= endPosition - 2) {
       progress.value = 100
       return
@@ -92,7 +108,7 @@ export function useReadingProgress(target) {
   }
 
   function scheduleCalculate() {
-    if (animationFrame) return
+    if (animationFrame !== null) return
 
     animationFrame =
       window.requestAnimationFrame(() => {
@@ -122,7 +138,6 @@ export function useReadingProgress(target) {
       behavior: 'instant',
     })
 
-    // Синхронизируем progress после scrollTo.
     scheduleCalculate()
   }
 
@@ -131,11 +146,14 @@ export function useReadingProgress(target) {
       scheduleCalculate()
 
       if (target.value) {
-        resizeObserver = new ResizeObserver(() => {
-          scheduleCalculate()
-        })
+        resizeObserver =
+          new ResizeObserver(() => {
+            scheduleCalculate()
+          })
 
-        resizeObserver.observe(target.value)
+        resizeObserver.observe(
+          target.value,
+        )
       }
     })
 
@@ -165,11 +183,14 @@ export function useReadingProgress(target) {
     )
 
     resizeObserver?.disconnect()
+    resizeObserver = null
 
-    if (animationFrame) {
+    if (animationFrame !== null) {
       window.cancelAnimationFrame(
         animationFrame,
       )
+
+      animationFrame = null
     }
   })
 
