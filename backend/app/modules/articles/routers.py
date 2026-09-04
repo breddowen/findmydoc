@@ -194,13 +194,27 @@ async def list_articles(
         )
     ).all()
 
-    ranking_cutoff = datetime.now(
-        timezone.utc
-    ).replace(
+    now = datetime.now(timezone.utc)
+
+    ranking_cutoff = now.replace(
         hour=0,
         minute=0,
         second=0,
         microsecond=0,
+    )
+
+    # Актуальные счётчики для суперпользователя
+    # и медицинского ассистента.
+    live_event_counts = get_article_event_counts(
+        session=session,
+    )
+
+    # Стабильные в течение дня счётчики,
+    # используемые только для ранжирования
+    # списка пациента.
+    ranking_event_counts = get_article_event_counts(
+        session=session,
+        before=ranking_cutoff,
     )
 
     event_counts = get_article_event_counts(
@@ -223,7 +237,7 @@ async def list_articles(
             )
 
             if can_see_analytics:
-                counts = event_counts.get(
+                counts = live_event_counts.get(
                     article.id,
                     {
                         "opened": 0,
@@ -309,7 +323,7 @@ async def list_articles(
             or patient.pro_enabled
         )
 
-        counts = event_counts.get(
+        counts = ranking_event_counts.get(
             article.id,
             {
                 "opened": 0,
