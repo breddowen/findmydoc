@@ -6,6 +6,7 @@ definePageMeta({
 
 const route = useRoute()
 const { $api } = useNuxtApp()
+const auth = useAuthStore()
 
 const token = computed(() => {
   const value = route.query.token
@@ -80,7 +81,13 @@ async function fetchPreview() {
 }
 
 async function acceptInvitation() {
-  if (!canSubmit.value) return
+  if (
+    !canSubmit.value
+    || !preview.value
+    || completed.value
+  ) {
+    return
+  }
 
   submitting.value = true
   errorMessage.value = ''
@@ -99,18 +106,69 @@ async function acceptInvitation() {
       },
     )
 
+    // Регистрация уже завершена.
+    // Ошибка последующего входа не должна
+    // предлагать повторно принять приглашение.
     completed.value = true
-    successMessage.value = response.email_verification_required
-      ? (
-          'Регистрация завершена. Мы отправили '
-          + 'на вашу почту ссылку для подтверждения email.'
-        )
-      : 'Регистрация успешно завершена.'
+
+    if (response.role_added !== 'patient') {
+      successMessage.value =
+        response.email_verification_required
+          ? (
+              'Регистрация завершена. '
+              + 'Проверьте почту для подтверждения email.'
+            )
+          : 'Регистрация успешно завершена.'
+
+      return
+    }
+
+    successMessage.value =
+      'Регистрация завершена. Открываем ваши материалы…'
+
+    try {
+      const result = await auth.login(
+        preview.value.email,
+        form.password,
+      )
+
+      // По текущему backend пациент регистрируется
+      // как новый аккаунт с одной ролью.
+      // Не продолжаем автоматически при неожиданном
+      // ответе или другой активной роли.
+      if (
+        !result.authenticated
+        || auth.activeRole !== 'patient'
+      ) {
+        auth.clearRoleSelection()
+
+        successMessage.value =
+          'Аккаунт создан. Для продолжения войдите '
+          + 'с указанным при регистрации паролем.'
+
+        return
+      }
+
+      // Токен уже сохранён auth.login().
+      // Полная навигация очищает старое состояние
+      // Pinia, в том числе при демонстрации
+      // нескольких аккаунтов на одном устройстве.
+      // replace убирает приглашение из текущей
+      // записи истории браузера.
+      window.location.replace('/dashboard')
+    } catch {
+      successMessage.value =
+        'Аккаунт создан, но автоматический вход '
+        + 'не удался. Войдите с указанным '
+        + 'при регистрации паролем.'
+    }
   } catch (error) {
     errorMessage.value =
       error?.data?.detail
       || 'Не удалось завершить регистрацию'
   } finally {
+    form.password = ''
+    form.password_confirmation = ''
     submitting.value = false
   }
 }

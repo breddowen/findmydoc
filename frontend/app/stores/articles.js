@@ -58,7 +58,13 @@ export const useArticlesStore = defineStore(
       }
     }
 
-    async function fetchArticle(articleId) {
+    async function fetchArticle(
+      articleId,
+      {
+        programId = null,
+        programStageId = null,
+      } = {},
+    ) {
       const { $api } = useNuxtApp()
 
       loading.value = true
@@ -66,6 +72,13 @@ export const useArticlesStore = defineStore(
       try {
         currentArticle.value = await $api(
           `/api/v1/articles/${articleId}`,
+          {
+            query: {
+              program_id: programId || undefined,
+              program_stage_id:
+                programStageId || undefined,
+            },
+          },
         )
 
         return currentArticle.value

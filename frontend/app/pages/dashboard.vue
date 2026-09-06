@@ -50,8 +50,11 @@ onMounted(async () => {
 
 <template>
   <div class="space-y-6">
+    <PatientHome v-if="isPatient" />
+
     <!-- Приветствие -->
     <section
+      v-if="!isPatient"
       class="bg-base-100 border-base-300 rounded-3xl border p-5 sm:p-8"
     >
       <p
@@ -69,19 +72,6 @@ onMounted(async () => {
         {{ userStore.user?.first_name || 'пользователь' }}
       </h1>
     </section>
-
-    <!-- Dashboard пациента -->
-    <AssignmentsPatientList
-      v-if="isPatient"
-    />
-
-    <ArticlesPatientOverview
-      v-if="isPatient"
-    />
-
-    <ConsentsAssistantContact
-      v-if="isPatient"
-    />
 
     <!-- Dashboard сотрудников -->
     <section
@@ -111,6 +101,7 @@ onMounted(async () => {
 
     <!-- Общие настройки -->
     <section
+      v-if="!isPatient"
       class="grid gap-4 md:grid-cols-2 xl:grid-cols-3"
     >
       <NuxtLink

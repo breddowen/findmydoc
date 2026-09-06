@@ -102,6 +102,14 @@ class ProgramCreateRequest(BaseModel):
     # без связанной медицинской услуги.
     service_id: uuid.UUID | None = None
 
+    is_start: bool = False
+
+    home_priority: int = Field(
+        default=0,
+        ge=0,
+        le=1000,
+    )
+
     is_popular: bool = False
 
     tag_ids: list[uuid.UUID] = []
@@ -192,6 +200,9 @@ class ProgramPatientResponse(BaseModel):
     service: MedicalServicePatientResponse | None
     is_popular: bool
 
+    is_start: bool = False
+    home_priority: int = 0
+
     tags: list[ProgramTagResponse]
 
     has_program_access: bool
@@ -210,6 +221,9 @@ class ProgramClinicalResponse(BaseModel):
 
     service: MedicalServiceStaffResponse | None
     is_popular: bool
+
+    is_start: bool = False
+    home_priority: int = 0
 
     is_hidden: bool
 

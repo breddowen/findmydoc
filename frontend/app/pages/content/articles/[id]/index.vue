@@ -1,5 +1,11 @@
 <!-- ./frontend/app/pages/content/articles/[id]/index.vue -->
 <script setup>
+definePageMeta({
+  // При смене программы или статьи создаём
+  // отдельный экземпляр страницы и взаимодействия.
+  key: route => route.fullPath,
+})
+
 const route = useRoute()
 
 const auth = useAuthStore()
@@ -10,6 +16,28 @@ const interactionId = ref(null)
 
 const loading = ref(true)
 const errorMessage = ref('')
+
+let disposed = false
+
+function stringQuery(value) {
+  return typeof value === 'string' && value
+    ? value
+    : null
+}
+
+const programId = computed(() =>
+  stringQuery(route.query.program_id)
+  || stringQuery(route.query.program),
+)
+
+const programStageId = computed(() =>
+  stringQuery(route.query.program_stage_id)
+  || stringQuery(route.query.stage),
+)
+
+const assignmentId = computed(() =>
+  stringQuery(route.query.assignment_id),
+)
 
 const isPatient = computed(
   () => auth.activeRole === 'patient',
@@ -23,9 +51,9 @@ const allowedSources = new Set([
 ])
 
 function getOpenSource() {
-  const source = String(
-    route.query.source || 'direct',
-  )
+  if (programId.value) return 'program'
+
+  const source = stringQuery(route.query.source)
 
   return allowedSources.has(source)
     ? source
@@ -35,49 +63,61 @@ function getOpenSource() {
 async function registerPatientOpen() {
   if (!isPatient.value) return
 
-  interactionId.value =
+  const currentInteractionId =
     window.crypto.randomUUID()
 
   try {
     await store.registerOpen(
       route.params.id,
       {
-        interaction_id: interactionId.value,
+        interaction_id: currentInteractionId,
         source: getOpenSource(),
-        program_id:
-          route.query.program_id || null,
-        assignment_id:
-          route.query.assignment_id || null,
+        program_id: programId.value,
+        program_stage_id: programStageId.value,
+        assignment_id: assignmentId.value,
       },
     )
-  } catch (error) {
-    // Ошибка аналитики не должна запрещать
-    // пациенту читать доступную статью.
-    console.warn(
-      'Не удалось зарегистрировать открытие статьи',
-      error,
-    )
 
-    // Без успешно зарегистрированного открытия
-    // не создаём связанное событие ARTICLE_READ.
+    if (!disposed) {
+      interactionId.value = currentInteractionId
+    }
+  } catch {
+    // Отсутствие аналитики не мешает чтению.
     interactionId.value = null
   }
 }
 
 onMounted(async () => {
   try {
-    article.value = await store.fetchArticle(
+    const response = await store.fetchArticle(
       route.params.id,
+      {
+        programId: programId.value,
+        programStageId: programStageId.value,
+      },
     )
+
+    if (disposed) return
+
+    article.value = response
 
     await registerPatientOpen()
   } catch (error) {
+    if (disposed) return
+
     errorMessage.value =
-      error?.data?.detail
-      || 'Не удалось загрузить статью'
+      typeof error?.data?.detail === 'string'
+        ? error.data.detail
+        : 'Не удалось загрузить статью'
   } finally {
-    loading.value = false
+    if (!disposed) {
+      loading.value = false
+    }
   }
+})
+
+onBeforeUnmount(() => {
+  disposed = true
 })
 </script>
 
@@ -91,6 +131,7 @@ onMounted(async () => {
   <div
     v-else-if="errorMessage"
     class="alert alert-error"
+    role="alert"
   >
     {{ errorMessage }}
   </div>
@@ -99,5 +140,7 @@ onMounted(async () => {
     v-else-if="article"
     :article="article"
     :interaction-id="interactionId"
+    :program-id="programId"
+    :program-stage-id="programStageId"
   />
 </template>

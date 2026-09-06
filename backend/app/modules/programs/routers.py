@@ -71,6 +71,7 @@ from app.modules.programs.utils import (
     normalize_datetime,
     patient_has_program_access,
     validate_program_periods,
+    sync_program_enrollment,
 )
 from app.modules.questionnaires.models import (
     Questionnaire,
@@ -88,6 +89,12 @@ from app.modules.services.models import MedicalService
 from app.modules.services.schemas import (
     MedicalServicePatientResponse,
     MedicalServiceStaffResponse,
+)
+from app.core.transactions import lock_patient_for_write
+from app.modules.notifications.transactional import (
+    create_in_app_notification,
+    publish_saved_notifications,
+    snapshot_notifications,
 )
 
 router = APIRouter(
@@ -154,6 +161,84 @@ def serialize_program_service_for_staff(
         service
     )
 
+def validate_start_program(
+    *,
+    session: Session,
+    payload: ProgramCreateRequest | ProgramUpdateRequest,
+    is_start: bool,
+) -> None:
+    if not is_start:
+        return
+
+    if payload.service_id is not None:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Стартовая программа должна быть бесплатной "
+                "и не иметь связанной платной услуги"
+            ),
+        )
+
+    stages = sorted(
+        payload.stages,
+        key=lambda item: item.order_index,
+    )
+
+    if not stages or stages[0].day_from != 0:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Первый этап стартовой программы "
+                "должен начинаться с дня 0"
+            ),
+        )
+
+    for stage in stages:
+        if not stage.items:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "Этапы стартовой программы "
+                    "не должны быть пустыми"
+                ),
+            )
+
+        for item in stage.items:
+            if item.item_type == ProgramItemType.CONSULTATION:
+                raise HTTPException(
+                    status_code=422,
+                    detail=(
+                        "Стартовый маршрут содержит только "
+                        "бесплатные статьи и опросники. "
+                        "Консультации добавьте в отдельную программу."
+                    ),
+                )
+
+            if item.item_type == ProgramItemType.ARTICLE:
+                content = session.get(
+                    Article,
+                    item.article_id,
+                )
+            else:
+                content = session.get(
+                    Questionnaire,
+                    item.questionnaire_id,
+                )
+
+            if not content:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Материал стартовой программы не найден",
+                )
+
+            if content.is_hidden or content.pro_content:
+                raise HTTPException(
+                    status_code=422,
+                    detail=(
+                        "В стартовую программу можно включать "
+                        "только нескрытые бесплатные материалы"
+                    ),
+                )
 
 def validate_program_service_choice(
     *,
@@ -602,6 +687,8 @@ def serialize_patient_program(
             program=program,
         ),
         is_popular=program.is_popular,
+        is_start=program.is_start,
+        home_priority=program.home_priority,
 
         tags=[
             ProgramTagResponse(
@@ -683,6 +770,8 @@ def serialize_clinical_program(
             program=program,
         ),
         is_popular=program.is_popular,
+        is_start=program.is_start,
+        home_priority=program.home_priority,
 
         is_hidden=program.is_hidden,
 
@@ -724,9 +813,17 @@ async def create_program(
             session=session,
             service_id=payload.service_id,
         )
+        validate_start_program(
+            session=session,
+            payload=payload,
+            is_start=payload.is_start,
+        )
         program = Program(
             title=payload.title.strip(),
             description=payload.description,
+            service_id=payload.service_id,
+            is_start=payload.is_start,
+            home_priority=payload.home_priority,
             is_popular=payload.is_popular,
             pro_content=False,
             created_by_user_id=auth.user.id,
@@ -962,6 +1059,8 @@ async def change_program_visibility(
     return serialize_clinical_program(
         session=session,
         program=program,
+        is_start=program.is_start,
+        home_priority=program.home_priority,
     )
 
 @router.put(
@@ -986,6 +1085,26 @@ async def update_program(
             status_code=404,
             detail="Программа не найдена",
         )
+
+    # Старые клиенты, которые ещё не отправляют новые поля,
+    # не должны случайно сбрасывать их.
+    next_is_start = (
+        payload.is_start
+        if "is_start" in payload.model_fields_set
+        else program.is_start
+    )
+
+    next_home_priority = (
+        payload.home_priority
+        if "home_priority" in payload.model_fields_set
+        else program.home_priority
+    )
+
+    validate_start_program(
+        session=session,
+        payload=payload,
+        is_start=next_is_start,
+    )
 
     validate_program_service_choice(
         session=session,
@@ -1014,6 +1133,8 @@ async def update_program(
     session.flush()
 
     program.title = payload.title.strip()
+    program.is_start = next_is_start
+    program.home_priority = next_home_priority
     program.description = payload.description
     program.service_id = payload.service_id
     program.pro_content = False
@@ -1109,6 +1230,11 @@ async def start_program(
             subject_id=program.id,
         )
 
+        sync_program_enrollment(
+            session=session,
+            enrollment=enrollment,
+        )
+
         session.commit()
         session.refresh(enrollment)
 
@@ -1131,129 +1257,189 @@ async def request_program_purchase(
     ),
     session: Session = Depends(get_session),
 ) -> ProgramPurchaseRequestResponse:
-    program = session.get(
-        Program,
-        program_id,
-    )
-
-    if not program or program.is_hidden:
-        raise HTTPException(
-            status_code=404,
-            detail="Программа не найдена",
-        )
-
     patient = get_patient_profile_by_user_id(
         session=session,
         user_id=auth.user.id,
     )
 
-    access = get_patient_program_access(
-        session=session,
-        patient_id=patient.id,
-        program_id=program.id,
-    )
+    snapshots = []
 
-    now = utc_now()
+    try:
+        lock_patient_for_write(
+            session=session,
+            patient_id=patient.id,
+        )
 
-    if not access:
-        access = PatientProgramAccess(
+        program = session.get(Program, program_id)
+
+        if not program or program.is_hidden:
+            raise HTTPException(
+                status_code=404,
+                detail="Программа не найдена",
+            )
+
+        access = get_patient_program_access(
+            session=session,
             patient_id=patient.id,
             program_id=program.id,
-            purchase_requested=True,
-            requested_at=now,
         )
 
-    elif access.is_active:
-        raise HTTPException(
-            status_code=400,
-            detail="Программа уже приобретена",
-        )
+        has_access = bool(access and access.is_active)
 
-    elif access.purchase_requested:
-        return ProgramPurchaseRequestResponse(
-            program_id=program.id,
-            requested_at=access.requested_at,
-            message=(
-                "Запрос уже отправлен. "
-                "Медицинский ассистент "
-                "свяжется с вами."
-            ),
-        )
-
-    else:
-        access.purchase_requested = True
-        access.requested_at = now
-        access.updated_at = now
-
-    session.add(access)
-    session.commit()
-    session.refresh(access)
-
-    staff_role_links = session.exec(
-        select(UserRoleLink).where(
-            UserRoleLink.role.in_(
-                [
-                    UserRole.SUPERUSER,
-                    UserRole.MED_ASSISTANT,
-                ]
-            )
-        )
-    ).all()
-
-    notified_user_ids: set[uuid.UUID] = set()
-
-    for role_link in staff_role_links:
-        if (
-            role_link.user_id
-            in notified_user_ids
-        ):
-            continue
-
-        notified_user_ids.add(
-            role_link.user_id
-        )
-
-        await send_notification(
+        can_see_by_tags = patient_can_see_content(
             session=session,
-            user_id=role_link.user_id,
-            title=(
-                "Запрос на покупку программы"
+            patient=patient,
+            content_tag_ids=get_program_tag_ids(
+                session=session,
+                program_id=program.id,
             ),
-            message=(
-                "Пациент запросил доступ "
-                "к программе "
-                f"«{program.title}»."
-            ),
-            notification_type=(
-                NotificationType
-                .PROGRAM_PURCHASE_REQUESTED
-            ),
-            channels=[
-                NotificationChannel.IN_APP,
-                NotificationChannel.BROWSER,
-            ],
-            action_url=(
-                f"/patients/{patient.id}"
-            ),
-            payload={
-                "patient_id": str(
-                    patient.id
-                ),
-                "program_id": str(
-                    program.id
-                ),
-            },
+            is_hidden=program.is_hidden,
         )
 
-    return ProgramPurchaseRequestResponse(
-        program_id=program.id,
-        requested_at=access.requested_at,
-        message=(
-            "Запрос отправлен. "
-            "Медицинский ассистент "
-            "свяжется с вами."
-        ),
-    )
+        if not has_access and not can_see_by_tags:
+            raise HTTPException(
+                status_code=403,
+                detail="Программа недоступна пациенту",
+            )
+
+        if program.service_id is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Для бесплатной программы покупка не требуется",
+            )
+
+        if has_access:
+            raise HTTPException(
+                status_code=400,
+                detail="Программа уже приобретена",
+            )
+
+        if access and access.purchase_requested:
+            if access.requested_at is None:
+                raise HTTPException(
+                    status_code=409,
+                    detail=(
+                        "У существующей заявки отсутствует дата. "
+                        "Обратитесь к администратору."
+                    ),
+                )
+
+            response = ProgramPurchaseRequestResponse(
+                program_id=program.id,
+                requested_at=access.requested_at,
+                message=(
+                    "Запрос уже отправлен. "
+                    "Ассистент обычно связывается "
+                    "в течение 1–2 дней."
+                ),
+            )
+
+            # Освобождаем блокировку пациента.
+            session.commit()
+            return response
+
+        staff_links = session.exec(
+            select(UserRoleLink).where(
+                UserRoleLink.role.in_(
+                    [
+                        UserRole.SUPERUSER,
+                        UserRole.MED_ASSISTANT,
+                    ]
+                )
+            )
+        ).all()
+
+        recipient_ids = {
+            link.user_id
+            for link in staff_links
+        }
+
+        recipients = []
+
+        for user_id in sorted(recipient_ids, key=str):
+            user = session.get(User, user_id)
+
+            if (
+                user
+                and user.deleted_at is None
+                and user.is_active
+                and not user.is_blocked
+            ):
+                recipients.append(user)
+
+        if not recipients:
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "Сейчас не удалось передать запрос ассистенту. "
+                    "Попробуйте позже или свяжитесь с клиникой."
+                ),
+            )
+
+        now = utc_now()
+
+        if not access:
+            access = PatientProgramAccess(
+                patient_id=patient.id,
+                program_id=program.id,
+                purchase_requested=True,
+                requested_at=now,
+            )
+        else:
+            access.purchase_requested = True
+            access.requested_at = now
+            access.updated_at = now
+
+        session.add(access)
+
+        notifications = []
+
+        for recipient in recipients:
+            notification = create_in_app_notification(
+                session=session,
+                user_id=recipient.id,
+                title="Запрос на обсуждение программы",
+                message=(
+                    "Пациент просит связаться с ним "
+                    f"по поводу программы «{program.title}»."
+                ),
+                notification_type=(
+                    NotificationType.PROGRAM_PURCHASE_REQUESTED
+                ),
+                action_url=f"/patients/{patient.id}",
+                payload={
+                    "patient_id": str(patient.id),
+                    "program_id": str(program.id),
+                },
+            )
+
+            notifications.append(notification)
+
+        snapshots = snapshot_notifications(
+            session=session,
+            notifications=notifications,
+        )
+
+        response = ProgramPurchaseRequestResponse(
+            program_id=program.id,
+            requested_at=now,
+            message=(
+                "Запрос отправлен. Ассистент обычно "
+                "связывается в течение 1–2 дней."
+            ),
+        )
+
+        # Заявка и все уведомления фиксируются вместе.
+        session.commit()
+
+    except Exception:
+        session.rollback()
+        raise
+
+    # Никаких сетевых отправок внутри транзакции.
+    await publish_saved_notifications(snapshots)
+
+    return response
 
 @router.get(
     "/manage/patient/{patient_id}/access",
@@ -1350,6 +1536,11 @@ async def update_patient_program_access(
     program = session.get(
         Program,
         program_id,
+    )
+
+    lock_patient_for_write(
+        session=session,
+        patient_id=patient.id,
     )
 
     if not patient or not program:
@@ -1510,6 +1701,8 @@ def serialize_patient_clinical_program(
             program=program,
         ),
         is_popular=patient_response.is_popular,
+        is_start=patient_response.is_start,
+        home_priority=patient_response.home_priority,
 
         tags=patient_response.tags,
 

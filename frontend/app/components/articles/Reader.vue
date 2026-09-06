@@ -9,6 +9,14 @@ const props = defineProps({
     type: String,
     default: null,
   },
+  programId: {
+    type: String,
+    default: null,
+  },
+  programStageId: {
+    type: String,
+    default: null,
+  },
 })
 
 const auth = useAuthStore()
@@ -22,6 +30,8 @@ const articleElement = ref(null)
 const savedProgress = ref(0)
 const saving = ref(false)
 const completed = ref(false)
+const progressReady = ref(false)
+const saveError = ref('')
 
 const {
   progress,
@@ -35,10 +45,9 @@ const isPatient = computed(
 
 const canEdit = computed(() => {
   if (
-    [
-      'superuser',
-      'med_assistant',
-    ].includes(auth.activeRole)
+    ['superuser', 'med_assistant'].includes(
+      auth.activeRole,
+    )
   ) {
     return true
   }
@@ -51,7 +60,25 @@ const canEdit = computed(() => {
 })
 
 let saveTimer = null
-let lastSentProgress = 0
+let restoreTimer = null
+let restoreFrame = null
+
+let disposed = false
+let lastSentProgress = null
+let pendingBody = null
+let savePromise = null
+
+function createProgressBody(value) {
+  return {
+    progress_percent: value,
+    interaction_id: props.interactionId,
+    is_trackable: Boolean(
+      props.interactionId && isTrackable.value,
+    ),
+    program_id: props.programId,
+    program_stage_id: props.programStageId,
+  }
+}
 
 async function loadProgress() {
   if (!isPatient.value) return
@@ -59,81 +86,144 @@ async function loadProgress() {
   try {
     const response = await $api(
       `/api/v1/articles/${props.article.id}/progress`,
+      {
+        query: {
+          program_id: props.programId || undefined,
+          program_stage_id:
+            props.programStageId || undefined,
+        },
+      },
     )
+
+    if (disposed) return
 
     savedProgress.value =
-      response.progress_percent || 0
+      Number(response.progress_percent) || 0
 
     lastSentProgress = savedProgress.value
-
-    completed.value = Boolean(
-      response.completed_at,
-    )
+    completed.value = Boolean(response.completed_at)
 
     await nextTick()
 
-    if (!completed.value) {
-      window.setTimeout(() => {
+    if (disposed) return
+
+    restoreTimer = window.setTimeout(() => {
+      if (disposed) return
+
+      if (!completed.value) {
         restoreProgress(savedProgress.value)
-      }, 100)
-    }
+      }
+
+      restoreFrame = window.requestAnimationFrame(() => {
+        if (!disposed) {
+          progressReady.value = true
+        }
+      })
+    }, 100)
   } catch {
-    // Отсутствие прогресса не должно мешать чтению.
+    if (disposed) return
+
+    saveError.value =
+      'Не удалось загрузить сохранённую позицию. '
+      + 'Вы можете читать материал и повторить загрузку.'
+
+    // Не отправляем случайный нулевой прогресс
+    // поверх состояния, которое не удалось загрузить.
+    progressReady.value = false
   }
+}
+
+async function drainSaveQueue() {
+  saving.value = true
+  let successful = true
+
+  try {
+    while (pendingBody && !disposed) {
+      const body = pendingBody
+      pendingBody = null
+
+      try {
+        const response = await $api(
+          `/api/v1/articles/${props.article.id}/progress`,
+          {
+            method: 'PUT',
+            body,
+          },
+        )
+
+        lastSentProgress = body.progress_percent
+
+        if (!disposed) {
+          savedProgress.value =
+            body.progress_percent
+
+          completed.value = Boolean(
+            response.completed_at,
+          )
+
+          saveError.value = ''
+        }
+      } catch {
+        successful = false
+
+        // Не делаем бесконечные автоматические повторы.
+        // Следующее действие сохранит актуальное значение.
+        pendingBody = null
+
+        if (!disposed) {
+          saveError.value =
+            'Не удалось сохранить прогресс. '
+            + 'Проверьте соединение и попробуйте ещё раз.'
+        }
+
+        break
+      }
+    }
+  } finally {
+    saving.value = false
+  }
+
+  return successful
 }
 
 async function saveProgress(
   value = progress.value,
 ) {
-  if (!isPatient.value || saving.value) return
-
-  saving.value = true
-
-  try {
-    const body = {
-      progress_percent: value,
-    }
-
-    if (props.interactionId) {
-      body.interaction_id =
-        props.interactionId
-
-      body.is_trackable =
-        isTrackable.value
-    }
-
-    const response = await $api(
-      `/api/v1/articles/${props.article.id}/progress`,
-      {
-        method: 'PUT',
-        body,
-      },
-    )
-
-    lastSentProgress = value
-    savedProgress.value = value
-
-    completed.value = Boolean(
-      response.completed_at,
-    )
-  } finally {
-    saving.value = false
+  if (
+    !isPatient.value
+    || !progressReady.value
+    || disposed
+  ) {
+    return false
   }
+
+  // Пока выполняется запрос, запоминаем последнее
+  // состояние вместо потери очередного сохранения.
+  pendingBody = createProgressBody(value)
+
+  if (!savePromise) {
+    savePromise = drainSaveQueue().finally(() => {
+      savePromise = null
+    })
+  }
+
+  return await savePromise
 }
 
 function scheduleSave() {
-  if (!isPatient.value) return
+  if (!isPatient.value || !progressReady.value) return
 
   window.clearTimeout(saveTimer)
 
   saveTimer = window.setTimeout(() => {
-    saveProgress()
+    void saveProgress()
   }, 800)
 }
 
 function saveWithKeepalive() {
   if (
     !isPatient.value
+    || !progressReady.value
     || progress.value === lastSentProgress
   ) {
     return
@@ -145,20 +235,12 @@ function saveWithKeepalive() {
 
   if (!token) return
 
-  const body = {
-    progress_percent: progress.value,
-  }
-
-  if (props.interactionId) {
-    body.interaction_id =
-      props.interactionId
-
-    body.is_trackable =
-      isTrackable.value
-  }
+  const baseURL = String(
+    config.public.apiBase || '',
+  ).replace(/\/$/, '')
 
   fetch(
-    `${config.public.apiBase}/api/v1/articles/${props.article.id}/progress`,
+    `${baseURL}/api/v1/articles/${props.article.id}/progress`,
     {
       method: 'PUT',
       keepalive: true,
@@ -166,16 +248,46 @@ function saveWithKeepalive() {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify(
+        createProgressBody(progress.value),
+      ),
     },
   ).catch(() => {})
+}
+
+function handleVisibilityChange() {
+  if (document.visibilityState === 'hidden') {
+    saveWithKeepalive()
+  }
+}
+
+async function retryProgress() {
+  if (!progressReady.value) {
+    saveError.value = ''
+    await loadProgress()
+    return
+  }
+
+  await saveProgress()
 }
 
 async function closeReader() {
   window.clearTimeout(saveTimer)
 
-  if (isPatient.value) {
-    await saveProgress()
+  if (isPatient.value && progressReady.value) {
+    const saved = await saveProgress()
+
+    if (!saved) return
+  }
+
+  if (props.programId) {
+    await navigateTo({
+      path: `/programs/${props.programId}`,
+      query: props.programStageId
+        ? { stage: props.programStageId }
+        : {},
+    })
+    return
   }
 
   if (window.history.length > 1) {
@@ -185,11 +297,12 @@ async function closeReader() {
   }
 }
 
-watch(progress, (value) => {
-  if (!isPatient.value) return
+watch(progress, value => {
+  if (!isPatient.value || !progressReady.value) return
 
   if (
-    Math.abs(value - lastSentProgress) >= 5
+    lastSentProgress === null
+    || Math.abs(value - lastSentProgress) >= 5
     || value >= 90
   ) {
     scheduleSave()
@@ -197,11 +310,16 @@ watch(progress, (value) => {
 })
 
 onMounted(() => {
-  loadProgress()
+  void loadProgress()
 
   window.addEventListener(
     'pagehide',
     saveWithKeepalive,
+  )
+
+  document.addEventListener(
+    'visibilitychange',
+    handleVisibilityChange,
   )
 })
 
@@ -210,11 +328,24 @@ onBeforeRouteLeave(() => {
 })
 
 onBeforeUnmount(() => {
+  disposed = true
+  pendingBody = null
+
   window.clearTimeout(saveTimer)
+  window.clearTimeout(restoreTimer)
+
+  if (restoreFrame !== null) {
+    window.cancelAnimationFrame(restoreFrame)
+  }
 
   window.removeEventListener(
     'pagehide',
     saveWithKeepalive,
+  )
+
+  document.removeEventListener(
+    'visibilitychange',
+    handleVisibilityChange,
   )
 })
 </script>
@@ -250,6 +381,7 @@ onBeforeUnmount(() => {
         type="button"
         class="btn btn-circle btn-sm bg-base-100 shadow-lg"
         aria-label="Закрыть статью"
+        :disabled="saving"
         @click="closeReader"
       >
         <Icon
@@ -289,6 +421,25 @@ onBeforeUnmount(() => {
       <ContentRichTextRenderer
         :content="article.content"
       />
+
+      <div
+        v-if="saveError && isPatient"
+        class="alert alert-warning mt-6"
+        role="alert"
+      >
+        <div>
+          <p>{{ saveError }}</p>
+
+          <button
+            type="button"
+            class="btn btn-sm mt-3"
+            :disabled="saving"
+            @click="retryProgress"
+          >
+            Повторить
+          </button>
+        </div>
+      </div>
 
       <div
         class="border-base-300 mt-10 border-t pt-6"
