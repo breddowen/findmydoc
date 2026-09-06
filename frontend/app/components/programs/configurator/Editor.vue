@@ -33,6 +33,9 @@ const form = reactive({
   service_id: null,
   is_popular: false,
 
+  is_start: false,
+  home_priority: 0,
+
   tag_ids: [],
   stages: [],
 })
@@ -116,15 +119,16 @@ function mapProgramToForm(program) {
   form.description = program.description || ''
 
   form.service_id = program.service?.id || null
+  form.is_start = Boolean(program.is_start)
+  form.home_priority = Number(program.home_priority) || 0
 
   form.tag_ids = (program.tags || []).map(
     (tag) => tag.id,
   )
 
-
   form.is_popular = Boolean(
     program.is_popular,
-    )
+  )
 
   form.stages = (program.stages || []).map(
     (stage, stageIndex) => ({
@@ -149,6 +153,7 @@ function mapProgramToForm(program) {
           title: item.title,
           description: item.description,
           pro_content: item.pro_content,
+          is_hidden: Boolean(item.is_hidden),
 
           article_id:
             item.item_type === 'article'
@@ -186,6 +191,36 @@ function mapProgramToForm(program) {
   }
 }
 
+async function fetchAllArticleSources() {
+  const itemsById = new Map()
+  const limit = 100
+  let offset = 0
+
+  while (true) {
+    const page = await $api(
+      '/api/v1/articles',
+      {
+        query: {
+          offset,
+          limit,
+        },
+      },
+    )
+
+    for (const article of page) {
+      itemsById.set(article.id, article)
+    }
+
+    if (page.length < limit) {
+      break
+    }
+
+    offset += page.length
+  }
+
+  return [...itemsById.values()]
+}
+
 async function loadSources() {
   loadingSources.value = true
 
@@ -196,7 +231,7 @@ async function loadSources() {
       specialityItems,
       tagItems,
     ] = await Promise.all([
-      $api('/api/v1/articles'),
+      fetchAllArticleSources(),
       $api('/api/v1/questionnaires'),
       $api('/api/v1/specialities'),
       $api('/api/v1/tags'),
@@ -252,6 +287,52 @@ function validateForm() {
     return 'Добавьте хотя бы один этап'
   }
 
+  const priority = Number(form.home_priority)
+
+  if (
+    form.home_priority === ''
+    || !Number.isInteger(priority)
+    || priority < 0
+    || priority > 1000
+  ) {
+    return 'Приоритет должен быть целым числом от 0 до 1000'
+  }
+
+  if (form.is_start) {
+    if (form.service_id) {
+      return (
+        'Стартовый маршрут должен быть бесплатным. '
+        + 'Уберите связанную медицинскую услугу.'
+      )
+    }
+
+    if (Number(form.stages[0].day_from) !== 0) {
+      return 'Первый этап стартового маршрута должен начинаться с дня 0'
+    }
+
+    for (const stage of form.stages) {
+      if (!stage.items.length) {
+        return `Добавьте материалы в этап «${stage.title}»`
+      }
+
+      for (const item of stage.items) {
+        if (item.item_type === 'consultation') {
+          return (
+            'Стартовый маршрут содержит статьи и опросники. '
+            + 'Консультации добавьте в программу сопровождения.'
+          )
+        }
+
+        if (item.pro_content || item.is_hidden) {
+          return (
+            'В стартовом маршруте должны быть только '
+            + 'бесплатные нескрытые материалы.'
+          )
+        }
+      }
+    }
+  }
+
   const sortedPeriods = [...form.stages].sort(
     (first, second) =>
       first.day_from - second.day_from,
@@ -296,28 +377,12 @@ function buildPayload() {
     description: form.description.trim() || null,
 
     service_id: form.service_id || null,
+    is_popular: form.is_popular,
 
-    price_amount:
-      form.price_amount === ''
-      || form.price_amount === null
-        ? null
-        : Number(form.price_amount),
-
-    currency:
-      form.price_amount === ''
-      || form.price_amount === null
-        ? null
-        : form.currency,
+    is_start: form.is_start,
+    home_priority: Number(form.home_priority),
 
     tag_ids: form.tag_ids,
-
-    discount_percent:
-        form.price_amount === ''
-        || form.price_amount === null
-            ? 0
-            : Number(form.discount_percent || 0),
-
-    is_popular: form.is_popular,
 
     stages: form.stages.map(
       (stage, stageIndex) => ({
@@ -371,6 +436,14 @@ function buildPayload() {
 }
 
 async function save() {
+  if (
+    store.saving
+    || loadingProgram.value
+    || loadingSources.value
+  ) {
+    return
+  }
+
   errorMessage.value = validateForm() || ''
 
   if (errorMessage.value) {
@@ -438,7 +511,11 @@ onMounted(async () => {
         <button
           type="button"
           class="btn btn-primary"
-          :disabled="store.saving"
+          :disabled="
+            store.saving
+            || loadingProgram
+            || loadingSources
+          "
           @click="save"
         >
           <span
@@ -476,69 +553,74 @@ onMounted(async () => {
 
     <template v-else>
       <section
-            class="bg-base-100 border-base-300 grid gap-5 rounded-3xl border p-5 sm:grid-cols-2 sm:p-6"
-            >
-            <label class="form-control block sm:col-span-2">
-                <span class="label-text mb-2 font-medium">
-                Название
-                </span>
+        class="bg-base-100 border-base-300 grid gap-5 rounded-3xl border p-5 sm:grid-cols-2 sm:p-6"
+      >
+        <label class="form-control block sm:col-span-2">
+          <span class="label-text mb-2 font-medium">
+            Название
+          </span>
 
-                <input
-                v-model="form.title"
-                type="text"
-                class="input input-bordered w-full"
-                >
-            </label>
+          <input
+            v-model="form.title"
+            type="text"
+            class="input input-bordered w-full"
+          >
+        </label>
 
-            <label class="form-control block sm:col-span-2">
-                <span class="label-text mb-2">
-                Описание
-                </span>
+        <label class="form-control block sm:col-span-2">
+          <span class="label-text mb-2">
+            Описание
+          </span>
 
-                <textarea
-                v-model="form.description"
-                class="textarea textarea-bordered min-h-28 w-full"
-                />
-            </label>
+          <textarea
+            v-model="form.description"
+            class="textarea textarea-bordered min-h-28 w-full"
+          />
+        </label>
 
-            <ProgramsConfiguratorServiceSelect
-              v-model="form.service_id"
-              :services="servicesStore.services"
-              :loading="loadingSources"
-            />
+        <ProgramsConfiguratorServiceSelect
+          v-model="form.service_id"
+          :services="servicesStore.services"
+          :loading="loadingSources"
+        />
 
-            <label
-                class="border-base-300 flex cursor-pointer items-center justify-between gap-4 rounded-2xl border p-4"
-            >
-                <span>
-                <span class="block font-medium">
-                    Популярная программа
-                </span>
+        <label
+          class="border-base-300 flex cursor-pointer items-center justify-between gap-4 rounded-2xl border p-4"
+        >
+          <span>
+            <span class="block font-medium">
+              Популярная программа
+            </span>
 
-                <span class="text-base-content/50 text-xs">
-                    Карточка будет выделена в каталоге.
-                </span>
-                </span>
+            <span class="text-base-content/50 text-xs">
+              Карточка будет выделена в каталоге.
+            </span>
+          </span>
 
-                <input
-                v-model="form.is_popular"
-                type="checkbox"
-                class="toggle toggle-warning"
-                >
-            </label>
+          <input
+            v-model="form.is_popular"
+            type="checkbox"
+            class="toggle toggle-warning"
+          >
+        </label>
 
-            <div class="sm:col-span-2">
-                <p class="mb-3 font-medium">
-                Теги программы
-                </p>
+        <div class="sm:col-span-2">
+          <p class="mb-3 font-medium">
+            Теги программы
+          </p>
 
-                <ContentTagSelector
-                v-model="form.tag_ids"
-                :tags="tags"
-                :loading="loadingSources"
-                />
-            </div>
-            </section>
+          <ContentTagSelector
+            v-model="form.tag_ids"
+            :tags="tags"
+            :loading="loadingSources"
+          />
+        </div>
+      </section>
+
+      <ProgramsConfiguratorHomeSettings
+        v-model:is-start="form.is_start"
+        v-model:priority="form.home_priority"
+      />
 
       <div
         class="grid items-start gap-6 lg:grid-cols-[20rem_minmax(0,1fr)]"

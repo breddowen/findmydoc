@@ -82,7 +82,7 @@ async function allowContact() {
     doNotCall.value = false
 
     message.value =
-      'Запрос принят. Ассистент сможет связаться с вами.'
+      'Разрешение на звонки сохранено.'
 
     dialogOpen.value = false
   } catch (error) {
@@ -210,7 +210,7 @@ onMounted(loadData)
                 name="lucide:phone"
                 class="size-4"
               />
-              Прошу связаться со мной
+              Разрешить звонки ассистента
             </button>
           </div>
         </div>
@@ -253,8 +253,7 @@ onMounted(loadData)
 
         <span class="text-sm">
           Я согласен, чтобы медицинский ассистент
-          связался со мной по контактным данным,
-          указанным в аккаунте.
+          связался со мной
         </span>
       </label>
 

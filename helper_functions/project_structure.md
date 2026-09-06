@@ -1,6 +1,6 @@
 ﻿# Project Structure
 
-> Generated: 2026-09-04 21:36
+> Generated: 2026-09-06 20:06
 
 ---
 
@@ -11,6 +11,7 @@ backend/alembic/env.py (60 lines)
 backend/alembic/README (1 lines)
 backend/alembic/script.py.mako (29 lines)
 backend/alembic/versions/4a9d77a6cc23_initial_schema.py (887 lines)
+backend/alembic/versions/6042112705c7_article_analytics_events.py (487 lines)
 backend/alembic/versions/6eb4582e2464_add_new_field_to_users.py (33 lines)
 backend/alembic/versions/7c21a6d4ef10_admin_invitations_and_hidden_directories.py (170 lines)
 backend/alembic/versions/9f31b8c4d2e7_medical_services.py (454 lines)
@@ -28,8 +29,8 @@ backend/app/main.py (107 lines)
 backend/app/modules/__init__.py (0 lines)
 backend/app/modules/articles/__init__.py (0 lines)
 backend/app/modules/articles/models.py (115 lines)
-backend/app/modules/articles/routers.py (644 lines)
-backend/app/modules/articles/schemas.py (89 lines)
+backend/app/modules/articles/routers.py (1032 lines)
+backend/app/modules/articles/schemas.py (128 lines)
 backend/app/modules/articles/utils.py (177 lines)
 backend/app/modules/assignments/__init__.py (0 lines)
 backend/app/modules/assignments/enums.py (14 lines)
@@ -51,11 +52,11 @@ backend/app/modules/consents/utils.py (37 lines)
 backend/app/modules/content/__init__.py (0 lines)
 backend/app/modules/content/utils.py (167 lines)
 backend/app/modules/events/__init__.py (0 lines)
-backend/app/modules/events/enums.py (31 lines)
-backend/app/modules/events/models.py (83 lines)
+backend/app/modules/events/enums.py (34 lines)
+backend/app/modules/events/models.py (116 lines)
 backend/app/modules/events/routers.py (69 lines)
 backend/app/modules/events/schemas.py (32 lines)
-backend/app/modules/events/service.py (54 lines)
+backend/app/modules/events/service.py (60 lines)
 backend/app/modules/invitations/__init__.py (0 lines)
 backend/app/modules/invitations/admin_routers.py (422 lines)
 backend/app/modules/invitations/admin_schemas.py (93 lines)
@@ -128,10 +129,10 @@ backend/seed/data/users.json (149 lines)
 backend/seed/Readme.md (1 lines)
 backend/seed/upload_tags.py (123 lines)
 backend/seed/upload_users.py (381 lines)
-backend/test_database.db (968 lines)
+backend/test_database.db (?)
 ```
 
-*Files: 122*
+*Files: 123*
 
 ---
 
@@ -140,9 +141,10 @@ backend/test_database.db (968 lines)
 ### components
 
 ```
+frontend/app/components/articles/Card.vue (203 lines)
 frontend/app/components/articles/Form.vue (233 lines)
 frontend/app/components/articles/PatientOverview.vue (185 lines)
-frontend/app/components/articles/Reader.vue (291 lines)
+frontend/app/components/articles/Reader.vue (321 lines)
 frontend/app/components/assignments/ContentPicker.vue (181 lines)
 frontend/app/components/assignments/CreateDialog.vue (345 lines)
 frontend/app/components/assignments/PatientList.vue (108 lines)
@@ -199,14 +201,14 @@ frontend/app/components/users/InviteDialog.vue (29 lines)
 frontend/app/components/users/InviteForm.vue (367 lines)
 frontend/app/components/users/List.vue (182 lines)
 ```
-*Files: 58*
+*Files: 59*
 
 ### pages
 
 ```
 frontend/app/pages/content/articles/[id]/edit.vue (85 lines)
-frontend/app/pages/content/articles/[id]/index.vue (43 lines)
-frontend/app/pages/content/articles/index.vue (169 lines)
+frontend/app/pages/content/articles/[id]/index.vue (103 lines)
+frontend/app/pages/content/articles/index.vue (186 lines)
 frontend/app/pages/content/articles/new.vue (49 lines)
 frontend/app/pages/content/questionnaires/[id].vue (319 lines)
 frontend/app/pages/content/questionnaires/index.vue (166 lines)
@@ -252,7 +254,7 @@ frontend/app/composables/useBodyScrollLock.js (48 lines)
 frontend/app/composables/useBreakpoint.js (30 lines)
 frontend/app/composables/useClientReady.js (12 lines)
 frontend/app/composables/useProgramPrice.js (180 lines)
-frontend/app/composables/useReadingProgress.js (178 lines)
+frontend/app/composables/useReadingProgress.js (203 lines)
 frontend/app/composables/useWebAuthn.js (172 lines)
 ```
 *Files: 7*
@@ -260,7 +262,7 @@ frontend/app/composables/useWebAuthn.js (172 lines)
 ### stores
 
 ```
-frontend/app/stores/articles.js (106 lines)
+frontend/app/stores/articles.js (159 lines)
 frontend/app/stores/assignments.js (99 lines)
 frontend/app/stores/auth.js (205 lines)
 frontend/app/stores/directories.js (208 lines)

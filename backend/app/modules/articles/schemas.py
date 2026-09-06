@@ -76,13 +76,6 @@ class ArticleReadResponse(BaseModel):
     message: str
     event_id: uuid.UUID
 
-class ArticleProgressUpdateRequest(BaseModel):
-    progress_percent: float = Field(
-        ge=0,
-        le=100,
-    )
-
-
 class ArticleProgressResponse(BaseModel):
     article_id: uuid.UUID
     patient_id: uuid.UUID
@@ -108,6 +101,7 @@ class ArticleOpenRequest(BaseModel):
     source: ArticleOpenSource = "direct"
 
     program_id: uuid.UUID | None = None
+    program_stage_id: uuid.UUID | None = None
     assignment_id: uuid.UUID | None = None
 
 
@@ -120,9 +114,11 @@ class ArticleProgressUpdateRequest(BaseModel):
     progress_percent: float = Field(
         ge=0,
         le=100,
+        allow_inf_nan=False,
     )
 
-    # Если параметры не переданы, прогресс сохранится,
-    # но аналитическое событие не создастся.
     interaction_id: uuid.UUID | None = None
     is_trackable: bool = False
+
+    program_id: uuid.UUID | None = None
+    program_stage_id: uuid.UUID | None = None

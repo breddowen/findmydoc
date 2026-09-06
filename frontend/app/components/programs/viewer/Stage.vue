@@ -60,6 +60,12 @@ function getItemLink(item) {
     return {
       path: `/content/articles/${item.content_id}`,
       query: {
+        source: 'program',
+        program_id: props.programId,
+        program_stage_id: props.stage.id,
+
+        // Пока сохраняем прежние параметры для
+        // совместимости с существующим возвратом.
         program: props.programId,
         stage: props.stage.id,
       },
@@ -374,8 +380,7 @@ function getActionText(item) {
               class="text-accent size-4"
             />
 
-            Консультация запланирована после выполнения
-            предыдущих заданий этапа.
+            Консультация входит в план программы. Дату и время согласует ассистент клиники.
           </div>
         </div>
       </article>

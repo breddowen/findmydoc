@@ -29,7 +29,6 @@ from app.modules.articles.schemas import (
     ArticleVisibilityRequest,
     ArticleOpenRequest,
     ArticleOpenResponse,
-    ArticleProgressUpdateRequest,
 
 )
 from app.modules.articles.utils import (
@@ -55,6 +54,12 @@ from app.modules.assignments.utils import (
 )
 from app.modules.programs.utils import (
     sync_patient_program_enrollments,
+)
+
+from app.modules.articles.access import ensure_article_access
+from app.core.transactions import lock_patient_for_write
+from app.modules.articles.tracking import (
+    record_article_interaction_event,
 )
 
 router = APIRouter(
@@ -217,11 +222,6 @@ async def list_articles(
         before=ranking_cutoff,
     )
 
-    event_counts = get_article_event_counts(
-        session=session,
-        before=ranking_cutoff,
-    )
-
     if auth.active_role != UserRole.PATIENT:
         result: list[ArticleListItem] = []
 
@@ -375,6 +375,8 @@ async def list_articles(
 )
 async def get_article(
     article_id: uuid.UUID,
+    program_id: uuid.UUID | None = None,
+    program_stage_id: uuid.UUID | None = None,
     auth: AuthContext = Depends(get_current_auth),
     session: Session = Depends(get_session),
 ) -> ArticleResponse:
@@ -382,7 +384,7 @@ async def get_article(
 
     if not article:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
+            status_code=404,
             detail="Статья не найдена",
         )
 
@@ -392,17 +394,12 @@ async def get_article(
             user_id=auth.user.id,
         )
 
-        is_assigned = patient_has_active_assignment(
+        ensure_article_access(
             session=session,
-            patient_id=patient.id,
-            assignment_type=AssignmentType.ARTICLE,
-            content_id=article.id,
-        )
-
-        ensure_patient_can_access_article(
             article=article,
             patient=patient,
-            is_assigned=is_assigned,
+            program_id=program_id,
+            program_stage_id=program_stage_id,
         )
 
     return serialize_article(
@@ -524,22 +521,22 @@ async def update_article(
 ) -> ArticleResponse:
     article = session.get(Article, article_id)
 
+    if not article:
+        raise HTTPException(
+            status_code=404,
+            detail="Статья не найдена",
+        )
+
     if (
         auth.active_role == UserRole.DOCTOR
         and article.created_by_user_id != auth.user.id
     ):
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
+            status_code=403,
             detail=(
                 "Врач может редактировать только "
                 "созданные им статьи"
             ),
-        )
-
-    if not article:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Статья не найдена",
         )
 
     update_data = payload.model_dump(
@@ -592,22 +589,22 @@ async def change_article_visibility(
 ) -> ArticleResponse:
     article = session.get(Article, article_id)
 
+    if not article:
+        raise HTTPException(
+            status_code=404,
+            detail="Статья не найдена",
+        )
+
     if (
         auth.active_role == UserRole.DOCTOR
         and article.created_by_user_id != auth.user.id
     ):
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
+            status_code=403,
             detail=(
                 "Врач может редактировать только "
                 "созданные им статьи"
             ),
-        )
-
-    if not article:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Статья не найдена",
         )
 
     article.is_hidden = payload.is_hidden
@@ -628,64 +625,14 @@ async def change_article_visibility(
     )
 
 
-# @router.post(
-#     "/{article_id}/read",
-#     response_model=ArticleReadResponse,
-# )
-# async def mark_article_as_read(
-#     article_id: uuid.UUID,
-#     auth: AuthContext = Depends(
-#         require_roles(UserRole.PATIENT)
-#     ),
-#     session: Session = Depends(get_session),
-# ) -> ArticleReadResponse:
-#     article = session.get(Article, article_id)
-
-#     if not article:
-#         raise HTTPException(
-#             status_code=status.HTTP_404_NOT_FOUND,
-#             detail="Статья не найдена",
-#         )
-
-#     patient = get_patient_profile_by_user_id(
-#         session=session,
-#         user_id=auth.user.id,
-#     )
-
-#     ensure_patient_content_access(
-#         session=session,
-#         patient=patient,
-#         content_tag_ids=get_article_tag_ids(
-#             session=session,
-#             article_id=article.id,
-#         ),
-#         pro_content=article.pro_content,
-#         is_hidden=article.is_hidden,
-#     )
-
-#     event = record_event(
-#         session=session,
-#         event_type=EventType.ARTICLE_READ,
-#         patient_id=patient.id,
-#         actor_user_id=auth.user.id,
-#         subject_type="article",
-#         subject_id=article.id,
-#     )
-
-#     session.commit()
-#     session.refresh(event)
-
-#     return ArticleReadResponse(
-#         message="Чтение статьи зарегистрировано",
-#         event_id=event.id,
-#     )
-
 @router.get(
     "/{article_id}/progress",
     response_model=ArticleProgressResponse,
 )
 async def get_article_progress(
     article_id: uuid.UUID,
+    program_id: uuid.UUID | None = None,
+    program_stage_id: uuid.UUID | None = None,
     auth: AuthContext = Depends(
         require_roles(UserRole.PATIENT)
     ),
@@ -704,30 +651,13 @@ async def get_article_progress(
         user_id=auth.user.id,
     )
 
-    is_assigned = patient_has_active_assignment(
+    ensure_article_access(
         session=session,
-        patient_id=patient.id,
-        assignment_type=AssignmentType.ARTICLE,
-        content_id=article.id,
+        article=article,
+        patient=patient,
+        program_id=program_id,
+        program_stage_id=program_stage_id,
     )
-
-    if article.is_hidden:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Статья скрыта",
-        )
-
-    if not is_assigned:
-        ensure_patient_content_access(
-            session=session,
-            patient=patient,
-            content_tag_ids=get_article_tag_ids(
-                session=session,
-                article_id=article.id,
-            ),
-            pro_content=article.pro_content,
-            is_hidden=article.is_hidden,
-        )
 
     progress = session.exec(
         select(ArticleProgress).where(
@@ -789,30 +719,18 @@ async def save_article_progress(
         user_id=auth.user.id,
     )
 
-    is_assigned = patient_has_active_assignment(
+    lock_patient_for_write(
         session=session,
         patient_id=patient.id,
-        assignment_type=AssignmentType.ARTICLE,
-        content_id=article.id,
     )
 
-    if article.is_hidden:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Статья скрыта",
-        )
-
-    if not is_assigned:
-        ensure_patient_content_access(
-            session=session,
-            patient=patient,
-            content_tag_ids=get_article_tag_ids(
-                session=session,
-                article_id=article.id,
-            ),
-            pro_content=article.pro_content,
-            is_hidden=article.is_hidden,
-        )
+    ensure_article_access(
+        session=session,
+        article=article,
+        patient=patient,
+        program_id=payload.program_id,
+        program_stage_id=payload.program_stage_id,
+    )
 
     progress = session.exec(
         select(ArticleProgress).where(
@@ -861,8 +779,7 @@ async def save_article_progress(
     # ARTICLE_READ создаётся отдельно для каждого
     # trackable-открытия статьи при достижении порога.
     should_register_read = (
-        normalized_percent
-        >= ARTICLE_COMPLETION_THRESHOLD
+        normalized_percent >= ARTICLE_COMPLETION_THRESHOLD
         and payload.is_trackable
         and payload.interaction_id is not None
     )
@@ -870,47 +787,35 @@ async def save_article_progress(
     if should_register_read:
         opening_event = session.exec(
             select(Event).where(
-                Event.event_type
-                == EventType.ARTICLE_OPENED,
-                Event.interaction_id
-                == payload.interaction_id,
-                Event.patient_id
-                == patient.id,
-                Event.subject_type
-                == "article",
-                Event.subject_id
-                == article.id,
+                Event.event_type == EventType.ARTICLE_OPENED,
+                Event.interaction_id == payload.interaction_id,
+                Event.patient_id == patient.id,
+                Event.subject_type == "article",
+                Event.subject_id == article.id,
             )
         ).first()
 
-        if opening_event:
-            existing_read_event = session.exec(
-                select(Event).where(
-                    Event.event_type
-                    == EventType.ARTICLE_READ,
-                    Event.interaction_id
-                    == payload.interaction_id,
-                )
-            ).first()
-
-            if not existing_read_event:
-                record_event(
-                    session=session,
-                    event_type=EventType.ARTICLE_READ,
-                    patient_id=patient.id,
-                    actor_user_id=auth.user.id,
-                    program_id=opening_event.program_id,
-                    assignment_id=opening_event.assignment_id,
-                    interaction_id=payload.interaction_id,
-                    source=opening_event.source,
-                    subject_type="article",
-                    subject_id=article.id,
-                    metadata={
-                        "progress_percent": (
-                            normalized_percent
-                        ),
-                    },
-                )
+        if (
+            opening_event is not None
+            and opening_event.program_id == payload.program_id
+        ):
+            record_article_interaction_event(
+                session=session,
+                event_type=EventType.ARTICLE_READ,
+                interaction_id=payload.interaction_id,
+                patient_id=patient.id,
+                article_id=article.id,
+                actor_user_id=auth.user.id,
+                program_id=opening_event.program_id,
+                assignment_id=opening_event.assignment_id,
+                source=opening_event.source,
+                metadata={
+                    "progress_percent": normalized_percent,
+                    "program_stage_id": (
+                        opening_event.metadata_json or {}
+                    ).get("program_stage_id"),
+                },
+            )
 
     # completed_at — пожизненное состояние пациента.
     # При первом достижении порога завершаем активное
@@ -961,7 +866,7 @@ async def register_article_open(
 
     if not article:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
+            status_code=404,
             detail="Статья не найдена",
         )
 
@@ -970,57 +875,46 @@ async def register_article_open(
         user_id=auth.user.id,
     )
 
-    is_assigned = patient_has_active_assignment(
+    lock_patient_for_write(
         session=session,
         patient_id=patient.id,
-        assignment_type=AssignmentType.ARTICLE,
-        content_id=article.id,
     )
 
-    ensure_patient_can_access_article(
+    ensure_article_access(
+        session=session,
         article=article,
         patient=patient,
-        is_assigned=is_assigned,
+        program_id=payload.program_id,
+        program_stage_id=payload.program_stage_id,
     )
 
-    existing_event = session.exec(
-        select(Event).where(
-            Event.event_type
-            == EventType.ARTICLE_OPENED,
-            Event.interaction_id
-            == payload.interaction_id,
-        )
-    ).first()
-
-    if existing_event:
-        if (
-            existing_event.patient_id != patient.id
-            or existing_event.subject_id != article.id
-        ):
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=(
-                    "Идентификатор открытия уже "
-                    "используется"
-                ),
-            )
-
-        return ArticleOpenResponse(
-            event_id=existing_event.id,
-            interaction_id=payload.interaction_id,
+    if payload.source == "program" and payload.program_id is None:
+        raise HTTPException(
+            status_code=422,
+            detail="Для источника program требуется program_id",
         )
 
-    event = record_event(
+    event = record_article_interaction_event(
         session=session,
         event_type=EventType.ARTICLE_OPENED,
+        interaction_id=payload.interaction_id,
         patient_id=patient.id,
+        article_id=article.id,
         actor_user_id=auth.user.id,
         program_id=payload.program_id,
         assignment_id=payload.assignment_id,
-        interaction_id=payload.interaction_id,
-        source=payload.source,
-        subject_type="article",
-        subject_id=article.id,
+        source=(
+            "program"
+            if payload.program_id is not None
+            else payload.source
+        ),
+        metadata={
+            "program_stage_id": (
+                str(payload.program_stage_id)
+                if payload.program_stage_id is not None
+                else None
+            ),
+        },
     )
 
     session.commit()
@@ -1028,5 +922,5 @@ async def register_article_open(
 
     return ArticleOpenResponse(
         event_id=event.id,
-        interaction_id=payload.interaction_id,
+        interaction_id=event.interaction_id,
     )

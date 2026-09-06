@@ -22,7 +22,6 @@ from app.modules.consents.utils import (
 )
 from app.modules.events.enums import EventType
 from app.modules.events.service import record_event
-from app.modules.referrals.models import Referral
 from app.modules.users.enums import UserRole
 from app.modules.users.models import PatientProfile
 
@@ -218,37 +217,6 @@ async def set_my_consent(
         preference.updated_by_user_id = auth.user.id
 
         session.add(preference)
-
-        if payload.accepted:
-            latest_referral = session.exec(
-                select(Referral)
-                .where(
-                    Referral.patient_id == patient.id
-                )
-                .order_by(Referral.created_at.desc())
-            ).first()
-
-            record_event(
-                session=session,
-                event_type=EventType.CONTACT_REQUESTED,
-                patient_id=patient.id,
-                actor_user_id=auth.user.id,
-                referral_id=(
-                    latest_referral.id
-                    if latest_referral
-                    else None
-                ),
-                doctor_id=(
-                    latest_referral.doctor_id
-                    if latest_referral
-                    else None
-                ),
-                speciality_id=(
-                    latest_referral.speciality_id
-                    if latest_referral
-                    else None
-                ),
-            )
 
     if payload.accepted:
         record_event(

@@ -5,6 +5,7 @@ from typing import Optional
 
 from sqlmodel import Field, Relationship, SQLModel
 from sqlalchemy import UniqueConstraint
+import sqlalchemy as sa
 
 from app.modules.articles.models import Article
 from app.modules.services.models import MedicalService
@@ -47,6 +48,24 @@ class Program(SQLModel, table=True):
     pro_content: bool = Field(
         default=False,
         index=True,
+    )
+
+    is_start: bool = Field(
+        default=False,
+        sa_column=sa.Column(
+            sa.Boolean(),
+            nullable=False,
+            server_default=sa.false(),
+        ),
+    )
+
+    home_priority: int = Field(
+        default=0,
+        sa_column=sa.Column(
+            sa.Integer(),
+            nullable=False,
+            server_default=sa.text("0"),
+        ),
     )
 
     is_popular: bool = Field(
