@@ -32,8 +32,22 @@ def upgrade() -> None:
                existing_nullable=False)
 
     with op.batch_alter_table('programs', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('is_start', sa.Boolean(), server_default=sa.text('0'), nullable=False))
-        batch_op.add_column(sa.Column('home_priority', sa.Integer(), server_default=sa.text('0'), nullable=False))
+        batch_op.add_column(
+            sa.Column(
+                "is_start",
+                sa.Boolean(),
+                server_default=sa.false(),
+                nullable=False,
+            )
+        )
+        batch_op.add_column(
+            sa.Column(
+                "home_priority",
+                sa.Integer(),
+                server_default=sa.text("0"),
+                nullable=False,
+            )
+        )
 
     # ### end Alembic commands ###
 
