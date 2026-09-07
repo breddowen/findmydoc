@@ -1,0 +1,357 @@
+{
+  "title": "Моя ситуация по модели ABC — копия",
+  "description": "Этот опрос поможет разобрать одну недавнюю ситуацию, в которой вы испытали сильную эмоцию, тягу или вернулись к привычному зависимому поведению. Выберите ситуацию, которую хорошо помните. Здесь нет правильных или неправильных ответов.",
+  "pro_content": false,
+  "tag_ids": [],
+  "copied_from_id": "cf6fcc63-d8df-4f99-98fa-b4a44a497481",
+  "questions": [
+    {
+      "question_type": "single_choice",
+      "text": "Какую ситуацию вы хотите разобрать?",
+      "is_required": true,
+      "order_index": 0,
+      "is_library_hidden": false,
+      "scale_min": null,
+      "scale_max": null,
+      "scale_min_label": null,
+      "scale_max_label": null,
+      "options": [
+        {
+          "text": "У меня появилась сильная тяга",
+          "order_index": 0
+        },
+        {
+          "text": "Я употребил(а) или вернулся(ась) к зависимому поведению",
+          "order_index": 1
+        },
+        {
+          "text": "Я испытал(а) сильную тревогу",
+          "order_index": 2
+        },
+        {
+          "text": "Я сильно разозлился(ась)",
+          "order_index": 3
+        },
+        {
+          "text": "Я чувствовал(а) грусть, одиночество или подавленность",
+          "order_index": 4
+        },
+        {
+          "text": "Другая сложная ситуация",
+          "order_index": 5
+        }
+      ]
+    },
+    {
+      "question_type": "single_choice",
+      "text": "Что стало основным триггером этой ситуации?",
+      "is_required": true,
+      "order_index": 1,
+      "is_library_hidden": false,
+      "scale_min": null,
+      "scale_max": null,
+      "scale_min_label": null,
+      "scale_max_label": null,
+      "options": [
+        {
+          "text": "Конфликт или неприятный разговор",
+          "order_index": 0
+        },
+        {
+          "text": "Стресс на работе или учёбе",
+          "order_index": 1
+        },
+        {
+          "text": "Одиночество или скука",
+          "order_index": 2
+        },
+        {
+          "text": "Определённый человек, место или компания",
+          "order_index": 3
+        },
+        {
+          "text": "Усталость, недосып или плохое самочувствие",
+          "order_index": 4
+        },
+        {
+          "text": "Неприятные мысли или воспоминания",
+          "order_index": 5
+        },
+        {
+          "text": "Приятное событие или желание что-то отметить",
+          "order_index": 6
+        },
+        {
+          "text": "Не могу определить",
+          "order_index": 7
+        },
+        {
+          "text": "Что-то другое",
+          "order_index": 8
+        }
+      ]
+    },
+    {
+      "question_type": "single_choice",
+      "text": "Какая мысль лучше всего описывает то, что происходило у вас в голове?",
+      "is_required": true,
+      "order_index": 2,
+      "is_library_hidden": false,
+      "scale_min": null,
+      "scale_max": null,
+      "scale_min_label": null,
+      "scale_max_label": null,
+      "options": [
+        {
+          "text": "Я этого не выдержу",
+          "order_index": 0
+        },
+        {
+          "text": "Мне нужно как-то расслабиться или отвлечься",
+          "order_index": 1
+        },
+        {
+          "text": "Один раз ничего не изменит",
+          "order_index": 2
+        },
+        {
+          "text": "У меня всё равно ничего не получится",
+          "order_index": 3
+        },
+        {
+          "text": "Со мной поступили несправедливо",
+          "order_index": 4
+        },
+        {
+          "text": "Я всё испортил(а)",
+          "order_index": 5
+        },
+        {
+          "text": "Я заслуживаю употребить или вернуться к привычному поведению",
+          "order_index": 6
+        },
+        {
+          "text": "Не могу вспомнить конкретную мысль",
+          "order_index": 7
+        },
+        {
+          "text": "У меня была другая мысль",
+          "order_index": 8
+        }
+      ]
+    },
+    {
+      "question_type": "single_choice",
+      "text": "Какая эмоция была самой сильной?",
+      "is_required": true,
+      "order_index": 3,
+      "is_library_hidden": false,
+      "scale_min": null,
+      "scale_max": null,
+      "scale_min_label": null,
+      "scale_max_label": null,
+      "options": [
+        {
+          "text": "Тревога или страх",
+          "order_index": 0
+        },
+        {
+          "text": "Злость или раздражение",
+          "order_index": 1
+        },
+        {
+          "text": "Грусть",
+          "order_index": 2
+        },
+        {
+          "text": "Стыд или вина",
+          "order_index": 3
+        },
+        {
+          "text": "Одиночество",
+          "order_index": 4
+        },
+        {
+          "text": "Скука",
+          "order_index": 5
+        },
+        {
+          "text": "Радость или возбуждение",
+          "order_index": 6
+        },
+        {
+          "text": "Мне сложно определить эмоцию",
+          "order_index": 7
+        }
+      ]
+    },
+    {
+      "question_type": "single_choice",
+      "text": "Насколько сильной была эта эмоция?",
+      "is_required": true,
+      "order_index": 4,
+      "is_library_hidden": false,
+      "scale_min": null,
+      "scale_max": null,
+      "scale_min_label": null,
+      "scale_max_label": null,
+      "options": [
+        {
+          "text": "0 — почти не ощущалась",
+          "order_index": 0
+        },
+        {
+          "text": "1",
+          "order_index": 1
+        },
+        {
+          "text": "2",
+          "order_index": 2
+        },
+        {
+          "text": "3",
+          "order_index": 3
+        },
+        {
+          "text": "4",
+          "order_index": 4
+        },
+        {
+          "text": "5",
+          "order_index": 5
+        },
+        {
+          "text": "6",
+          "order_index": 6
+        },
+        {
+          "text": "7",
+          "order_index": 7
+        },
+        {
+          "text": "8",
+          "order_index": 8
+        },
+        {
+          "text": "9",
+          "order_index": 9
+        },
+        {
+          "text": "10 — максимально сильной",
+          "order_index": 10
+        }
+      ]
+    },
+    {
+      "question_type": "single_choice",
+      "text": "Что вы сделали после этого?",
+      "is_required": true,
+      "order_index": 5,
+      "is_library_hidden": false,
+      "scale_min": null,
+      "scale_max": null,
+      "scale_min_label": null,
+      "scale_max_label": null,
+      "options": [
+        {
+          "text": "Употребил(а) или вернулся(ась) к зависимому поведению",
+          "order_index": 0
+        },
+        {
+          "text": "Сократил(а) или отложил(а) употребление",
+          "order_index": 1
+        },
+        {
+          "text": "Ушёл (ушла) из ситуации или избегал(а) триггера",
+          "order_index": 2
+        },
+        {
+          "text": "Обратился(ась) к кому-то за поддержкой",
+          "order_index": 3
+        },
+        {
+          "text": "Переключился(ась) на другое занятие",
+          "order_index": 4
+        },
+        {
+          "text": "Переждал(а) тягу или сильную эмоцию без употребления",
+          "order_index": 5
+        },
+        {
+          "text": "Сделал(а) что-то другое",
+          "order_index": 6
+        }
+      ]
+    },
+    {
+      "question_type": "single_choice",
+      "text": "Если похожая ситуация повторится, видите ли вы другой способ отреагировать?",
+      "is_required": true,
+      "order_index": 6,
+      "is_library_hidden": false,
+      "scale_min": null,
+      "scale_max": null,
+      "scale_min_label": null,
+      "scale_max_label": null,
+      "options": [
+        {
+          "text": "Да, я знаю, что хочу попробовать",
+          "order_index": 0
+        },
+        {
+          "text": "Есть несколько идей, но я пока не уверен(а)",
+          "order_index": 1
+        },
+        {
+          "text": "Пока не знаю",
+          "order_index": 2
+        }
+      ]
+    },
+    {
+      "question_type": "single_choice",
+      "text": "Что вы могли бы попробовать в следующий раз?",
+      "is_required": true,
+      "order_index": 7,
+      "is_library_hidden": false,
+      "scale_min": null,
+      "scale_max": null,
+      "scale_min_label": null,
+      "scale_max_label": null,
+      "options": [
+        {
+          "text": "Остановиться и проверить свои мысли",
+          "order_index": 0
+        },
+        {
+          "text": "Отложить решение и дать эмоции время ослабнуть",
+          "order_index": 1
+        },
+        {
+          "text": "Уйти из ситуации высокого риска",
+          "order_index": 2
+        },
+        {
+          "text": "Позвонить или написать человеку, которому доверяю",
+          "order_index": 3
+        },
+        {
+          "text": "Переключиться на другое занятие",
+          "order_index": 4
+        },
+        {
+          "text": "Использовать стратегию совладания с тягой",
+          "order_index": 5
+        },
+        {
+          "text": "Обсудить эту ситуацию с врачом",
+          "order_index": 6
+        },
+        {
+          "text": "Пока не знаю, что могло бы помочь",
+          "order_index": 7
+        }
+      ]
+    }
+  ]
+}

@@ -11,7 +11,9 @@ docker compose \
 docker inspect findmydoc-prod-nginx-1 \
   --format 'project={{ index .Config.Labels "com.docker.compose.project" }} working_dir={{ index .Config.Labels "com.docker.compose.project.working_dir" }} config={{ index .Config.Labels "com.docker.compose.project.config_files" }}'
 
-
+docker logs \
+  --tail 100 \
+  findmydoc-prod-backend-1
 
 staging:
 # 1. Переключиться на develop ДО внесения изменений
