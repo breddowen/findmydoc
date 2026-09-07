@@ -1059,8 +1059,6 @@ async def change_program_visibility(
     return serialize_clinical_program(
         session=session,
         program=program,
-        is_start=program.is_start,
-        home_priority=program.home_priority,
     )
 
 @router.put(
