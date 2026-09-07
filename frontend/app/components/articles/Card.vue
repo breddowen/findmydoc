@@ -80,6 +80,12 @@ function toggleVisibility() {
         >
           Скрыта
         </span>
+        <span
+            v-if="article.is_library_hidden"
+            class="badge badge-outline"
+          >
+            Вне каталога
+          </span>
       </div>
 
       <h2 class="card-title">

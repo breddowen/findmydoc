@@ -13,6 +13,7 @@ class ArticleCreateRequest(BaseModel):
     tag_ids: list[uuid.UUID] = []
 
     pro_content: bool = True
+    is_library_hidden: bool = False
 
 
 class ArticleUpdateRequest(BaseModel):
@@ -25,7 +26,7 @@ class ArticleUpdateRequest(BaseModel):
 
     tag_ids: list[uuid.UUID] | None = None
     pro_content: bool | None = None
-
+    is_library_hidden: bool = False
 
 class ArticleVisibilityRequest(BaseModel):
     is_hidden: bool
@@ -45,6 +46,7 @@ class ArticleResponse(BaseModel):
 
     pro_content: bool
     is_hidden: bool
+    is_library_hidden: bool = False
 
     tags: list[ArticleTagResponse]
 
@@ -61,6 +63,7 @@ class ArticleListItem(BaseModel):
     pro_content: bool
     is_hidden: bool
     can_access: bool = True
+    is_library_hidden: bool = False
 
     tags: list[ArticleTagResponse]
 

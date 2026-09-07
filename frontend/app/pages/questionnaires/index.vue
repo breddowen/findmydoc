@@ -1,6 +1,8 @@
 <!-- ./frontend/app/pages/questionnaires/index.vue -->
 <script setup>
 const store = useQuestionnairesStore()
+const auth = useAuthStore()
+const updatingLibraryIds = ref([])
 
 const questionnaires = ref([])
 const progressItems = ref([])
@@ -42,6 +44,37 @@ async function load() {
 }
 
 onMounted(load)
+
+const errorMessage = ref('')
+
+const canManage = computed(() =>
+  ['superuser', 'med_assistant'].includes(auth.activeRole),
+)
+
+async function toggleLibraryVisibility(questionnaire) {
+  if (updatingLibraryIds.value.includes(questionnaire.id)) {
+    return
+  }
+
+  errorMessage.value = ''
+  updatingLibraryIds.value.push(questionnaire.id)
+
+  try {
+    await store.setLibraryVisibility(
+      questionnaire.id,
+      !questionnaire.is_library_hidden,
+    )
+  } catch (error) {
+    errorMessage.value =
+      typeof error?.data?.detail === 'string'
+        ? error.data.detail
+        : 'Не удалось изменить отображение в каталоге'
+  } finally {
+    updatingLibraryIds.value = updatingLibraryIds.value.filter(
+      id => id !== questionnaire.id,
+    )
+  }
+}
 </script>
 
 <template>
@@ -96,6 +129,12 @@ onMounted(load)
             >
               Не завершён
             </span>
+            <span
+              v-if="questionnaire.is_library_hidden"
+              class="badge badge-outline"
+            >
+              Вне каталога
+            </span>
           </div>
 
           <h2 class="card-title">
@@ -132,11 +171,30 @@ onMounted(load)
             >
               {{
                 getProgress(questionnaire.id)?.status
-                === 'in_progress'
-                  ? 'Продолжить'
-                  : 'Начать'
+                  === 'in_progress'
+                    ? 'Продолжить'
+                    : 'Начать'
               }}
             </NuxtLink>
+
+            <button
+              v-if="canManage"
+              type="button"
+              class="btn btn-sm btn-outline"
+              :disabled="updatingLibraryIds.includes(questionnaire.id)"
+              @click="toggleLibraryVisibility(questionnaire)"
+            >
+              <span
+                v-if="updatingLibraryIds.includes(questionnaire.id)"
+                class="loading loading-spinner loading-xs"
+              />
+
+              {{
+                questionnaire.is_library_hidden
+                  ? 'Вернуть в каталог'
+                  : 'Убрать из каталога'
+              }}
+            </button>
           </div>
         </div>
       </article>

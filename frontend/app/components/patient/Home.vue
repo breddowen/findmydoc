@@ -2,8 +2,16 @@
 <script setup>
 const store = usePatientHomeStore()
 
+const purchaseDialogOpen = ref(false)
+const selectedProgram = ref(null)
+
+function openPurchaseDialog(program) {
+  selectedProgram.value = program
+  purchaseDialogOpen.value = true
+}
+
 onMounted(() => {
-  store.load()
+  void store.load()
 })
 
 onBeforeUnmount(() => {
@@ -12,16 +20,26 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="mx-auto max-w-4xl space-y-7">
+  <div class="mx-auto max-w-4xl space-y-5">
+    <header>
+      <h1 class="text-xl font-bold sm:text-2xl">
+        Ваши программы
+      </h1>
+
+      <p class="text-base-content/60 mt-1 text-sm">
+        Выберите подходящий маршрут и проходите его в своём темпе.
+      </p>
+    </header>
+
     <UiContentSkeleton
       v-if="store.loading"
       variant="card"
-      :count="2"
+      :count="3"
     />
 
     <section
       v-else-if="store.errorMessage"
-      class="border-base-300 bg-base-100 rounded-3xl border p-6"
+      class="border-base-300 bg-base-100 rounded-2xl border p-5"
     >
       <p role="alert">
         {{ store.errorMessage }}
@@ -29,7 +47,7 @@ onBeforeUnmount(() => {
 
       <button
         type="button"
-        class="btn btn-primary mt-4"
+        class="btn btn-primary btn-sm mt-4"
         @click="store.load"
       >
         Попробовать ещё раз
@@ -37,96 +55,61 @@ onBeforeUnmount(() => {
     </section>
 
     <template v-else>
-      <PatientNextStep
-        v-if="store.primaryProgram"
-        :key="store.primaryProgram.id"
-        :program="store.primaryProgram"
-      />
+      <section
+        v-if="store.homePrograms.length"
+        class="space-y-3"
+        aria-label="Доступные программы"
+      >
+        <PatientProgramCard
+          v-for="program in store.homePrograms"
+          :key="program.id"
+          :program="program"
+          @request-purchase="openPurchaseDialog"
+        />
+      </section>
 
       <section
         v-else
-        class="border-base-300 bg-base-100 rounded-3xl border p-5 sm:p-8"
+        class="border-base-300 bg-base-100 rounded-2xl border p-5"
       >
-        <h1 class="text-2xl font-bold">
+        <p class="font-medium">
           {{
-            store.hasCompletedStart
-              ? 'Первый маршрут пройден'
-              : 'Здравствуйте'
+            store.completedPrograms.length
+              ? 'Доступные программы пройдены'
+              : 'Пока нет доступных программ'
           }}
-        </h1>
+        </p>
 
-        <p class="text-base-content/70 mt-3">
-          {{
-            store.hasCompletedStart
-              ? 'Можно вернуться к материалам или обсудить дальнейшую поддержку со специалистом.'
-              : 'Здесь можно познакомиться с материалами клиники и доступными программами.'
-          }}
+        <p class="text-base-content/60 mt-2 text-sm">
+          Можно вернуться к материалам или посмотреть общий каталог.
         </p>
 
         <NuxtLink
           to="/programs"
-          class="btn btn-primary mt-5"
+          class="btn btn-outline btn-sm mt-3"
         >
-          {{
-            store.hasCompletedStart
-              ? 'Посмотреть дальнейшие варианты'
-              : 'Посмотреть программы'
-          }}
+          Каталог программ
         </NuxtLink>
       </section>
 
-      <PatientJourney
-        v-if="store.primaryProgram?.is_start"
-        :program="store.primaryProgram"
-      />
-
       <AssignmentsPatientList />
-
-      <details
-        v-if="store.otherActivePrograms.length"
-        class="border-base-300 rounded-2xl border p-4"
-      >
-        <summary class="cursor-pointer font-medium">
-          Другие начатые программы
-        </summary>
-
-        <div class="mt-4 space-y-3">
-          <NuxtLink
-            v-for="program in store.otherActivePrograms"
-            :key="program.id"
-            :to="`/programs/${program.id}`"
-            class="border-base-300 block rounded-xl border p-4"
-          >
-            <span class="font-medium">
-              {{ program.title }}
-            </span>
-
-            <span class="text-base-content/60 mt-1 block text-sm">
-              Продолжить программу
-            </span>
-          </NuxtLink>
-        </div>
-      </details>
-
-      <PatientSupport />
 
       <details
         v-if="store.completedPrograms.length"
         class="border-base-300 rounded-2xl border p-4"
       >
-        <summary class="cursor-pointer font-medium">
-          Пройденные материалы программ
+        <summary class="cursor-pointer text-sm font-medium">
+          Пройденные программы
+          · {{ store.completedPrograms.length }}
         </summary>
 
         <div class="mt-4 space-y-3">
-          <NuxtLink
+          <PatientProgramCard
             v-for="program in store.completedPrograms"
             :key="program.id"
-            :to="`/programs/${program.id}`"
-            class="link link-primary block"
-          >
-            {{ program.title }}
-          </NuxtLink>
+            :program="program"
+            @request-purchase="openPurchaseDialog"
+          />
         </div>
       </details>
 
@@ -156,5 +139,10 @@ onBeforeUnmount(() => {
         </NuxtLink>
       </nav>
     </template>
+
+    <PatientPurchaseDialog
+      v-model="purchaseDialogOpen"
+      :program="selectedProgram"
+    />
   </div>
 </template>

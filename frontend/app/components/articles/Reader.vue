@@ -22,6 +22,7 @@ const props = defineProps({
 const auth = useAuthStore()
 const userStore = useUserStore()
 const router = useRouter()
+const closing = ref(false)
 const config = useRuntimeConfig()
 const { $api } = useNuxtApp()
 
@@ -272,28 +273,35 @@ async function retryProgress() {
 }
 
 async function closeReader() {
+  if (closing.value) return
+
+  closing.value = true
   window.clearTimeout(saveTimer)
 
-  if (isPatient.value && progressReady.value) {
-    const saved = await saveProgress()
+  try {
+    if (isPatient.value && progressReady.value) {
+      const saved = await saveProgress()
 
-    if (!saved) return
-  }
+      if (!saved) return
+    }
 
-  if (props.programId) {
-    await navigateTo({
-      path: `/programs/${props.programId}`,
-      query: props.programStageId
-        ? { stage: props.programStageId }
-        : {},
-    })
-    return
-  }
+    if (props.programId) {
+      await navigateTo({
+        path: `/programs/${props.programId}`,
+        query: props.programStageId
+          ? { stage: props.programStageId }
+          : {},
+      })
 
-  if (window.history.length > 1) {
-    router.back()
-  } else {
+      return
+    }
+
+    // Не используем history.back():
+    // предыдущей страницей могла быть форма редактирования
+    // или вообще внешняя страница.
     await navigateTo('/content/articles')
+  } finally {
+    closing.value = false
   }
 }
 
@@ -351,7 +359,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div>
+  <div class="pb-24">
     <progress
       class="progress progress-secondary fixed inset-x-0 top-0 z-[70] h-1 w-full rounded-none"
       :value="progress"
@@ -377,7 +385,7 @@ onBeforeUnmount(() => {
         </span>
       </NuxtLink>
 
-      <button
+      <!-- <button
         type="button"
         class="btn btn-circle btn-sm bg-base-100 shadow-lg"
         aria-label="Закрыть статью"
@@ -388,7 +396,7 @@ onBeforeUnmount(() => {
           name="lucide:x"
           class="size-5"
         />
-      </button>
+      </button> -->
     </div>
 
     <article
@@ -467,6 +475,12 @@ onBeforeUnmount(() => {
           max="100"
         />
       </div>
+
+      <ArticlesReaderAction
+        :target="articleElement"
+        :disabled="closing"
+        @close="closeReader"
+      />
     </article>
   </div>
 </template>

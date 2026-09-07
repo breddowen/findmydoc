@@ -61,6 +61,8 @@ class QuestionCreateRequest(BaseModel):
 
         return self
 
+class QuestionnaireLibraryVisibilityRequest(BaseModel):
+    is_library_hidden: bool
 
 class QuestionnaireCreateRequest(BaseModel):
     title: str = Field(min_length=1, max_length=300)
@@ -68,6 +70,7 @@ class QuestionnaireCreateRequest(BaseModel):
 
     tag_ids: list[uuid.UUID] = []
     pro_content: bool = True
+    is_library_hidden: bool = False
 
     copied_from_id: uuid.UUID | None = None
 
@@ -122,6 +125,7 @@ class QuestionnaireResponse(BaseModel):
 
     pro_content: bool
     is_hidden: bool
+    is_library_hidden: bool = False
 
     copied_from_id: uuid.UUID | None
 
@@ -140,6 +144,7 @@ class QuestionnaireListItem(BaseModel):
 
     pro_content: bool
     is_hidden: bool
+    is_library_hidden: bool = False
 
     tags: list[QuestionnaireTagResponse]
 

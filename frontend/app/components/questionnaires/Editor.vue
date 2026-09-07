@@ -39,6 +39,7 @@ function createEmptyForm() {
     pro_content: true,
     tag_ids: [],
     copied_from_id: null,
+    is_library_hidden: false,
     questions: [
       createEmptyQuestion(),
     ],
@@ -50,6 +51,7 @@ function applyForm(data) {
   form.description = data.description || ''
   form.pro_content = data.pro_content !== false
   form.tag_ids = data.tag_ids || []
+  form.is_library_hidden = Boolean(data.is_library_hidden)
   form.copied_from_id =
     data.copied_from_id || null
 
@@ -119,6 +121,7 @@ async function loadCopySource() {
       tag_ids: source.tags.map((tag) => tag.id),
       copied_from_id: source.id,
       questions: source.questions,
+      is_library_hidden: source.is_library_hidden,
     })
   } catch (error) {
     errorMessage.value =
@@ -250,6 +253,7 @@ function buildPayload() {
         text: question.text.trim(),
         is_required: question.is_required,
         order_index: questionIndex,
+        is_library_hidden: form.is_library_hidden,
 
         scale_min:
           question.question_type === 'scale'
@@ -469,6 +473,10 @@ onMounted(async () => {
           >
         </label>
       </section>
+      <ContentLibraryVisibility
+        v-model="form.is_library_hidden"
+        :disabled="saving"
+      />
 
       <section class="space-y-4">
         <QuestionnairesQuestionItem

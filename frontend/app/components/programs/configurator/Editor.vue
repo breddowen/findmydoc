@@ -623,14 +623,29 @@ onMounted(async () => {
       />
 
       <div
-        class="grid items-start gap-6 lg:grid-cols-[20rem_minmax(0,1fr)]"
+        class="grid items-start gap-6 lg:grid-cols-[24rem_minmax(0,1fr)] 2xl:grid-cols-[28rem_minmax(0,1fr)]"
       >
         <aside
           class="bg-base-100 border-base-300 sticky top-20 hidden max-h-[calc(100dvh-6rem)] overflow-y-auto rounded-3xl border p-4 lg:block"
         >
-          <h2 class="mb-4 font-bold">
-            Библиотека
-          </h2>
+          <div class="mb-4 flex items-center justify-between gap-3">
+            <h2 class="font-bold">
+              Библиотека
+            </h2>
+
+            <button
+              type="button"
+              class="btn btn-ghost btn-sm"
+              @click="mobileLibraryOpen = true"
+            >
+              <Icon
+                name="lucide:expand"
+                class="size-4"
+              />
+
+              Развернуть
+            </button>
+          </div>
 
           <ProgramsConfiguratorLibrary
             :articles="articles"
@@ -699,10 +714,18 @@ onMounted(async () => {
     </template>
   </div>
 
-  <UiBottomSheet
+  <UiResponsiveDialog
     v-model="mobileLibraryOpen"
-    title="Добавить в этап"
+    title="Добавить материал в этап"
+    max-width-class="max-w-5xl"
   >
+    <p class="text-base-content/60 mb-4 text-sm">
+      Этап:
+      <strong class="text-base-content">
+        {{ form.stages[activeStageIndex]?.title || 'Не выбран' }}
+      </strong>
+    </p>
+
     <ProgramsConfiguratorLibrary
       :articles="articles"
       :questionnaires="questionnaires"
@@ -711,5 +734,5 @@ onMounted(async () => {
       :draggable="false"
       @add="addItemToActiveStage"
     />
-  </UiBottomSheet>
+  </UiResponsiveDialog>
 </template>

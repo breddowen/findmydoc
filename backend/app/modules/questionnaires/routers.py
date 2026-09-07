@@ -40,6 +40,7 @@ from app.modules.questionnaires.schemas import (
     QuestionnaireResponse,
     QuestionnaireTagResponse,
     QuestionnaireVisibilityRequest,
+    QuestionnaireLibraryVisibilityRequest,
     QuestionResponse,
     SubmissionCompleteRequest,
     SubmissionProgressItem,
@@ -82,6 +83,7 @@ from app.modules.programs.utils import (
     sync_patient_program_enrollments,
 )
 
+
 router = APIRouter(
     prefix="/api/v1/questionnaires",
     tags=["Questionnaires"],
@@ -113,6 +115,7 @@ def serialize_questionnaire(
         description=questionnaire.description,
         pro_content=questionnaire.pro_content,
         is_hidden=questionnaire.is_hidden,
+        is_library_hidden=questionnaire.is_library_hidden,
         copied_from_id=questionnaire.copied_from_id,
         tags=[
             QuestionnaireTagResponse(
@@ -180,6 +183,7 @@ def create_questionnaire_from_payload(
         title=payload.title.strip(),
         description=payload.description,
         pro_content=payload.pro_content,
+        is_library_hidden=payload.is_library_hidden,
         copied_from_id=copied_from_id,
         created_by_user_id=created_by_user_id,
     )
@@ -228,11 +232,18 @@ async def list_questionnaires(
     auth: AuthContext = Depends(get_current_auth),
     session: Session = Depends(get_session),
 ) -> list[QuestionnaireListItem]:
-    questionnaires = session.exec(
-        select(Questionnaire).order_by(
-            Questionnaire.created_at.desc()
+    statement = select(Questionnaire).order_by(
+        Questionnaire.created_at.desc(),
+        Questionnaire.id.asc(),
+    )
+
+    if auth.active_role == UserRole.PATIENT:
+        statement = statement.where(
+            Questionnaire.is_hidden.is_(False),
+            Questionnaire.is_library_hidden.is_(False),
         )
-    ).all()
+
+    questionnaires = session.exec(statement).all()
 
     patient = None
 
@@ -271,6 +282,7 @@ async def list_questionnaires(
                 description=questionnaire.description,
                 pro_content=questionnaire.pro_content,
                 is_hidden=questionnaire.is_hidden,
+                is_library_hidden=questionnaire.is_library_hidden,
                 tags=[
                     QuestionnaireTagResponse(
                         id=tag.id,
@@ -279,9 +291,7 @@ async def list_questionnaires(
                     )
                     for tag in tags
                 ],
-                questions_count=len(
-                    questionnaire.questions
-                ),
+                questions_count=len(questionnaire.questions),
                 created_at=questionnaire.created_at,
             )
         )
@@ -436,6 +446,7 @@ async def copy_questionnaire(
             for tag in source_response.tags
         ],
         pro_content=source.pro_content,
+        is_library_hidden=source.is_library_hidden,
         questions=[
             {
                 "question_type": question.question_type,
@@ -522,6 +533,46 @@ async def change_questionnaire_visibility(
         questionnaire=questionnaire,
     )
 
+@router.patch(
+    "/{questionnaire_id}/library-visibility",
+    response_model=QuestionnaireResponse,
+)
+async def change_questionnaire_library_visibility(
+    questionnaire_id: uuid.UUID,
+    payload: QuestionnaireLibraryVisibilityRequest,
+    _: AuthContext = Depends(
+        require_roles(
+            UserRole.SUPERUSER,
+            UserRole.MED_ASSISTANT,
+        )
+    ),
+    session: Session = Depends(get_session),
+) -> QuestionnaireResponse:
+    questionnaire = session.get(
+        Questionnaire,
+        questionnaire_id,
+    )
+
+    if not questionnaire:
+        raise HTTPException(
+            status_code=404,
+            detail="Опросник не найден",
+        )
+
+    questionnaire.is_library_hidden = (
+        payload.is_library_hidden
+    )
+
+    # Это отдельная настройка каталога:
+    # is_hidden и hidden_at не трогаем.
+    session.add(questionnaire)
+    session.commit()
+    session.refresh(questionnaire)
+
+    return serialize_questionnaire(
+        session=session,
+        questionnaire=questionnaire,
+    )
 
 @router.post(
     "/{questionnaire_id}/start",

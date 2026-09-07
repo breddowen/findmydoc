@@ -22,14 +22,40 @@ export const usePatientHomeStore = defineStore(
         return priorityDifference
       }
 
-      return String(left.id).localeCompare(
-        String(right.id),
+      const titleDifference = String(left.title || '').localeCompare(
+        String(right.title || ''),
+        'ru',
+        { sensitivity: 'base' },
       )
+
+      return titleDifference
+        || String(left.id).localeCompare(String(right.id))
     }
 
     const orderedPrograms = computed(() =>
       [...programs.value].sort(comparePrograms),
     )
+
+    function homeGroup(program) {
+        if (!program.service) {
+          return program.is_start ? 0 : 1
+        }
+
+        return program.has_program_access ? 2 : 3
+      }
+
+      const homePrograms = computed(() =>
+        programs.value
+          .filter(
+            program =>
+              program.enrollment?.status !== 'completed',
+          )
+          .sort(
+            (left, right) =>
+              homeGroup(left) - homeGroup(right)
+              || comparePrograms(left, right),
+          ),
+      )
 
     const activePrograms = computed(() =>
       orderedPrograms.value.filter(
@@ -188,6 +214,7 @@ export const usePatientHomeStore = defineStore(
       hasCompletedStart,
       pendingRequests,
       supportPrograms,
+      homePrograms,
 
       load,
       startProgram,
