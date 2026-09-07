@@ -139,6 +139,7 @@ def serialize_article(
         content=article.content,
         pro_content=article.pro_content,
         is_hidden=article.is_hidden,
+        is_library_hidden=article.is_library_hidden,
         tags=[
             ArticleTagResponse(
                 id=tag.id,
@@ -160,18 +161,26 @@ def serialize_article_list_item(
     article: Article,
     can_access: bool = True,
 ) -> ArticleListItem:
-    full_response = serialize_article(
+    tags = get_article_tags(
         session=session,
-        article=article,
+        article_id=article.id,
     )
 
     return ArticleListItem(
-        id=full_response.id,
-        title=full_response.title,
-        pro_content=full_response.pro_content,
-        is_hidden=full_response.is_hidden,
+        id=article.id,
+        title=article.title,
+        pro_content=article.pro_content,
+        is_hidden=article.is_hidden,
+        is_library_hidden=article.is_library_hidden,
         can_access=can_access,
-        tags=full_response.tags,
-        created_at=full_response.created_at,
-        updated_at=full_response.updated_at,
+        tags=[
+            ArticleTagResponse(
+                id=tag.id,
+                name=tag.name,
+                description=tag.description,
+            )
+            for tag in tags
+        ],
+        created_at=article.created_at,
+        updated_at=article.updated_at,
     )

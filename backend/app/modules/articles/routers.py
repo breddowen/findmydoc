@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func
+from sqlalchemy.orm import defer
 from app.modules.events.models import Event
 
 from sqlmodel import Session, select
@@ -193,42 +194,35 @@ async def list_articles(
     auth: AuthContext = Depends(get_current_auth),
     session: Session = Depends(get_session),
 ) -> list[ArticleListItem]:
-    articles = session.exec(
-        select(Article).order_by(
-            Article.created_at.desc()
+    # Текст статьи в каталоге не нужен.
+    statement = (
+        select(Article)
+        .options(defer(Article.content))
+        .order_by(
+            Article.created_at.desc(),
+            Article.id.asc(),
         )
-    ).all()
-
-    now = datetime.now(timezone.utc)
-
-    ranking_cutoff = now.replace(
-        hour=0,
-        minute=0,
-        second=0,
-        microsecond=0,
-    )
-
-    # Актуальные счётчики для суперпользователя
-    # и медицинского ассистента.
-    live_event_counts = get_article_event_counts(
-        session=session,
-    )
-
-    # Стабильные в течение дня счётчики,
-    # используемые только для ранжирования
-    # списка пациента.
-    ranking_event_counts = get_article_event_counts(
-        session=session,
-        before=ranking_cutoff,
     )
 
     if auth.active_role != UserRole.PATIENT:
-        result: list[ArticleListItem] = []
+        # Сотрудники видят в том числе материалы,
+        # исключённые из пациентского каталога.
+        articles = session.exec(
+            statement.offset(offset).limit(limit)
+        ).all()
 
         can_see_analytics = auth.active_role in {
             UserRole.SUPERUSER,
             UserRole.MED_ASSISTANT,
         }
+
+        live_event_counts = (
+            get_article_event_counts(session=session)
+            if can_see_analytics and articles
+            else {}
+        )
+
+        result: list[ArticleListItem] = []
 
         for article in articles:
             item = serialize_article_list_item(
@@ -239,10 +233,7 @@ async def list_articles(
             if can_see_analytics:
                 counts = live_event_counts.get(
                     article.id,
-                    {
-                        "opened": 0,
-                        "read": 0,
-                    },
+                    {"opened": 0, "read": 0},
                 )
 
                 opened_count = counts["opened"]
@@ -251,11 +242,7 @@ async def list_articles(
                 item.opened_count = opened_count
                 item.read_count = read_count
                 item.read_rate = round(
-                    (
-                        read_count
-                        / opened_count
-                        * 100
-                    )
+                    read_count / opened_count * 100
                     if opened_count > 0
                     else 0,
                     2,
@@ -263,27 +250,39 @@ async def list_articles(
 
             result.append(item)
 
-        return result[offset:offset + limit]
+        return result
+
+    # Исключаем материалы до загрузки из БД.
+    articles = session.exec(
+        statement.where(
+            Article.is_hidden.is_(False),
+            Article.is_library_hidden.is_(False),
+        )
+    ).all()
+
+    if not articles:
+        return []
 
     patient = get_patient_profile_by_user_id(
         session=session,
         user_id=auth.user.id,
     )
 
-    ranked_articles: list[
-        tuple[
-            bool,
-            bool,
-            float,
-            datetime,
-            ArticleListItem,
-        ]
-    ] = []
+    ranking_cutoff = datetime.now(timezone.utc).replace(
+        hour=0,
+        minute=0,
+        second=0,
+        microsecond=0,
+    )
+
+    ranking_event_counts = get_article_event_counts(
+        session=session,
+        before=ranking_cutoff,
+    )
+
+    ranked_articles = []
 
     for article in articles:
-        if article.is_hidden:
-            continue
-
         tag_ids = get_article_tag_ids(
             session=session,
             article_id=article.id,
@@ -296,18 +295,15 @@ async def list_articles(
             content_id=article.id,
         )
 
-        matches_patient_tags = (
-            patient_can_see_content(
-                session=session,
-                patient=patient,
-                content_tag_ids=tag_ids,
-                is_hidden=False,
-            )
+        matches_patient_tags = patient_can_see_content(
+            session=session,
+            patient=patient,
+            content_tag_ids=tag_ids,
+            is_hidden=False,
         )
 
-        # ====================================================
-        # МЕСТО СТРОГОЙ ФИЛЬТРАЦИИ СТАТЕЙ ПО ТЕГАМ
-        # ====================================================
+        # Существующую стратегию доступа и ранжирования
+        # по тегам не меняем.
         if (
             STRICT_PATIENT_ARTICLE_TAG_FILTER
             and not is_assigned
@@ -315,8 +311,6 @@ async def list_articles(
         ):
             continue
 
-        # Теги больше не запрещают чтение.
-        # Они используются только для ранжирования.
         can_access = (
             is_assigned
             or not article.pro_content
@@ -325,21 +319,12 @@ async def list_articles(
 
         counts = ranking_event_counts.get(
             article.id,
-            {
-                "opened": 0,
-                "read": 0,
-            },
+            {"opened": 0, "read": 0},
         )
 
         score = calculate_article_score(
             opened_count=counts["opened"],
             read_count=counts["read"],
-        )
-
-        item = serialize_article_list_item(
-            session=session,
-            article=article,
-            can_access=can_access,
         )
 
         ranked_articles.append(
@@ -348,26 +333,32 @@ async def list_articles(
                 matches_patient_tags,
                 score,
                 article.created_at,
-                item,
+                article,
+                can_access,
             )
         )
 
+    # Исходный SQL-порядок по id обеспечивает
+    # стабильность при совпадении всех критериев.
     ranked_articles.sort(
         key=lambda row: (
-            row[0],  # Назначенные.
-            row[1],  # Подходящие по тегам.
-            row[2],  # Эффективность статьи.
-            row[3],  # Более новые.
+            row[0],
+            row[1],
+            row[2],
+            row[3],
         ),
         reverse=True,
     )
 
-    items = [
-        row[4]
-        for row in ranked_articles
+    # Сериализуем только запрошенную страницу.
+    return [
+        serialize_article_list_item(
+            session=session,
+            article=row[4],
+            can_access=row[5],
+        )
+        for row in ranked_articles[offset:offset + limit]
     ]
-
-    return items[offset:offset + limit]
 
 @router.get(
     "/{article_id}",
@@ -482,6 +473,7 @@ async def create_article(
         title=payload.title.strip(),
         content=payload.content,
         pro_content=payload.pro_content,
+        is_library_hidden=payload.is_library_hidden,
         created_by_user_id=auth.user.id,
     )
 

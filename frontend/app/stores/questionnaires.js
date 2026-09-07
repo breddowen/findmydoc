@@ -153,6 +153,37 @@ export const useQuestionnairesStore = defineStore(
         },
       )
     }
+    async function setLibraryVisibility(
+        questionnaireId,
+        isLibraryHidden,
+      ) {
+        const { $api } = useNuxtApp()
+
+        const response = await $api(
+          `/api/v1/questionnaires/${questionnaireId}/library-visibility`,
+          {
+            method: 'PATCH',
+            body: {
+              is_library_hidden: isLibraryHidden,
+            },
+          },
+        )
+
+        const item = questionnaires.value.find(
+          current => current.id === questionnaireId,
+        )
+
+        if (item) {
+          item.is_library_hidden = response.is_library_hidden
+        }
+
+        if (currentQuestionnaire.value?.id === questionnaireId) {
+          currentQuestionnaire.value.is_library_hidden =
+            response.is_library_hidden
+        }
+
+        return response
+      }
 
     return {
       questionnaires,
@@ -163,6 +194,7 @@ export const useQuestionnairesStore = defineStore(
       fetchQuestionnaire,
       createQuestionnaire,
       setVisibility,
+      setLibraryVisibility,
 
       fetchMyProgress,
       startQuestionnaire,

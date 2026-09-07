@@ -3,6 +3,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Optional
 
+import sqlalchemy as sa
 from sqlalchemy import Column, JSON, UniqueConstraint
 from sqlmodel import Field, Relationship, SQLModel
 
@@ -27,6 +28,16 @@ class Questionnaire(SQLModel, table=True):
 
     pro_content: bool = Field(default=True, index=True)
     is_hidden: bool = Field(default=False, index=True)
+
+    is_library_hidden: bool = Field(
+        default=False,
+        sa_column=sa.Column(
+            sa.Boolean(),
+            nullable=False,
+            server_default=sa.false(),
+            index=True,
+        ),
+    )
 
     copied_from_id: Optional[uuid.UUID] = Field(
         default=None,

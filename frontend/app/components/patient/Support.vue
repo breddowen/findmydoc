@@ -1,4 +1,5 @@
 <!-- ./frontend/app/components/patient/Support.vue -->
+ <!-- DELETE -->
 <script setup>
 const store = usePatientHomeStore()
 

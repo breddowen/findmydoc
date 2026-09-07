@@ -3,6 +3,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
+import sqlalchemy as sa
 from sqlalchemy import UniqueConstraint
 from sqlmodel import Field, Relationship, SQLModel
 
@@ -23,6 +24,16 @@ class Article(SQLModel, table=True):
 
     pro_content: bool = Field(default=True, index=True)
     is_hidden: bool = Field(default=False, index=True)
+
+    is_library_hidden: bool = Field(
+        default=False,
+        sa_column=sa.Column(
+            sa.Boolean(),
+            nullable=False,
+            server_default=sa.false(),
+            index=True,
+        ),
+    )
 
     created_by_user_id: uuid.UUID = Field(
         foreign_key="users.id",

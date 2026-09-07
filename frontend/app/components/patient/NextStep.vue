@@ -1,4 +1,5 @@
 <!-- ./frontend/app/components/patient/NextStep.vue -->
+ <!-- DELETE -->
 <script setup>
 const props = defineProps({
   program: {

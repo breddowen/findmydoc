@@ -81,6 +81,7 @@ function normalizeQuestionnaire(source) {
         is_required:
           question.is_required !== false,
         order_index: questionIndex,
+        is_library_hidden: data.is_library_hidden === true,
 
         scale_min:
           questionType === 'scale'

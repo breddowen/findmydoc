@@ -1,0 +1,324 @@
+# ./backend/app/modules/questionnaires/routers.py
+
+import uuid
+from datetime import datetime, timezone
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlmodel import Session, select
+from app.core.db import get_session
+from app.core.security import (
+    AuthContext,
+    get_current_auth,
+    require_roles,
+)
+from app.modules.content.utils import (
+    ensure_patient_content_access,
+    get_patient_profile_by_user_id,
+    patient_can_access_content,
+)
+from app.modules.events.enums import EventType
+from app.modules.events.service import record_event
+from app.modules.questionnaires.enums import (
+    QuestionnaireSubmissionStatus,
+)
+from app.modules.questionnaires.models import (
+    Question,
+    QuestionAnswer,
+    Questionnaire,
+    QuestionnaireSubmission,
+    QuestionnaireTagLink,
+    QuestionOption,
+)
+from app.modules.questionnaires.schemas import (
+    AnswerResponse,
+    AnswerSaveRequest,
+    AnswerSaveResponse,
+    QuestionOptionResponse,
+    QuestionnaireCopyRequest,
+    QuestionnaireCreateRequest,
+    QuestionnaireListItem,
+    QuestionnaireResponse,
+    QuestionnaireTagResponse,
+    QuestionnaireVisibilityRequest,
+    QuestionResponse,
+    SubmissionCompleteRequest,
+    SubmissionProgressItem,
+    SubmissionResponse,
+    SubmissionStartResponse,
+)
+from app.modules.questionnaires.utils import (
+    get_questionnaire_tag_ids,
+    get_questionnaire_tags,
+    normalize_question_answer,
+    validate_questionnaire_answers,
+)
+from app.modules.tags.models import Tag
+from app.modules.users.enums import UserRole
+from app.modules.assignments.enums import AssignmentType
+from app.modules.assignments.utils import (
+    mark_assignment_completed,
+    mark_assignment_in_progress,
+    patient_has_active_assignment,
+)
+from app.modules.notifications.enums import (
+    NotificationChannel,
+    NotificationType,
+)
+from app.modules.notifications.service import (
+    send_notification,
+)
+from app.modules.users.enums import (
+    DoctorPatientStatus,
+    UserRole,
+)
+from app.modules.users.models import (
+    DoctorPatientLink,
+    DoctorProfile,
+)
+from app.modules.programs.utils import (
+    sync_patient_program_enrollments,
+)
+
+def utc_now() -> datetime:
+    FUNCTION BODY
+    return datetime.now(timezone.utc)
+def serialize_questionnaire(
+    *,
+    session: Session,
+    questionnaire: Questionnaire,
+) -> QuestionnaireResponse:
+    FUNCTION BODY
+    return QuestionnaireResponse(
+        id=questionnaire.id,
+        title=questionnaire.title,
+        description=questionnaire.description,
+        pro_content=questionnaire.pro_content,
+        is_hidden=questionnaire.is_hidden,
+        copied_from_id=questionnaire.copied_from_id,
+        tags=[
+            QuestionnaireTagResponse(
+                id=tag.id,
+                name=tag.name,
+                description=tag.description,
+            )
+            for tag in tags
+        ],
+        questions=[
+            QuestionResponse(
+                id=question.id,
+                question_type=question.question_type,
+                text=question.text,
+                is_required=question.is_required,
+                order_index=question.order_index,
+                scale_min=question.scale_min,
+                scale_max=question.scale_max,
+                scale_min_label=question.scale_min_label,
+                scale_max_label=question.scale_max_label,
+                options=[
+                    QuestionOptionResponse(
+                        id=option.id,
+                        text=option.text,
+                        order_index=option.order_index,
+                    )
+                    for option in sorted(
+                        question.options,
+                        key=lambda item: item.order_index,
+                    )
+                ],
+            )
+            for question in questions
+        ],
+        created_by_user_id=questionnaire.created_by_user_id,
+        created_at=questionnaire.created_at,
+        hidden_at=questionnaire.hidden_at,
+    )
+def create_questionnaire_from_payload(
+    *,
+    session: Session,
+    payload: QuestionnaireCreateRequest,
+    created_by_user_id: uuid.UUID,
+    copied_from_id: uuid.UUID | None = None,
+) -> Questionnaire:
+    FUNCTION BODY
+    return questionnaire
+@@router.get("", response_model=list[QuestionnaireListItem])
+async def list_questionnaires(
+    auth: AuthContext = Depends(get_current_auth),
+    session: Session = Depends(get_session),
+) -> list[QuestionnaireListItem]:
+    FUNCTION BODY
+    return result
+@@router.get(
+    "/{questionnaire_id}",
+    response_model=QuestionnaireResponse,
+)
+async def get_questionnaire(
+    questionnaire_id: uuid.UUID,
+    program_id: uuid.UUID | None = None,
+    program_stage_id: uuid.UUID | None = None,
+    auth: AuthContext = Depends(get_current_auth),
+    session: Session = Depends(get_session),
+) -> QuestionnaireResponse:
+    FUNCTION BODY
+    return serialize_questionnaire(
+        session=session,
+        questionnaire=questionnaire,
+    )
+@@router.post(
+    "",
+    response_model=QuestionnaireResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_questionnaire(
+    payload: QuestionnaireCreateRequest,
+    auth: AuthContext = Depends(
+        require_roles(
+            UserRole.SUPERUSER,
+            UserRole.MED_ASSISTANT,
+        )
+    ),
+    session: Session = Depends(get_session),
+) -> QuestionnaireResponse:
+    FUNCTION BODY
+    return serialize_questionnaire(
+        session=session,
+        questionnaire=questionnaire,
+    )
+@@router.post(
+    "/{questionnaire_id}/copy",
+    response_model=QuestionnaireResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def copy_questionnaire(
+    questionnaire_id: uuid.UUID,
+    payload: QuestionnaireCopyRequest,
+    auth: AuthContext = Depends(
+        require_roles(
+            UserRole.SUPERUSER,
+            UserRole.MED_ASSISTANT,
+        )
+    ),
+    session: Session = Depends(get_session),
+) -> QuestionnaireResponse:
+    FUNCTION BODY
+    return serialize_questionnaire(
+        session=session,
+        questionnaire=copy,
+    )
+@@router.patch(
+    "/{questionnaire_id}/visibility",
+    response_model=QuestionnaireResponse,
+)
+async def change_questionnaire_visibility(
+    questionnaire_id: uuid.UUID,
+    payload: QuestionnaireVisibilityRequest,
+    _: AuthContext = Depends(
+        require_roles(
+            UserRole.SUPERUSER,
+            UserRole.MED_ASSISTANT,
+        )
+    ),
+    session: Session = Depends(get_session),
+) -> QuestionnaireResponse:
+    FUNCTION BODY
+    return serialize_questionnaire(
+        session=session,
+        questionnaire=questionnaire,
+    )
+@@router.post(
+    "/{questionnaire_id}/start",
+    response_model=SubmissionStartResponse,
+)
+async def start_questionnaire(
+    questionnaire_id: uuid.UUID,
+    program_id: uuid.UUID | None = None,
+    program_stage_id: uuid.UUID | None = None,
+    auth: AuthContext = Depends(
+        require_roles(UserRole.PATIENT)
+    ),
+    session: Session = Depends(get_session),
+) -> SubmissionStartResponse:
+    FUNCTION BODY
+    return SubmissionStartResponse(
+        submission_id=submission.id,
+        questionnaire_id=questionnaire.id,
+        status=submission.status,
+        started_at=submission.started_at,
+    )
+@@router.post(
+    "/submissions/{submission_id}/complete",
+    response_model=SubmissionResponse,
+)
+async def complete_questionnaire(
+    submission_id: uuid.UUID,
+    payload: SubmissionCompleteRequest,
+    auth: AuthContext = Depends(
+        require_roles(UserRole.PATIENT)
+    ),
+    session: Session = Depends(get_session),
+) -> SubmissionResponse:
+    FUNCTION BODY
+    return SubmissionResponse(
+        id=submission.id,
+        questionnaire_id=(
+            submission.questionnaire_id
+        ),
+        patient_id=submission.patient_id,
+        status=submission.status,
+        started_at=submission.started_at,
+        completed_at=submission.completed_at,
+        answers=response_answers,
+        program_id=submission.program_id,
+        program_stage_id=submission.program_stage_id,
+    )
+@@router.put(
+    "/submissions/{submission_id}/answer",
+    response_model=AnswerSaveResponse,
+)
+async def save_submission_answer(
+    submission_id: uuid.UUID,
+    payload: AnswerSaveRequest,
+    auth: AuthContext = Depends(
+        require_roles(UserRole.PATIENT)
+    ),
+    session: Session = Depends(get_session),
+) -> AnswerSaveResponse:
+    FUNCTION BODY
+    return AnswerSaveResponse(
+        submission_id=submission.id,
+        question_id=question.id,
+        value=answer.value_json,
+        saved_at=answer.created_at,
+    )
+@@router.get(
+    "/submissions/mine/progress",
+    response_model=list[SubmissionProgressItem],
+)
+async def get_my_questionnaire_progress(
+    auth: AuthContext = Depends(
+        require_roles(UserRole.PATIENT)
+    ),
+    session: Session = Depends(get_session),
+) -> list[SubmissionProgressItem]:
+    FUNCTION BODY
+    return result
+@@router.get(
+    "/submissions/{submission_id}",
+    response_model=SubmissionResponse,
+)
+async def get_submission(
+    submission_id: uuid.UUID,
+    auth: AuthContext = Depends(get_current_auth),
+    session: Session = Depends(get_session),
+) -> SubmissionResponse:
+    FUNCTION BODY
+    return SubmissionResponse(
+        id=submission.id,
+        questionnaire_id=submission.questionnaire_id,
+        patient_id=submission.patient_id,
+        status=submission.status,
+        started_at=submission.started_at,
+        completed_at=submission.completed_at,
+        answers=response_answers,
+        program_id=submission.program_id,
+        program_stage_id=submission.program_stage_id,
+    )

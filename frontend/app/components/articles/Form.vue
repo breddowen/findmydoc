@@ -33,6 +33,7 @@ const form = reactive({
   content: '',
   tag_ids: [],
   pro_content: true,
+  is_library_hidden: false,
 })
 
 function applyInitialValue(value) {
@@ -44,6 +45,7 @@ function applyInitialValue(value) {
     (tag) => tag.id,
   )
   form.pro_content = Boolean(value.pro_content)
+  form.is_library_hidden = Boolean(value.is_library_hidden)
 }
 
 async function loadTags() {
@@ -74,6 +76,7 @@ function submit() {
     content: form.content,
     tag_ids: form.tag_ids,
     pro_content: form.pro_content,
+    is_library_hidden: form.is_library_hidden,
   })
 }
 
@@ -171,6 +174,7 @@ onMounted(loadTags)
               Профессиональный контент
             </span>
 
+
             <span
               class="text-base-content/60 mt-1 block text-sm"
             >
@@ -186,6 +190,10 @@ onMounted(loadTags)
           >
         </label>
       </div>
+      <ContentLibraryVisibility
+        v-model="form.is_library_hidden"
+        :disabled="saving"
+      />
     </section>
 
     <div
