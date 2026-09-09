@@ -199,6 +199,9 @@ class ProgramPatientResponse(BaseModel):
 
     service: MedicalServicePatientResponse | None
     is_popular: bool
+    # Рекомендация по эффективным тегам пациента.
+    # Не является разрешением на доступ к материалам.
+    is_recommended: bool = False
 
     is_start: bool = False
     home_priority: int = 0

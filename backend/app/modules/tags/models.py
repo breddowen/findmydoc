@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import UniqueConstraint
+from sqlalchemy import Text, UniqueConstraint
 from sqlmodel import Field, Relationship, SQLModel
 
 from app.modules.tags.enums import DoctorTagOverrideAction
@@ -54,6 +54,13 @@ class Tag(SQLModel, table=True):
     )
 
     patient_overrides: list["PatientTagOverride"] = Relationship(
+        back_populates="tag",
+        sa_relationship_kwargs={
+            "cascade": "all, delete-orphan",
+        },
+    )
+
+    life_aspect_links: list["LifeAspectTagLink"] = Relationship(
         back_populates="tag",
         sa_relationship_kwargs={
             "cascade": "all, delete-orphan",
@@ -189,4 +196,84 @@ class PatientTagOverride(SQLModel, table=True):
                 "[PatientTagOverride.tag_id]"
             ),
         },
+    )
+
+class LifeAspect(SQLModel, table=True):
+    __tablename__ = "life_aspects"
+
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        primary_key=True,
+    )
+
+    name: str = Field(
+        max_length=100,
+        unique=True,
+        index=True,
+    )
+
+    # HTML из редактора.
+    # На frontend выводим через RichTextRenderer.
+    description: Optional[str] = Field(
+        default=None,
+        sa_type=Text,
+    )
+
+    order_index: int = Field(
+        default=0,
+        index=True,
+    )
+
+    is_hidden: bool = Field(
+        default=False,
+        index=True,
+    )
+    hidden_at: Optional[datetime] = Field(default=None)
+
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+
+    tag_links: list["LifeAspectTagLink"] = Relationship(
+        back_populates="life_aspect",
+        sa_relationship_kwargs={
+            "cascade": "all, delete-orphan",
+        },
+    )
+
+
+class LifeAspectTagLink(SQLModel, table=True):
+    __tablename__ = "life_aspect_tag_links"
+    __table_args__ = (
+        UniqueConstraint(
+            "life_aspect_id",
+            "tag_id",
+            name="uq_life_aspect_tag",
+        ),
+    )
+
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        primary_key=True,
+    )
+
+    life_aspect_id: uuid.UUID = Field(
+        foreign_key="life_aspects.id",
+        ondelete="CASCADE",
+        index=True,
+    )
+
+    tag_id: uuid.UUID = Field(
+        foreign_key="tags.id",
+        ondelete="CASCADE",
+        index=True,
+    )
+
+    created_at: datetime = Field(default_factory=utc_now)
+
+    life_aspect: Optional[LifeAspect] = Relationship(
+        back_populates="tag_links",
+    )
+
+    tag: Optional[Tag] = Relationship(
+        back_populates="life_aspect_links",
     )
