@@ -15,7 +15,7 @@
 # Файлы сжато
 python ./helper_functions/export_context.py backend --max-lines 1000 --output helper_functions/backend_context.txt
 python ./helper_functions/export_context.py backend\app\modules\tags\utils.py --max-lines 1000 --output helper_functions/patients_context.txt
-python ./helper_functions/export_context.py backend\app\modules\tags\routers.py --max-lines 500 --output helper_functions/shorten.txt
+python ./helper_functions/export_context.py backend\app\modules\programs\routers.py --max-lines 500 --output helper_functions/shorten.txt
 
 python ./helper_functions/export_context.py
 python ./helper_functions/export_context.py backend
