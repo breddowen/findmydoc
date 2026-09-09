@@ -138,7 +138,10 @@ async function submitPasskeyLogin() {
               v-model.trim="email"
               type="email"
               required
-              autocomplete="username webauthn"
+              inputmode="email"
+              autocomplete="username"
+              autocapitalize="none"
+              spellcheck="false"
               placeholder="name@example.com"
               class="min-w-0 grow"
             >
