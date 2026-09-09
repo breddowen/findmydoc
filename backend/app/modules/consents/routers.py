@@ -25,6 +25,8 @@ from app.modules.events.service import record_event
 from app.modules.users.enums import UserRole
 from app.modules.users.models import PatientProfile
 
+from app.core.transactions import lock_patient_for_write
+from app.modules.consents.models import utc_now
 
 router = APIRouter(
     prefix="/api/v1/consents",
@@ -179,6 +181,10 @@ async def set_my_consent(
         session=session,
         auth=auth,
     )
+    lock_patient_for_write(
+        session=session,
+        patient_id=patient.id,
+    )
 
     consent_record = ConsentRecord(
         patient_id=patient.id,
@@ -215,6 +221,7 @@ async def set_my_consent(
             preference.do_not_call = False
 
         preference.updated_by_user_id = auth.user.id
+        preference.updated_at = utc_now()
 
         session.add(preference)
 

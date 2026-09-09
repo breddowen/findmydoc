@@ -13,12 +13,15 @@ from app.core.config import settings
 from app.core.db import init_sqlite_db
 from app.modules.auth.routers import router as auth_router
 from app.modules.consents.routers import router as consents_router
+from app.modules.consents.contact_routers import router as assistant_contact_router
 from app.modules.events.routers import router as events_router
 from app.modules.invitations.routers import router as invitations_router
 from app.modules.referrals.routers import router as referrals_router
 from app.modules.relationships.routers import router as relationships_router
 from app.modules.specialities.routers import router as specialities_router
 from app.modules.tags.routers import router as tags_router
+from app.modules.tags.life_aspect_routers import router as life_aspects_manage_router
+from app.modules.tags.life_aspect_patient_routers import router as life_aspects_patient_router
 from app.modules.users.routers import router as users_router
 from app.modules.articles.routers import router as articles_router
 from app.modules.services.routers import router as services_router
@@ -67,10 +70,13 @@ app.include_router(specialities_router)
 app.include_router(invitations_router)
 app.include_router(admin_invitations_router)
 app.include_router(tags_router)
+app.include_router(life_aspects_manage_router)
+app.include_router(life_aspects_patient_router)
 app.include_router(relationships_router)
 
 app.include_router(referrals_router)
 app.include_router(consents_router)
+app.include_router(assistant_contact_router)
 app.include_router(events_router)
 
 app.include_router(articles_router)

@@ -5,6 +5,7 @@ export const usePatientHomeStore = defineStore(
     const { $api } = useNuxtApp()
 
     const programs = ref([])
+    const lifeAspects = ref([])
     const loading = ref(false)
     const errorMessage = ref('')
 
@@ -61,6 +62,51 @@ export const usePatientHomeStore = defineStore(
       orderedPrograms.value.filter(
         program =>
           program.enrollment?.status === 'active',
+      ),
+    )
+
+    function hasCompletedTask(program) {
+      return (program.stages || []).some(
+        stage => (stage.items || []).some(
+          item =>
+            [
+              'article',
+              'questionnaire',
+            ].includes(item.item_type)
+            && item.is_completed === true,
+        ),
+      )
+    }
+
+    // Пациент начал программу и выполнил
+    // хотя бы одно задание.
+    const inProgressPrograms = computed(() =>
+      activePrograms.value.filter(hasCompletedTask),
+    )
+
+    // Остальные программы для обычного списка.
+    // Уже показанные в блоке продолжения не дублируем.
+    const remainingHomePrograms = computed(() => {
+      const inProgressIds = new Set(
+        inProgressPrograms.value.map(
+          program => program.id,
+        ),
+      )
+
+      return homePrograms.value.filter(
+        program => !inProgressIds.has(program.id),
+      )
+    })
+
+    const recommendedPrograms = computed(() =>
+      remainingHomePrograms.value.filter(
+        program => program.is_recommended === true,
+      ),
+    )
+
+    const otherHomePrograms = computed(() =>
+      remainingHomePrograms.value.filter(
+        program => program.is_recommended !== true,
       ),
     )
 
@@ -145,22 +191,28 @@ export const usePatientHomeStore = defineStore(
       loading.value = true
       errorMessage.value = ''
       programs.value = []
+      lifeAspects.value = []
 
       try {
-        const response = await $api(
-          '/api/v1/programs/patient',
-        )
+        const [
+          programResponse,
+          aspectResponse,
+        ] = await Promise.all([
+          $api('/api/v1/programs/patient'),
+          $api('/api/v1/life-aspects/patient'),
+        ])
 
         if (currentVersion !== loadVersion) return
 
-        programs.value = response
+        programs.value = programResponse
+        lifeAspects.value = aspectResponse
       } catch (error) {
         if (currentVersion !== loadVersion) return
 
         errorMessage.value =
           typeof error?.data?.detail === 'string'
             ? error.data.detail
-            : 'Не удалось загрузить ваш маршрут'
+            : 'Не удалось загрузить программы и сферы жизни'
       } finally {
         if (currentVersion === loadVersion) {
           loading.value = false
@@ -196,9 +248,62 @@ export const usePatientHomeStore = defineStore(
       return response
     }
 
+    const homeLifeAspects = computed(() => {
+      const programsById = new Map(
+        programs.value.map(program => [
+          program.id,
+          program,
+        ]),
+      )
+
+      const inProgressIds = new Set(
+        inProgressPrograms.value.map(
+          program => program.id,
+        ),
+      )
+
+      return lifeAspects.value
+        .map(aspect => ({
+          ...aspect,
+
+          // Используем полные пациентские данные программы:
+          // доступ к материалам, прогресс, участие и услугу.
+          programs: aspect.programs
+            .map(program => programsById.get(program.id))
+            .filter(program =>
+              program
+              && !inProgressIds.has(program.id),
+            )
+            .sort(
+              (left, right) =>
+                Number(Boolean(right.is_recommended))
+                  - Number(Boolean(left.is_recommended))
+                || comparePrograms(left, right),
+            ),
+        }))
+        .filter(aspect => aspect.programs.length > 0)
+    })
+
+    const unclassifiedPrograms = computed(() => {
+      const classifiedIds = new Set(
+        lifeAspects.value.flatMap(
+          aspect => aspect.programs.map(
+            program => program.id,
+          ),
+        ),
+      )
+
+      return remainingHomePrograms.value.filter(
+        program =>
+          !classifiedIds.has(program.id)
+          && !program.is_recommended,
+      )
+    })
+
     function clear() {
       loadVersion += 1
       programs.value = []
+      lifeAspects.value = []
       loading.value = false
       errorMessage.value = ''
     }
@@ -216,10 +321,19 @@ export const usePatientHomeStore = defineStore(
       supportPrograms,
       homePrograms,
 
+      inProgressPrograms,
+      remainingHomePrograms,
+      recommendedPrograms,
+      otherHomePrograms,
+
       load,
       startProgram,
       requestPurchase,
       clear,
+
+      lifeAspects,
+      homeLifeAspects,
+      unclassifiedPrograms,
     }
   },
 )

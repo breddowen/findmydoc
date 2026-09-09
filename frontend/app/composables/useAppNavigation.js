@@ -145,6 +145,12 @@ export function useAppNavigation() {
             icon: 'lucide:library',
             description: 'Специальности и теги',
           },
+          {
+            to: '/settings/life-aspects',
+            label: 'Сферы жизни',
+            icon: 'lucide:heart-pulse',
+            description: 'Направления, описания и связанные теги',
+          },
         ],
       })
     }

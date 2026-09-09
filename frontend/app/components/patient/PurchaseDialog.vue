@@ -12,6 +12,8 @@ const props = defineProps({
   },
 })
 
+const emit = defineEmits(['requested'])
+
 const store = usePatientHomeStore()
 
 const requesting = ref(false)
@@ -33,8 +35,16 @@ async function sendRequest() {
   errorMessage.value = ''
 
   try {
-    await store.requestPurchase(programId)
-    model.value = false
+    const response = await store.requestPurchase(programId)
+
+    emit('requested', {
+      programId,
+      response,
+    })
+
+    if (props.program?.id === programId) {
+      model.value = false
+    }
   } catch (error) {
     errorMessage.value =
       typeof error?.data?.detail === 'string'
@@ -49,7 +59,7 @@ async function sendRequest() {
 <template>
   <UiResponsiveDialog
     v-model="model"
-    title="Обсудить программу"
+    title="Обсудить сопровождение"
     max-width-class="max-w-md"
     :close-on-backdrop="!requesting"
     :show-close-button="!requesting"
@@ -60,12 +70,22 @@ async function sendRequest() {
       </p>
 
       <p class="text-base-content/70 text-sm">
-        Отправим ассистенту запрос на обсуждение программы.
-        Состав, стоимость и порядок записи можно согласовать
-        до покупки.
+        Ассистент поможет разобраться в составе программы,
+        стоимости консультаций и порядке записи.
+      </p>
+
+      <p class="text-base-content/70 text-sm">
+        Материалы без отметки Pro можно проходить бесплатно.
+        Для Pro-материалов нужен индивидуальный доступ
+        к программе сопровождения.
       </p>
 
       <p class="text-base-content/60 text-sm">
+        Нажимая «Прошу связаться со мной», Вы разрешаете
+        ассистенту клиники связаться с Вами по поводу программы.
+      </p>
+
+      <p class="text-base-content/50 text-xs">
         Запрос не обязывает покупать программу.
         Оплата в приложении не производится.
         Это не канал срочной медицинской помощи.
@@ -101,7 +121,6 @@ async function sendRequest() {
             v-if="requesting"
             class="loading loading-spinner loading-sm"
           />
-
           Прошу связаться со мной
         </button>
       </div>

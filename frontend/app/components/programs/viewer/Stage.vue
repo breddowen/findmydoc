@@ -21,6 +21,10 @@ const props = defineProps({
     type: String,
     default: 'Купить программу',
   },
+  purchaseRequested: {
+    type: Boolean,
+    default: false,
+  },
 })
 
 const emit = defineEmits([
@@ -200,7 +204,7 @@ function getActionText(item) {
     </div>
 
     <div
-      v-if="stage.doctor_description"
+      v-if="!isPatient && stage.doctor_description"
       class="border-info/30 bg-info/10 mt-5 rounded-2xl border p-4"
     >
       <div class="flex gap-3">
@@ -318,27 +322,45 @@ function getActionText(item) {
                 >
                 <!-- Пациент -->
                 <template v-if="isPatient">
-                    <NuxtLink
+                  <NuxtLink
                     v-if="item.can_access"
                     :to="getItemLink(item)"
                     class="btn btn-primary btn-sm"
-                    >
+                  >
                     {{ getActionText(item) }}
-                    </NuxtLink>
+                  </NuxtLink>
+
+                  <template v-else-if="item.pro_content">
+                    <p class="text-base-content/60 mb-2 text-xs">
+                      Этот материал доступен в программе сопровождения.
+                    </p>
 
                     <button
-                    v-else
-                    type="button"
-                    class="btn btn-warning btn-sm"
-                    @click="emit('purchase')"
+                      type="button"
+                      class="btn btn-warning btn-sm"
+                      :disabled="purchaseRequested"
+                      @click="emit('purchase')"
                     >
-                    <Icon
-                        name="lucide:shopping-cart"
+                      <Icon
+                        :name="
+                          purchaseRequested
+                            ? 'lucide:check'
+                            : 'lucide:shopping-cart'
+                        "
                         class="size-4"
-                    />
+                      />
 
-                    {{ purchaseLabel }}
+                      {{
+                        purchaseRequested
+                          ? 'Запрос отправлен'
+                          : purchaseLabel
+                      }}
                     </button>
+                  </template>
+
+                  <p v-else class="text-base-content/60 text-sm">
+                    Материал пока недоступен.
+                  </p>
                 </template>
 
                 <!-- Врач, ассистент или суперпользователь -->

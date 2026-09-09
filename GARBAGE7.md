@@ -3409,3 +3409,5219 @@ class SubmissionProgressItem(BaseModel):
 
     started_at: datetime
     completed_at: datetime | None
+# ./backend/app/modules/questionnaires/utils.py
+import uuid
+from typing import Any
+
+from fastapi import HTTPException, status
+from sqlmodel import Session, select
+
+from app.modules.questionnaires.enums import QuestionType
+from app.modules.questionnaires.models import (
+    Question,
+    Questionnaire,
+    QuestionnaireTagLink,
+)
+from app.modules.questionnaires.schemas import (
+    AnswerSubmitRequest,
+)
+from app.modules.tags.models import Tag
+
+
+def get_questionnaire_tag_ids(
+    *,
+    session: Session,
+    questionnaire_id: uuid.UUID,
+) -> set[uuid.UUID]:
+    links = session.exec(
+        select(QuestionnaireTagLink).where(
+            QuestionnaireTagLink.questionnaire_id
+            == questionnaire_id
+        )
+    ).all()
+
+    return {link.tag_id for link in links}
+
+
+def get_questionnaire_tags(
+    *,
+    session: Session,
+    questionnaire_id: uuid.UUID,
+) -> list[Tag]:
+    links = session.exec(
+        select(QuestionnaireTagLink).where(
+            QuestionnaireTagLink.questionnaire_id
+            == questionnaire_id
+        )
+    ).all()
+
+    tags: list[Tag] = []
+
+    for link in links:
+        tag = session.get(Tag, link.tag_id)
+
+        if tag:
+            tags.append(tag)
+
+    return sorted(
+        tags,
+        key=lambda item: item.name.casefold(),
+    )
+
+
+def validate_questionnaire_answers(
+    *,
+    questionnaire: Questionnaire,
+    answers: list[AnswerSubmitRequest],
+) -> dict[uuid.UUID, Any]:
+    answers_by_question = {
+        answer.question_id: answer.value
+        for answer in answers
+    }
+
+    question_ids = {
+        question.id
+        for question in questionnaire.questions
+    }
+
+    unknown_ids = set(answers_by_question) - question_ids
+
+    if unknown_ids:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Передан ответ на неизвестный вопрос",
+        )
+
+    normalized_answers: dict[uuid.UUID, Any] = {}
+
+    for question in questionnaire.questions:
+        has_answer = question.id in answers_by_question
+
+        if question.is_required and not has_answer:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=(
+                    f"Не заполнен обязательный вопрос: "
+                    f"{question.text}"
+                ),
+            )
+
+        if not has_answer:
+            continue
+
+        value = answers_by_question[question.id]
+
+        if question.question_type == QuestionType.TEXT:
+            if not isinstance(value, str):
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Ожидается текст: {question.text}",
+                )
+
+        elif question.question_type == QuestionType.NUMBER:
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, (int, float))
+            ):
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Ожидается число: {question.text}",
+                )
+
+        elif question.question_type == QuestionType.BOOLEAN:
+            if not isinstance(value, bool):
+                raise HTTPException(
+                    status_code=422,
+                    detail=(
+                        f"Ожидается логическое значение: "
+                        f"{question.text}"
+                    ),
+                )
+
+        elif question.question_type == QuestionType.SCALE:
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, (int, float))
+            ):
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Ожидается число шкалы: {question.text}",
+                )
+
+            if (
+                value < question.scale_min
+                or value > question.scale_max
+            ):
+                raise HTTPException(
+                    status_code=422,
+                    detail=(
+                        f"Значение шкалы вне диапазона: "
+                        f"{question.text}"
+                    ),
+                )
+
+        elif (
+            question.question_type
+            == QuestionType.SINGLE_CHOICE
+        ):
+            option_ids = {
+                str(option.id)
+                for option in question.options
+            }
+
+            if str(value) not in option_ids:
+                raise HTTPException(
+                    status_code=422,
+                    detail=(
+                        f"Неизвестный вариант ответа: "
+                        f"{question.text}"
+                    ),
+                )
+
+            value = str(value)
+
+        elif (
+            question.question_type
+            == QuestionType.MULTIPLE_CHOICE
+        ):
+            if not isinstance(value, list):
+                raise HTTPException(
+                    status_code=422,
+                    detail=(
+                        f"Ожидается список вариантов: "
+                        f"{question.text}"
+                    ),
+                )
+
+            option_ids = {
+                str(option.id)
+                for option in question.options
+            }
+            selected_ids = [str(item) for item in value]
+
+            if not set(selected_ids).issubset(option_ids):
+                raise HTTPException(
+                    status_code=422,
+                    detail=(
+                        f"Передан неизвестный вариант: "
+                        f"{question.text}"
+                    ),
+                )
+
+            value = list(dict.fromkeys(selected_ids))
+
+        normalized_answers[question.id] = value
+
+    return normalized_answers
+
+def normalize_question_answer(
+    *,
+    question: Question,
+    value: Any,
+) -> Any:
+    if question.question_type == QuestionType.TEXT:
+        if not isinstance(value, str):
+            raise HTTPException(
+                status_code=422,
+                detail="Ожидается текстовый ответ",
+            )
+
+        return value
+
+    if question.question_type == QuestionType.NUMBER:
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+        ):
+            raise HTTPException(
+                status_code=422,
+                detail="Ожидается числовой ответ",
+            )
+
+        return value
+
+    if question.question_type == QuestionType.BOOLEAN:
+        if not isinstance(value, bool):
+            raise HTTPException(
+                status_code=422,
+                detail="Ожидается значение Да или Нет",
+            )
+
+        return value
+
+    if question.question_type == QuestionType.SCALE:
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+        ):
+            raise HTTPException(
+                status_code=422,
+                detail="Ожидается значение шкалы",
+            )
+
+        if (
+            value < question.scale_min
+            or value > question.scale_max
+        ):
+            raise HTTPException(
+                status_code=422,
+                detail="Значение находится вне диапазона шкалы",
+            )
+
+        return value
+
+    option_ids = {
+        str(option.id)
+        for option in question.options
+    }
+
+    if question.question_type == QuestionType.SINGLE_CHOICE:
+        normalized_value = str(value)
+
+        if normalized_value not in option_ids:
+            raise HTTPException(
+                status_code=422,
+                detail="Неизвестный вариант ответа",
+            )
+
+        return normalized_value
+
+    if question.question_type == QuestionType.MULTIPLE_CHOICE:
+        if not isinstance(value, list):
+            raise HTTPException(
+                status_code=422,
+                detail="Ожидается список вариантов",
+            )
+
+        normalized_values = list(
+            dict.fromkeys(
+                str(item)
+                for item in value
+            )
+        )
+
+        if not set(normalized_values).issubset(option_ids):
+            raise HTTPException(
+                status_code=422,
+                detail="Передан неизвестный вариант ответа",
+            )
+
+        return normalized_values
+
+    raise HTTPException(
+        status_code=422,
+        detail="Неизвестный тип вопроса",
+    )
+
+урезанные роуты опросников:
+# ./backend/app/modules/questionnaires/routers.py
+
+import uuid
+from datetime import datetime, timezone
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlmodel import Session, select
+from app.core.db import get_session
+from app.core.security import (
+    AuthContext,
+    get_current_auth,
+    require_roles,
+)
+from app.modules.content.utils import (
+    ensure_patient_content_access,
+    get_patient_profile_by_user_id,
+    patient_can_access_content,
+)
+from app.modules.events.enums import EventType
+from app.modules.events.service import record_event
+from app.modules.questionnaires.enums import (
+    QuestionnaireSubmissionStatus,
+)
+from app.modules.questionnaires.models import (
+    Question,
+    QuestionAnswer,
+    Questionnaire,
+    QuestionnaireSubmission,
+    QuestionnaireTagLink,
+    QuestionOption,
+)
+from app.modules.questionnaires.schemas import (
+    AnswerResponse,
+    AnswerSaveRequest,
+    AnswerSaveResponse,
+    QuestionOptionResponse,
+    QuestionnaireCopyRequest,
+    QuestionnaireCreateRequest,
+    QuestionnaireListItem,
+    QuestionnaireResponse,
+    QuestionnaireTagResponse,
+    QuestionnaireVisibilityRequest,
+    QuestionResponse,
+    SubmissionCompleteRequest,
+    SubmissionProgressItem,
+    SubmissionResponse,
+    SubmissionStartResponse,
+)
+from app.modules.questionnaires.utils import (
+    get_questionnaire_tag_ids,
+    get_questionnaire_tags,
+    normalize_question_answer,
+    validate_questionnaire_answers,
+)
+from app.modules.tags.models import Tag
+from app.modules.users.enums import UserRole
+from app.modules.assignments.enums import AssignmentType
+from app.modules.assignments.utils import (
+    mark_assignment_completed,
+    mark_assignment_in_progress,
+    patient_has_active_assignment,
+)
+from app.modules.notifications.enums import (
+    NotificationChannel,
+    NotificationType,
+)
+from app.modules.notifications.service import (
+    send_notification,
+)
+from app.modules.users.enums import (
+    DoctorPatientStatus,
+    UserRole,
+)
+from app.modules.users.models import (
+    DoctorPatientLink,
+    DoctorProfile,
+)
+from app.modules.programs.utils import (
+    sync_patient_program_enrollments,
+)
+
+def utc_now() -> datetime:
+    FUNCTION BODY
+    return datetime.now(timezone.utc)
+def serialize_questionnaire(
+    *,
+    session: Session,
+    questionnaire: Questionnaire,
+) -> QuestionnaireResponse:
+    FUNCTION BODY
+    return QuestionnaireResponse(
+        id=questionnaire.id,
+        title=questionnaire.title,
+        description=questionnaire.description,
+        pro_content=questionnaire.pro_content,
+        is_hidden=questionnaire.is_hidden,
+        copied_from_id=questionnaire.copied_from_id,
+        tags=[
+            QuestionnaireTagResponse(
+                id=tag.id,
+                name=tag.name,
+                description=tag.description,
+            )
+            for tag in tags
+        ],
+        questions=[
+            QuestionResponse(
+                id=question.id,
+                question_type=question.question_type,
+                text=question.text,
+                is_required=question.is_required,
+                order_index=question.order_index,
+                scale_min=question.scale_min,
+                scale_max=question.scale_max,
+                scale_min_label=question.scale_min_label,
+                scale_max_label=question.scale_max_label,
+                options=[
+                    QuestionOptionResponse(
+                        id=option.id,
+                        text=option.text,
+                        order_index=option.order_index,
+                    )
+                    for option in sorted(
+                        question.options,
+                        key=lambda item: item.order_index,
+                    )
+                ],
+            )
+            for question in questions
+        ],
+        created_by_user_id=questionnaire.created_by_user_id,
+        created_at=questionnaire.created_at,
+        hidden_at=questionnaire.hidden_at,
+    )
+def create_questionnaire_from_payload(
+    *,
+    session: Session,
+    payload: QuestionnaireCreateRequest,
+    created_by_user_id: uuid.UUID,
+    copied_from_id: uuid.UUID | None = None,
+) -> Questionnaire:
+    FUNCTION BODY
+    return questionnaire
+@@router.get("", response_model=list[QuestionnaireListItem])
+async def list_questionnaires(
+    auth: AuthContext = Depends(get_current_auth),
+    session: Session = Depends(get_session),
+) -> list[QuestionnaireListItem]:
+    FUNCTION BODY
+    return result
+@@router.get(
+    "/{questionnaire_id}",
+    response_model=QuestionnaireResponse,
+)
+async def get_questionnaire(
+    questionnaire_id: uuid.UUID,
+    program_id: uuid.UUID | None = None,
+    program_stage_id: uuid.UUID | None = None,
+    auth: AuthContext = Depends(get_current_auth),
+    session: Session = Depends(get_session),
+) -> QuestionnaireResponse:
+    FUNCTION BODY
+    return serialize_questionnaire(
+        session=session,
+        questionnaire=questionnaire,
+    )
+@@router.post(
+    "",
+    response_model=QuestionnaireResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_questionnaire(
+    payload: QuestionnaireCreateRequest,
+    auth: AuthContext = Depends(
+        require_roles(
+            UserRole.SUPERUSER,
+            UserRole.MED_ASSISTANT,
+        )
+    ),
+    session: Session = Depends(get_session),
+) -> QuestionnaireResponse:
+    FUNCTION BODY
+    return serialize_questionnaire(
+        session=session,
+        questionnaire=questionnaire,
+    )
+@@router.post(
+    "/{questionnaire_id}/copy",
+    response_model=QuestionnaireResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def copy_questionnaire(
+    questionnaire_id: uuid.UUID,
+    payload: QuestionnaireCopyRequest,
+    auth: AuthContext = Depends(
+        require_roles(
+            UserRole.SUPERUSER,
+            UserRole.MED_ASSISTANT,
+        )
+    ),
+    session: Session = Depends(get_session),
+) -> QuestionnaireResponse:
+    FUNCTION BODY
+    return serialize_questionnaire(
+        session=session,
+        questionnaire=copy,
+    )
+@@router.patch(
+    "/{questionnaire_id}/visibility",
+    response_model=QuestionnaireResponse,
+)
+async def change_questionnaire_visibility(
+    questionnaire_id: uuid.UUID,
+    payload: QuestionnaireVisibilityRequest,
+    _: AuthContext = Depends(
+        require_roles(
+            UserRole.SUPERUSER,
+            UserRole.MED_ASSISTANT,
+        )
+    ),
+    session: Session = Depends(get_session),
+) -> QuestionnaireResponse:
+    FUNCTION BODY
+    return serialize_questionnaire(
+        session=session,
+        questionnaire=questionnaire,
+    )
+@@router.post(
+    "/{questionnaire_id}/start",
+    response_model=SubmissionStartResponse,
+)
+async def start_questionnaire(
+    questionnaire_id: uuid.UUID,
+    program_id: uuid.UUID | None = None,
+    program_stage_id: uuid.UUID | None = None,
+    auth: AuthContext = Depends(
+        require_roles(UserRole.PATIENT)
+    ),
+    session: Session = Depends(get_session),
+) -> SubmissionStartResponse:
+    FUNCTION BODY
+    return SubmissionStartResponse(
+        submission_id=submission.id,
+        questionnaire_id=questionnaire.id,
+        status=submission.status,
+        started_at=submission.started_at,
+    )
+@@router.post(
+    "/submissions/{submission_id}/complete",
+    response_model=SubmissionResponse,
+)
+async def complete_questionnaire(
+    submission_id: uuid.UUID,
+    payload: SubmissionCompleteRequest,
+    auth: AuthContext = Depends(
+        require_roles(UserRole.PATIENT)
+    ),
+    session: Session = Depends(get_session),
+) -> SubmissionResponse:
+    FUNCTION BODY
+    return SubmissionResponse(
+        id=submission.id,
+        questionnaire_id=(
+            submission.questionnaire_id
+        ),
+        patient_id=submission.patient_id,
+        status=submission.status,
+        started_at=submission.started_at,
+        completed_at=submission.completed_at,
+        answers=response_answers,
+        program_id=submission.program_id,
+        program_stage_id=submission.program_stage_id,
+    )
+@@router.put(
+    "/submissions/{submission_id}/answer",
+    response_model=AnswerSaveResponse,
+)
+async def save_submission_answer(
+    submission_id: uuid.UUID,
+    payload: AnswerSaveRequest,
+    auth: AuthContext = Depends(
+        require_roles(UserRole.PATIENT)
+    ),
+    session: Session = Depends(get_session),
+) -> AnswerSaveResponse:
+    FUNCTION BODY
+    return AnswerSaveResponse(
+        submission_id=submission.id,
+        question_id=question.id,
+        value=answer.value_json,
+        saved_at=answer.created_at,
+    )
+@@router.get(
+    "/submissions/mine/progress",
+    response_model=list[SubmissionProgressItem],
+)
+async def get_my_questionnaire_progress(
+    auth: AuthContext = Depends(
+        require_roles(UserRole.PATIENT)
+    ),
+    session: Session = Depends(get_session),
+) -> list[SubmissionProgressItem]:
+    FUNCTION BODY
+    return result
+@@router.get(
+    "/submissions/{submission_id}",
+    response_model=SubmissionResponse,
+)
+async def get_submission(
+    submission_id: uuid.UUID,
+    auth: AuthContext = Depends(get_current_auth),
+    session: Session = Depends(get_session),
+) -> SubmissionResponse:
+    FUNCTION BODY
+    return SubmissionResponse(
+        id=submission.id,
+        questionnaire_id=submission.questionnaire_id,
+        patient_id=submission.patient_id,
+        status=submission.status,
+        started_at=submission.started_at,
+        completed_at=submission.completed_at,
+        answers=response_answers,
+        program_id=submission.program_id,
+        program_stage_id=submission.program_stage_id,
+    )
+
+"""program_home_fields
+
+Revision ID: 95f734785945
+Revises: 6042112705c7
+Create Date: 2026-09-07 00:43:00.920877
+
+"""
+from typing import Sequence, Union
+
+from alembic import op
+import sqlalchemy as sa
+import sqlmodel
+
+
+# revision identifiers, used by Alembic.
+revision: str = '95f734785945'
+down_revision: Union[str, Sequence[str], None] = '6042112705c7'
+branch_labels: Union[str, Sequence[str], None] = None
+depends_on: Union[str, Sequence[str], None] = None
+
+
+def upgrade() -> None:
+    """Upgrade schema."""
+    # ### commands auto generated by Alembic - please adjust! ###
+    with op.batch_alter_table('events', schema=None) as batch_op:
+        batch_op.drop_index(batch_op.f('ix_events_article_analytics'))
+
+    with op.batch_alter_table('invitations', schema=None) as batch_op:
+        batch_op.alter_column('invitation_type',
+               existing_type=sa.VARCHAR(length=8),
+               type_=sa.Enum('DOCTOR', 'PATIENT', 'RELATIVE', 'MED_ASSISTANT', 'SUPERUSER', name='invitationtype'),
+               existing_nullable=False)
+
+    with op.batch_alter_table('programs', schema=None) as batch_op:
+        batch_op.add_column(
+            sa.Column(
+                "is_start",
+                sa.Boolean(),
+                server_default=sa.false(),
+                nullable=False,
+            )
+        )
+        batch_op.add_column(
+            sa.Column(
+                "home_priority",
+                sa.Integer(),
+                server_default=sa.text("0"),
+                nullable=False,
+            )
+        )
+
+    # ### end Alembic commands ###
+
+
+def downgrade() -> None:
+    """Downgrade schema."""
+    # ### commands auto generated by Alembic - please adjust! ###
+    with op.batch_alter_table('programs', schema=None) as batch_op:
+        batch_op.drop_column('home_priority')
+        batch_op.drop_column('is_start')
+
+    with op.batch_alter_table('invitations', schema=None) as batch_op:
+        batch_op.alter_column('invitation_type',
+               existing_type=sa.Enum('DOCTOR', 'PATIENT', 'RELATIVE', 'MED_ASSISTANT', 'SUPERUSER', name='invitationtype'),
+               type_=sa.VARCHAR(length=8),
+               existing_nullable=False)
+
+    with op.batch_alter_table('events', schema=None) as batch_op:
+        batch_op.create_index(batch_op.f('ix_events_article_analytics'), ['subject_type', 'event_type', 'subject_id', 'occurred_at'], unique=False)
+
+    # ### end Alembic commands ###
+локально у меня база mysql, на сервере - Postgres
+
+Фронтенд:
+<!-- ./frontend/app/pages/dashboard.vue -->
+<script setup>
+const auth = useAuthStore()
+const userStore = useUserStore()
+
+const { isClientReady } = useClientReady()
+
+const roleNames = {
+  superuser: 'Суперпользователь',
+  med_assistant: 'Медицинский ассистент',
+  doctor: 'Врач',
+  patient: 'Пациент',
+  relative: 'Родственник',
+}
+
+const staffRoles = [
+  'doctor',
+  'med_assistant',
+  'superuser',
+]
+
+const activeRoleName = computed(() => {
+  if (!isClientReady.value) {
+    return ''
+  }
+
+  return (
+    roleNames[auth.activeRole]
+    || auth.activeRole
+    || ''
+  )
+})
+
+const isPatient = computed(() =>
+  isClientReady.value
+  && auth.activeRole === 'patient'
+)
+
+const isStaff = computed(() =>
+  isClientReady.value
+  && staffRoles.includes(auth.activeRole)
+)
+
+onMounted(async () => {
+  if (!userStore.user) {
+    await userStore.fetchMe()
+  }
+})
+</script>
+
+<template>
+  <div class="space-y-6">
+    <PatientHome v-if="isPatient" />
+
+    <!-- Приветствие -->
+    <section
+      v-if="!isPatient"
+      class="bg-base-100 border-base-300 rounded-3xl border p-5 sm:p-8"
+    >
+      <p
+        class="text-base-content/60 min-h-5 text-sm"
+      >
+        <span v-if="isClientReady">
+          {{ activeRoleName }}
+        </span>
+      </p>
+
+      <h1
+        class="mt-1 text-xl font-bold sm:text-2xl"
+      >
+        Здравствуйте,
+        {{ userStore.user?.first_name || 'пользователь' }}
+      </h1>
+    </section>
+
+    <!-- Dashboard сотрудников -->
+    <section
+      v-if="isStaff"
+      class="space-y-4"
+    >
+      <div
+        class="flex items-center justify-between gap-4"
+      >
+        <h2 class="text-xl font-bold sm:text-2xl">
+          Пациенты
+        </h2>
+
+        <NuxtLink
+          to="/patients"
+          class="btn btn-ghost btn-sm"
+        >
+          Открыть весь список
+        </NuxtLink>
+      </div>
+
+      <PatientsList
+        compact
+        :page-size="10"
+      />
+    </section>
+
+    <!-- Общие настройки -->
+    <section
+      v-if="!isPatient"
+      class="grid gap-4 md:grid-cols-2 xl:grid-cols-3"
+    >
+      <NuxtLink
+        to="/settings/security"
+        class="card bg-base-100 border-base-300 hover:border-primary border transition"
+      >
+        <div class="card-body">
+          <div
+            class="bg-primary/10 text-primary flex size-12 items-center justify-center rounded-2xl"
+          >
+            <Icon
+              name="lucide:shield-check"
+              class="size-6"
+            />
+          </div>
+
+          <h2 class="card-title mt-2">
+            Безопасность
+          </h2>
+
+          <p class="text-base-content/60 text-sm">
+            Добавьте passkey или измените пароль.
+          </p>
+        </div>
+      </NuxtLink>
+
+      <div
+        class="card bg-base-100 border-base-300 border"
+      >
+        <div class="card-body">
+          <div
+            class="bg-secondary/10 text-secondary flex size-12 items-center justify-center rounded-2xl"
+          >
+            <Icon
+              name="lucide:tags"
+              class="size-6"
+            />
+          </div>
+
+          <h2 class="card-title mt-2">
+            Активная роль
+          </h2>
+
+          <p
+            class="text-base-content/60 min-h-5 text-sm"
+          >
+            <span v-if="isClientReady">
+              {{ activeRoleName }}
+            </span>
+          </p>
+        </div>
+      </div>
+    </section>
+  </div>
+</template>
+
+<!-- ./frontend/app/pages/content/articles/index.vue -->
+<script setup>
+const auth = useAuthStore()
+const store = useArticlesStore()
+
+const errorMessage = ref('')
+const loadMoreElement = ref(null)
+
+let observer = null
+
+const canManage = computed(() =>
+  [
+    'superuser',
+    'med_assistant',
+  ].includes(auth.activeRole),
+)
+
+const canViewAnalytics = computed(() =>
+  [
+    'superuser',
+    'med_assistant',
+  ].includes(auth.activeRole),
+)
+
+async function toggleVisibility(article) {
+  errorMessage.value = ''
+
+  try {
+    await store.setVisibility(
+      article.id,
+      !article.is_hidden,
+    )
+
+    await store.fetchArticles({
+      reset: true,
+      limit: 5,
+    })
+  } catch (error) {
+    errorMessage.value =
+      error?.data?.detail
+      || 'Не удалось изменить видимость'
+  }
+}
+
+async function loadInitialArticles() {
+  await store.fetchArticles({
+    reset: true,
+    limit: 5,
+  })
+}
+
+async function loadMoreArticles() {
+  if (
+    store.loading
+    || !store.hasMore
+  ) {
+    return
+  }
+
+  await store.fetchArticles({
+    limit: 10,
+  })
+}
+
+onMounted(async () => {
+  await loadInitialArticles()
+
+  observer = new IntersectionObserver(
+    entries => {
+      if (entries[0]?.isIntersecting) {
+        loadMoreArticles()
+      }
+    },
+    {
+      rootMargin: '300px',
+    },
+  )
+
+  if (loadMoreElement.value) {
+    observer.observe(
+      loadMoreElement.value,
+    )
+  }
+})
+
+onBeforeUnmount(() => {
+  observer?.disconnect()
+})
+</script>
+
+<template>
+  <div class="space-y-6">
+    <header
+      class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
+    >
+      <div>
+        <h1 class="text-2xl font-bold sm:text-3xl">
+          Статьи
+        </h1>
+
+        <p class="text-base-content/60 mt-1">
+          Материалы для пациентов.
+        </p>
+      </div>
+      <ClientOnly>
+        <NuxtLink
+          v-if="canManage"
+          to="/content/articles/new"
+          class="btn btn-primary"
+        >
+          <Icon
+            name="lucide:plus"
+            class="size-4"
+          />
+          Новая статья
+        </NuxtLink>
+      </ClientOnly>
+    </header>
+
+    <div
+      v-if="errorMessage"
+      class="alert alert-error"
+    >
+      {{ errorMessage }}
+    </div>
+
+    <!-- Полноэкранный loader только при первой загрузке. -->
+    <div
+      v-if="store.loading && !store.articles.length"
+      class="flex justify-center py-16"
+    >
+      <span
+        class="loading loading-spinner loading-lg text-primary"
+      />
+    </div>
+
+    <div
+      v-else-if="store.articles.length"
+      class="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3"
+    >
+      <ArticlesCard
+        v-for="article in store.articles"
+        :key="article.id"
+        :article="article"
+        :can-manage="canManage"
+        :show-analytics="canViewAnalytics"
+        @toggle-visibility="toggleVisibility"
+      />
+    </div>
+
+    <div
+      v-else
+      class="bg-base-100 border-base-300 rounded-2xl border border-dashed p-10 text-center"
+    >
+      <Icon
+        name="lucide:file-text"
+        class="text-base-content/30 mx-auto size-12"
+      />
+
+      <p class="mt-4 font-medium">
+        Статей пока нет
+      </p>
+    </div>
+
+    <!-- Sentinel для автоматической подгрузки. -->
+    <div
+      v-if="store.hasMore"
+      ref="loadMoreElement"
+      class="flex justify-center py-8"
+    >
+      <span
+        v-if="store.loading"
+        class="loading loading-spinner text-primary"
+      />
+
+      <button
+        v-else
+        type="button"
+        class="btn btn-ghost btn-sm"
+        @click="loadMoreArticles"
+      >
+        Загрузить ещё
+      </button>
+    </div>
+  </div>
+</template>
+
+<!-- ./frontend/app/pages/content/articles/new.vue -->
+<script setup>
+const store = useArticlesStore()
+
+const saving = ref(false)
+const errorMessage = ref('')
+
+async function save(payload) {
+  saving.value = true
+  errorMessage.value = ''
+
+  try {
+    const article = await store.createArticle(payload)
+
+    await navigateTo(
+      `/content/articles/${article.id}`,
+    )
+  } catch (error) {
+    errorMessage.value =
+      error?.data?.detail
+      || 'Не удалось создать статью'
+  } finally {
+    saving.value = false
+  }
+}
+</script>
+
+<template>
+  <div class="mx-auto max-w-5xl space-y-6">
+    <header>
+      <h1 class="text-2xl font-bold sm:text-3xl">
+        Новая статья
+      </h1>
+    </header>
+
+    <div
+      v-if="errorMessage"
+      class="alert alert-error"
+    >
+      {{ errorMessage }}
+    </div>
+
+    <ArticlesForm
+      :saving="saving"
+      @submit="save"
+      @cancel="navigateTo('/content/articles')"
+    />
+  </div>
+</template>
+
+<!-- ./frontend/app/components/articles/Form.vue -->
+<script setup>
+const props = defineProps({
+  initialValue: {
+    type: Object,
+    default: null,
+  },
+  saving: {
+    type: Boolean,
+    default: false,
+  },
+  submitLabel: {
+    type: String,
+    default: 'Сохранить статью',
+  },
+})
+
+const emit = defineEmits([
+  'submit',
+  'cancel',
+])
+
+const { $api } = useNuxtApp()
+
+const tags = ref([])
+const loadingTags = ref(false)
+
+const previewOpen = ref(false)
+const errorMessage = ref('')
+
+const form = reactive({
+  title: '',
+  content: '',
+  tag_ids: [],
+  pro_content: true,
+})
+
+function applyInitialValue(value) {
+  if (!value) return
+
+  form.title = value.title || ''
+  form.content = value.content || ''
+  form.tag_ids = (value.tags || []).map(
+    (tag) => tag.id,
+  )
+  form.pro_content = Boolean(value.pro_content)
+}
+
+async function loadTags() {
+  loadingTags.value = true
+
+  try {
+    tags.value = await $api('/api/v1/tags')
+  } finally {
+    loadingTags.value = false
+  }
+}
+
+function submit() {
+  errorMessage.value = ''
+
+  if (!form.title.trim()) {
+    errorMessage.value = 'Введите название статьи'
+    return
+  }
+
+  if (!form.content.trim() || form.content === '<p></p>') {
+    errorMessage.value = 'Введите текст статьи'
+    return
+  }
+
+  emit('submit', {
+    title: form.title.trim(),
+    content: form.content,
+    tag_ids: form.tag_ids,
+    pro_content: form.pro_content,
+  })
+}
+
+watch(
+  () => props.initialValue,
+  applyInitialValue,
+  {
+    immediate: true,
+  },
+)
+
+onMounted(loadTags)
+</script>
+
+<template>
+  <form
+    class="space-y-6"
+    @submit.prevent="submit"
+  >
+    <div
+      v-if="errorMessage"
+      class="alert alert-error"
+    >
+      <Icon
+        name="lucide:circle-alert"
+        class="size-5"
+      />
+      <span>{{ errorMessage }}</span>
+    </div>
+
+    <section
+      class="bg-base-100 border-base-300 rounded-2xl border p-4 sm:p-6"
+    >
+      <div class="space-y-5">
+        <label class="form-control block">
+          <span class="label">
+            <span class="label-text font-medium">
+              Название статьи
+            </span>
+          </span>
+
+          <input
+            v-model="form.title"
+            type="text"
+            maxlength="300"
+            required
+            class="input input-bordered w-full"
+            placeholder="Введите название"
+          >
+        </label>
+
+        <div>
+          <div class="mb-2 flex items-center justify-between">
+            <span class="font-medium">
+              Текст статьи
+            </span>
+
+            <button
+              type="button"
+              class="btn btn-ghost btn-sm"
+              :disabled="!form.content"
+              @click="previewOpen = true"
+            >
+              <Icon
+                name="lucide:eye"
+                class="size-4"
+              />
+              Предпросмотр
+            </button>
+          </div>
+
+          <ContentRichTextEditor
+            v-model="form.content"
+            placeholder="Введите текст статьи..."
+          />
+        </div>
+
+        <div>
+          <p class="mb-3 font-medium">
+            Теги
+          </p>
+
+          <ContentTagSelector
+            v-model="form.tag_ids"
+            :tags="tags"
+            :loading="loadingTags"
+          />
+        </div>
+
+        <label
+          class="border-base-300 flex cursor-pointer items-start justify-between gap-4 rounded-2xl border p-4"
+        >
+          <span>
+            <span class="block font-medium">
+              Профессиональный контент
+            </span>
+
+            <span
+              class="text-base-content/60 mt-1 block text-sm"
+            >
+              Доступен пациенту только после включения
+              доступа Pro.
+            </span>
+          </span>
+
+          <input
+            v-model="form.pro_content"
+            type="checkbox"
+            class="toggle toggle-primary shrink-0"
+          >
+        </label>
+      </div>
+    </section>
+
+    <div
+      class="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end"
+    >
+      <button
+        type="button"
+        class="btn"
+        :disabled="saving"
+        @click="emit('cancel')"
+      >
+        Отмена
+      </button>
+
+      <button
+        type="submit"
+        class="btn btn-primary"
+        :disabled="saving"
+      >
+        <span
+          v-if="saving"
+          class="loading loading-spinner loading-sm"
+        />
+
+        {{ submitLabel }}
+      </button>
+    </div>
+  </form>
+
+  <UiResponsiveDialog
+    v-model="previewOpen"
+    title="Предпросмотр статьи"
+    max-width-class="max-w-3xl"
+  >
+    <article>
+      <h1 class="mb-6 text-2xl font-bold sm:text-3xl">
+        {{ form.title || 'Без названия' }}
+      </h1>
+
+      <ContentRichTextRenderer
+        :content="form.content"
+      />
+    </article>
+  </UiResponsiveDialog>
+</template>
+
+<!-- frontend\app\components\articles\Card.vue -->
+ <script setup>
+const props = defineProps({
+  article: {
+    type: Object,
+    required: true,
+  },
+
+  canManage: {
+    type: Boolean,
+    default: false,
+  },
+
+  showAnalytics: {
+    type: Boolean,
+    default: false,
+  },
+})
+
+const emit = defineEmits([
+  'toggle-visibility',
+])
+
+const openedCount = computed(
+  () => props.article.opened_count ?? 0,
+)
+
+const readCount = computed(
+  () => props.article.read_count ?? 0,
+)
+
+const readRate = computed(() => {
+  const value = Number(
+    props.article.read_rate ?? 0,
+  )
+
+  return new Intl.NumberFormat(
+    'ru-RU',
+    {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 1,
+    },
+  ).format(value)
+})
+
+const articleRoute = computed(() => ({
+  path: `/content/articles/${props.article.id}`,
+  query: {
+    source: 'library',
+  },
+}))
+
+function toggleVisibility() {
+  emit(
+    'toggle-visibility',
+    props.article,
+  )
+}
+</script>
+
+<template>
+  <article
+    class="card bg-base-100 border-base-300 overflow-hidden border"
+    :class="{
+      'opacity-60': article.is_hidden,
+    }"
+  >
+    <div class="card-body">
+      <div class="flex flex-wrap gap-2">
+        <span
+          v-if="article.pro_content"
+          class="badge badge-secondary"
+        >
+          Pro
+        </span>
+
+        <span
+          v-if="article.is_hidden"
+          class="badge badge-warning"
+        >
+          Скрыта
+        </span>
+      </div>
+
+      <h2 class="card-title">
+        {{ article.title }}
+      </h2>
+
+      <div
+        v-if="article.tags?.length"
+        class="flex flex-wrap gap-1"
+      >
+        <span
+          v-for="tag in article.tags"
+          :key="tag.id"
+          class="badge badge-outline badge-sm"
+        >
+          {{ tag.name }}
+        </span>
+      </div>
+
+      <div
+        v-if="showAnalytics"
+        class="text-base-content/60 flex items-center gap-3 text-xs"
+        >
+        <div
+            class="tooltip tooltip-bottom"
+            data-tip="Открытия"
+        >
+            <span class="flex cursor-help items-center gap-1">
+            <Icon
+                name="lucide:mouse-pointer-click"
+                class="text-primary size-3.5"
+            />
+            <span class="font-medium">
+                {{ openedCount }}
+            </span>
+            </span>
+        </div>
+
+        <div
+            class="tooltip tooltip-bottom"
+            data-tip="Прочтения"
+        >
+            <span class="flex cursor-help items-center gap-1">
+            <Icon
+                name="lucide:book-open-check"
+                class="text-success size-3.5"
+            />
+            <span class="font-medium">
+                {{ readCount }}
+            </span>
+            </span>
+        </div>
+
+        <div
+            class="tooltip tooltip-bottom"
+            data-tip="Дочитали"
+        >
+            <span class="flex cursor-help items-center gap-1">
+            <Icon
+                name="lucide:percent"
+                class="text-secondary size-3.5"
+            />
+            <span class="font-medium">
+                {{ readRate }}%
+            </span>
+            </span>
+        </div>
+        </div>
+
+      <div class="card-actions mt-auto pt-4">
+        <NuxtLink
+          :to="articleRoute"
+          class="btn btn-sm"
+        >
+          <Icon
+            name="lucide:book-open"
+            class="size-4"
+          />
+
+          Открыть
+        </NuxtLink>
+        <ClientOnly>
+             <NuxtLink
+                v-if="canManage"
+                :to="`/content/articles/${article.id}/edit`"
+                class="btn btn-sm btn-outline"
+                >
+                <Icon
+                    name="lucide:pencil"
+                    class="size-4"
+                />
+
+                Редактировать
+                </NuxtLink>
+        </ClientOnly>
+
+        <button
+          v-if="canManage"
+          type="button"
+          class="btn btn-sm btn-ghost"
+          @click="toggleVisibility"
+        >
+          <Icon
+            :name="
+              article.is_hidden
+                ? 'lucide:eye'
+                : 'lucide:eye-off'
+            "
+            class="size-4"
+          />
+
+          {{
+            article.is_hidden
+              ? 'Показать'
+              : 'Скрыть'
+          }}
+        </button>
+      </div>
+    </div>
+  </article>
+</template>
+<!-- ./frontend/app/pages/questionnaires/[id].vue -->
+<script setup>
+const route = useRoute()
+const store = useQuestionnairesStore()
+
+const questionnaire = ref(null)
+const submissionId = ref(null)
+
+const answers = reactive({})
+const savingQuestions = reactive({})
+
+const loading = ref(true)
+const completing = ref(false)
+const completed = ref(false)
+
+const errorMessage = ref('')
+
+const saveTimers = new Map()
+
+const answeredCount = computed(() =>
+  questionnaire.value?.questions.filter(
+    (question) =>
+      answers[question.id] !== undefined
+      && answers[question.id] !== null
+      && answers[question.id] !== '',
+  ).length || 0
+)
+
+const progress = computed(() => {
+  const total =
+    questionnaire.value?.questions.length || 0
+
+  return total
+    ? Math.round(answeredCount.value / total * 100)
+    : 0
+})
+
+async function initialize() {
+  loading.value = true
+
+  try {
+    questionnaire.value =
+      await store.fetchQuestionnaire(
+        route.params.id,
+      )
+
+    const allProgress =
+      await store.fetchMyProgress()
+
+    const existing = allProgress.find(
+      (item) =>
+        item.questionnaire_id === route.params.id
+        && item.status === 'in_progress',
+    )
+
+    if (existing) {
+      submissionId.value = existing.submission_id
+
+      const submission =
+        await store.fetchSubmission(
+          existing.submission_id,
+        )
+
+      for (const answer of submission.answers) {
+        answers[answer.question_id] = answer.value
+      }
+    } else {
+      const submission =
+        await store.startQuestionnaire(
+          route.params.id,
+        )
+
+      submissionId.value = submission.submission_id
+    }
+  } catch (error) {
+    errorMessage.value =
+      error?.data?.detail
+      || 'Не удалось открыть опросник'
+  } finally {
+    loading.value = false
+  }
+}
+
+function scheduleAnswerSave(question) {
+  const oldTimer = saveTimers.get(question.id)
+
+  if (oldTimer) {
+    window.clearTimeout(oldTimer)
+  }
+
+  const timer = window.setTimeout(async () => {
+    savingQuestions[question.id] = true
+
+    try {
+      await store.saveAnswer(
+        submissionId.value,
+        question.id,
+        answers[question.id],
+      )
+    } catch (error) {
+      errorMessage.value =
+        error?.data?.detail
+        || 'Не удалось сохранить ответ'
+    } finally {
+      savingQuestions[question.id] = false
+      saveTimers.delete(question.id)
+    }
+  }, 500)
+
+  saveTimers.set(question.id, timer)
+}
+
+async function complete() {
+  errorMessage.value = ''
+
+  const missingRequired =
+    questionnaire.value.questions.find(
+      (question) =>
+        question.is_required
+        && (
+          answers[question.id] === undefined
+          || answers[question.id] === null
+          || answers[question.id] === ''
+        ),
+    )
+
+  if (missingRequired) {
+    errorMessage.value =
+      `Ответьте на обязательный вопрос: ${missingRequired.text}`
+
+    document
+      .getElementById(
+        `question-${missingRequired.id}`,
+      )
+      ?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      })
+
+    return
+  }
+
+  completing.value = true
+
+  try {
+    const payload = questionnaire.value.questions
+      .filter(
+        (question) =>
+          answers[question.id] !== undefined,
+      )
+      .map((question) => ({
+        question_id: question.id,
+        value: answers[question.id],
+      }))
+
+    await store.completeSubmission(
+      submissionId.value,
+      payload,
+    )
+
+    completed.value = true
+  } catch (error) {
+    errorMessage.value =
+      error?.data?.detail
+      || 'Не удалось завершить опросник'
+  } finally {
+    completing.value = false
+  }
+}
+
+onMounted(initialize)
+
+onBeforeUnmount(() => {
+  for (const timer of saveTimers.values()) {
+    window.clearTimeout(timer)
+  }
+})
+</script>
+
+<template>
+  <UiContentSkeleton
+    v-if="loading"
+    variant="card"
+    :count="3"
+  />
+
+  <div
+    v-else-if="errorMessage && !questionnaire"
+    class="alert alert-error"
+  >
+    {{ errorMessage }}
+  </div>
+
+  <div
+    v-else-if="completed"
+    class="bg-base-100 border-base-300 mx-auto max-w-2xl rounded-3xl border p-8 text-center"
+  >
+    <Icon
+      name="lucide:circle-check-big"
+      class="text-success mx-auto size-16"
+    />
+
+    <h1 class="mt-5 text-2xl font-bold">
+      Опросник заполнен
+    </h1>
+
+    <NuxtLink
+      to="/questionnaires"
+      class="btn btn-primary mt-6"
+    >
+      Вернуться к опросникам
+    </NuxtLink>
+  </div>
+
+  <div
+    v-else-if="questionnaire"
+    class="mx-auto max-w-3xl space-y-6"
+  >
+    <header
+      class="bg-base-100 border-base-300 rounded-3xl border p-5 sm:p-7"
+    >
+      <h1 class="text-2xl font-bold sm:text-3xl">
+        {{ questionnaire.title }}
+      </h1>
+
+      <p
+        v-if="questionnaire.description"
+        class="text-base-content/60 mt-2"
+      >
+        {{ questionnaire.description }}
+      </p>
+
+      <div class="mt-5">
+        <div class="mb-2 flex justify-between text-sm">
+          <span>
+            Заполнено {{ answeredCount }} из
+            {{ questionnaire.questions.length }}
+          </span>
+
+          <strong>{{ progress }}%</strong>
+        </div>
+
+        <progress
+          class="progress progress-primary w-full"
+          :value="progress"
+          max="100"
+        />
+      </div>
+    </header>
+
+    <div
+      v-if="errorMessage"
+      class="alert alert-error"
+    >
+      {{ errorMessage }}
+    </div>
+
+    <section class="space-y-4">
+      <article
+        v-for="(question, index) in questionnaire.questions"
+        :id="`question-${question.id}`"
+        :key="question.id"
+        class="bg-base-100 border-base-300 rounded-2xl border p-4 sm:p-6"
+      >
+        <div class="mb-5 flex items-start gap-3">
+          <div
+            class="bg-primary text-primary-content flex size-8 shrink-0 items-center justify-center rounded-full text-sm font-bold"
+          >
+            {{ index + 1 }}
+          </div>
+
+          <div class="min-w-0 flex-1">
+            <h2 class="font-semibold sm:text-lg">
+              {{ question.text }}
+            </h2>
+
+            <span
+              v-if="question.is_required"
+              class="text-error text-xs"
+            >
+              Обязательный вопрос
+            </span>
+          </div>
+
+          <span
+            v-if="savingQuestions[question.id]"
+            class="loading loading-spinner loading-xs"
+          />
+        </div>
+
+        <QuestionnairesQuestionField
+          v-model="answers[question.id]"
+          :question="question"
+          @update:model-value="
+            scheduleAnswerSave(question)
+          "
+        />
+      </article>
+    </section>
+
+    <div
+      class="bg-base-100 border-base-300 sticky bottom-3 rounded-2xl border p-3 shadow-xl"
+    >
+      <button
+        type="button"
+        class="btn btn-primary w-full"
+        :disabled="completing"
+        @click="complete"
+      >
+        <span
+          v-if="completing"
+          class="loading loading-spinner loading-sm"
+        />
+
+        Завершить опросник
+      </button>
+    </div>
+  </div>
+</template>
+
+<!-- ./frontend/app/pages/content/questionnaires/new.vue -->
+<script setup>
+</script>
+
+<template>
+  <div class="mx-auto max-w-5xl">
+    <QuestionnairesEditor />
+  </div>
+</template>
+
+<!-- ./frontend/app/components/questionnaires/Editor.vue -->
+<script setup>
+const route = useRoute()
+const { $api } = useNuxtApp()
+const store = useQuestionnairesStore()
+
+const saving = ref(false)
+const loading = ref(false)
+const loadingTags = ref(false)
+
+const tags = ref([])
+
+const importOpen = ref(false)
+const errorMessage = ref('')
+
+const form = reactive(createEmptyForm())
+
+function createEmptyQuestion() {
+  return {
+    client_id: crypto.randomUUID(),
+    question_type: 'text',
+    text: '',
+    is_required: true,
+    order_index: 0,
+
+    scale_min: null,
+    scale_max: null,
+    scale_min_label: null,
+    scale_max_label: null,
+
+    options: [],
+  }
+}
+
+function createEmptyForm() {
+  return {
+    title: '',
+    description: '',
+    pro_content: true,
+    tag_ids: [],
+    copied_from_id: null,
+    questions: [
+      createEmptyQuestion(),
+    ],
+  }
+}
+
+function applyForm(data) {
+  form.title = data.title || ''
+  form.description = data.description || ''
+  form.pro_content = data.pro_content !== false
+  form.tag_ids = data.tag_ids || []
+  form.copied_from_id =
+    data.copied_from_id || null
+
+  form.questions = (data.questions || []).map(
+    (question, questionIndex) => ({
+      client_id:
+        question.client_id
+        || crypto.randomUUID(),
+
+      question_type: question.question_type,
+      text: question.text || '',
+      is_required:
+        question.is_required !== false,
+      order_index: questionIndex,
+
+      scale_min: question.scale_min ?? null,
+      scale_max: question.scale_max ?? null,
+      scale_min_label:
+        question.scale_min_label ?? null,
+      scale_max_label:
+        question.scale_max_label ?? null,
+
+      options: (question.options || []).map(
+        (option, optionIndex) => ({
+          client_id:
+            option.client_id
+            || crypto.randomUUID(),
+          text: option.text || '',
+          order_index: optionIndex,
+        }),
+      ),
+    }),
+  )
+
+  if (!form.questions.length) {
+    form.questions = [
+      createEmptyQuestion(),
+    ]
+  }
+}
+
+async function loadTags() {
+  loadingTags.value = true
+
+  try {
+    tags.value = await $api('/api/v1/tags')
+  } finally {
+    loadingTags.value = false
+  }
+}
+
+async function loadCopySource() {
+  const sourceId = route.query.copy
+
+  if (typeof sourceId !== 'string') return
+
+  loading.value = true
+
+  try {
+    const source =
+      await store.fetchQuestionnaire(sourceId)
+
+    applyForm({
+      title: `${source.title} — копия`,
+      description: source.description,
+      pro_content: source.pro_content,
+      tag_ids: source.tags.map((tag) => tag.id),
+      copied_from_id: source.id,
+      questions: source.questions,
+    })
+  } catch (error) {
+    errorMessage.value =
+      error?.data?.detail
+      || 'Не удалось загрузить исходный опросник'
+  } finally {
+    loading.value = false
+  }
+}
+
+function addQuestion() {
+  const question = createEmptyQuestion()
+  question.order_index = form.questions.length
+
+  form.questions.push(question)
+}
+
+function removeQuestion(index) {
+  if (form.questions.length === 1) {
+    errorMessage.value =
+      'Опросник должен содержать хотя бы один вопрос'
+    return
+  }
+
+  form.questions.splice(index, 1)
+  reindexQuestions()
+}
+
+function moveQuestion(index, direction) {
+  const targetIndex = index + direction
+
+  if (
+    targetIndex < 0
+    || targetIndex >= form.questions.length
+  ) {
+    return
+  }
+
+  const temporary = form.questions[index]
+  form.questions[index] = form.questions[targetIndex]
+  form.questions[targetIndex] = temporary
+
+  reindexQuestions()
+}
+
+function reindexQuestions() {
+  form.questions.forEach((question, index) => {
+    question.order_index = index
+
+    question.options.forEach((option, optionIndex) => {
+      option.order_index = optionIndex
+    })
+  })
+}
+
+function validateForm() {
+  if (!form.title.trim()) {
+    return 'Введите название опросника'
+  }
+
+  if (!form.questions.length) {
+    return 'Добавьте хотя бы один вопрос'
+  }
+
+  for (
+    let index = 0;
+    index < form.questions.length;
+    index += 1
+  ) {
+    const question = form.questions[index]
+
+    if (!question.text.trim()) {
+      return `Введите текст вопроса №${index + 1}`
+    }
+
+    if (
+      [
+        'single_choice',
+        'multiple_choice',
+      ].includes(question.question_type)
+    ) {
+      if (question.options.length < 2) {
+        return (
+          `У вопроса №${index + 1} должно быть `
+          + 'не менее двух вариантов'
+        )
+      }
+
+      if (
+        question.options.some(
+          (option) => !option.text.trim(),
+        )
+      ) {
+        return (
+          `Заполните варианты ответа `
+          + `в вопросе №${index + 1}`
+        )
+      }
+    }
+
+    if (
+      question.question_type === 'scale'
+      && question.scale_max <= question.scale_min
+    ) {
+      return (
+        `В вопросе №${index + 1} максимум `
+        + 'должен быть больше минимума'
+      )
+    }
+  }
+
+  return null
+}
+
+function buildPayload() {
+  reindexQuestions()
+
+  return {
+    title: form.title.trim(),
+    description:
+      form.description.trim() || null,
+    pro_content: form.pro_content,
+    tag_ids: form.tag_ids,
+    copied_from_id: form.copied_from_id,
+
+    questions: form.questions.map(
+      (question, questionIndex) => ({
+        question_type: question.question_type,
+        text: question.text.trim(),
+        is_required: question.is_required,
+        order_index: questionIndex,
+
+        scale_min:
+          question.question_type === 'scale'
+            ? question.scale_min
+            : null,
+
+        scale_max:
+          question.question_type === 'scale'
+            ? question.scale_max
+            : null,
+
+        scale_min_label:
+          question.question_type === 'scale'
+            ? question.scale_min_label || null
+            : null,
+
+        scale_max_label:
+          question.question_type === 'scale'
+            ? question.scale_max_label || null
+            : null,
+
+        options: [
+          'single_choice',
+          'multiple_choice',
+        ].includes(question.question_type)
+          ? question.options.map(
+              (option, optionIndex) => ({
+                text: option.text.trim(),
+                order_index: optionIndex,
+              }),
+            )
+          : [],
+      }),
+    ),
+  }
+}
+
+async function save() {
+  errorMessage.value = validateForm() || ''
+
+  if (errorMessage.value) return
+
+  saving.value = true
+
+  try {
+    const questionnaire =
+      await store.createQuestionnaire(
+        buildPayload(),
+      )
+
+    await navigateTo('/content/questionnaires')
+  } catch (error) {
+    errorMessage.value =
+      error?.data?.detail
+      || 'Не удалось создать опросник'
+  } finally {
+    saving.value = false
+  }
+}
+
+function handleImport(data) {
+  applyForm(data)
+  errorMessage.value = ''
+}
+
+function downloadJson() {
+  const payload = buildPayload()
+
+  const blob = new Blob(
+    [
+      JSON.stringify(payload, null, 2),
+    ],
+    {
+      type: 'application/json',
+    },
+  )
+
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+
+  anchor.href = url
+  anchor.download = 'questionnaire.json'
+  anchor.click()
+
+  URL.revokeObjectURL(url)
+}
+
+onMounted(async () => {
+  await Promise.all([
+    loadTags(),
+    loadCopySource(),
+  ])
+})
+</script>
+
+<template>
+  <div class="space-y-6">
+    <header
+      class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
+    >
+      <div>
+        <h1 class="text-2xl font-bold sm:text-3xl">
+          Новый опросник
+        </h1>
+
+        <p class="text-base-content/60 mt-1">
+          После сохранения опросник нельзя редактировать.
+        </p>
+      </div>
+
+      <div class="flex flex-col gap-2 sm:flex-row">
+        <button
+          type="button"
+          class="btn btn-outline"
+          @click="downloadJson"
+        >
+          <Icon
+            name="lucide:download"
+            class="size-4"
+          />
+          Скачать JSON
+        </button>
+
+        <button
+          type="button"
+          class="btn btn-outline"
+          @click="importOpen = true"
+        >
+          <Icon
+            name="lucide:upload"
+            class="size-4"
+          />
+          Загрузить JSON
+        </button>
+      </div>
+    </header>
+
+    <div
+      v-if="errorMessage"
+      class="alert alert-error"
+    >
+      <Icon
+        name="lucide:circle-alert"
+        class="size-5"
+      />
+      <span>{{ errorMessage }}</span>
+    </div>
+
+    <div
+      v-if="loading"
+      class="flex justify-center py-16"
+    >
+      <span
+        class="loading loading-spinner loading-lg text-primary"
+      />
+    </div>
+
+    <template v-else>
+      <section
+        class="bg-base-100 border-base-300 space-y-5 rounded-2xl border p-4 sm:p-6"
+      >
+        <label class="form-control block">
+          <span class="label-text mb-2 font-medium">
+            Название
+          </span>
+
+          <input
+            v-model="form.title"
+            type="text"
+            maxlength="300"
+            class="input input-bordered w-full"
+          >
+        </label>
+
+        <label class="form-control block">
+          <span class="label-text mb-2 font-medium">
+            Описание
+          </span>
+
+          <textarea
+            v-model="form.description"
+            class="textarea textarea-bordered min-h-28 w-full"
+          />
+        </label>
+
+        <div>
+          <p class="mb-3 font-medium">
+            Теги
+          </p>
+
+          <ContentTagSelector
+            v-model="form.tag_ids"
+            :tags="tags"
+            :loading="loadingTags"
+          />
+        </div>
+
+        <label
+          class="border-base-300 flex cursor-pointer items-center justify-between gap-4 rounded-2xl border p-4"
+        >
+          <span>
+            <span class="block font-medium">
+              Профессиональный контент
+            </span>
+
+            <span
+              class="text-base-content/60 text-sm"
+            >
+              Требует доступа Pro.
+            </span>
+          </span>
+
+          <input
+            v-model="form.pro_content"
+            type="checkbox"
+            class="toggle toggle-primary"
+          >
+        </label>
+      </section>
+
+      <section class="space-y-4">
+        <QuestionnairesQuestionItem
+          v-for="(question, index) in form.questions"
+          :key="question.client_id"
+          v-model="form.questions[index]"
+          :index="index"
+          :total="form.questions.length"
+          @remove="removeQuestion(index)"
+          @move-up="moveQuestion(index, -1)"
+          @move-down="moveQuestion(index, 1)"
+        />
+
+        <button
+          type="button"
+          class="btn btn-outline w-full"
+          @click="addQuestion"
+        >
+          <Icon
+            name="lucide:plus"
+            class="size-5"
+          />
+          Добавить вопрос
+        </button>
+      </section>
+
+      <div
+        class="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end"
+      >
+        <NuxtLink
+          to="/content/questionnaires"
+          class="btn"
+        >
+          Отмена
+        </NuxtLink>
+
+        <button
+          type="button"
+          class="btn btn-primary"
+          :disabled="saving"
+          @click="save"
+        >
+          <span
+            v-if="saving"
+            class="loading loading-spinner loading-sm"
+          />
+
+          Создать опросник
+        </button>
+      </div>
+    </template>
+  </div>
+
+  <QuestionnairesJsonImporter
+    v-model="importOpen"
+    @import="handleImport"
+  />
+</template>
+
+// ./frontend/app/stores/articles.js
+export const useArticlesStore = defineStore(
+  'articles',
+  () => {
+    const articles = ref([])
+    const currentArticle = ref(null)
+    const loading = ref(false)
+
+    const hasMore = ref(true)
+
+    async function fetchArticles({
+      reset = false,
+      limit = 5,
+    } = {}) {
+      const { $api } = useNuxtApp()
+
+      if (loading.value) return articles.value
+
+      if (reset) {
+        articles.value = []
+        hasMore.value = true
+      }
+
+      if (!hasMore.value) {
+        return articles.value
+      }
+
+      loading.value = true
+
+      try {
+        const page = await $api(
+          '/api/v1/articles',
+          {
+            query: {
+              offset: articles.value.length,
+              limit,
+            },
+          },
+        )
+
+        const existingIds = new Set(
+          articles.value.map(
+            article => article.id,
+          ),
+        )
+
+        const newItems = page.filter(
+          article => !existingIds.has(article.id),
+        )
+
+        articles.value.push(...newItems)
+
+        hasMore.value = page.length === limit
+
+        return articles.value
+      } finally {
+        loading.value = false
+      }
+    }
+
+    async function fetchArticle(
+      articleId,
+      {
+        programId = null,
+        programStageId = null,
+      } = {},
+    ) {
+      const { $api } = useNuxtApp()
+
+      loading.value = true
+
+      try {
+        currentArticle.value = await $api(
+          `/api/v1/articles/${articleId}`,
+          {
+            query: {
+              program_id: programId || undefined,
+              program_stage_id:
+                programStageId || undefined,
+            },
+          },
+        )
+
+        return currentArticle.value
+      } finally {
+        loading.value = false
+      }
+    }
+
+    async function createArticle(payload) {
+      const { $api } = useNuxtApp()
+
+      return await $api('/api/v1/articles', {
+        method: 'POST',
+        body: payload,
+      })
+    }
+
+    async function updateArticle(
+      articleId,
+      payload,
+    ) {
+      const { $api } = useNuxtApp()
+
+      return await $api(
+        `/api/v1/articles/${articleId}`,
+        {
+          method: 'PATCH',
+          body: payload,
+        },
+      )
+    }
+
+    async function setVisibility(
+      articleId,
+      isHidden,
+    ) {
+      const { $api } = useNuxtApp()
+
+      return await $api(
+        `/api/v1/articles/${articleId}/visibility`,
+        {
+          method: 'PATCH',
+          body: {
+            is_hidden: isHidden,
+          },
+        },
+      )
+    }
+
+    async function markAsRead(articleId) {
+      const { $api } = useNuxtApp()
+
+      return await $api(
+        `/api/v1/articles/${articleId}/read`,
+        {
+          method: 'POST',
+        },
+      )
+    }
+
+    async function registerOpen(
+      articleId,
+      payload,
+    ) {
+      const { $api } = useNuxtApp()
+
+      return await $api(
+        `/api/v1/articles/${articleId}/open`,
+        {
+          method: 'POST',
+          body: payload,
+        },
+      )
+    }
+
+    return {
+      articles,
+      currentArticle,
+      loading,
+
+      hasMore,
+      fetchArticles,
+      fetchArticle,
+      registerOpen,
+      createArticle,
+      updateArticle,
+      setVisibility,
+      markAsRead,
+    }
+  },
+)
+
+// ./frontend/app/stores/questionnaires.js
+export const useQuestionnairesStore = defineStore(
+  'questionnaires',
+  () => {
+    const questionnaires = ref([])
+    const currentQuestionnaire = ref(null)
+    const loading = ref(false)
+
+    async function fetchQuestionnaires() {
+      const { $api } = useNuxtApp()
+
+      loading.value = true
+
+      try {
+        questionnaires.value = await $api(
+          '/api/v1/questionnaires',
+        )
+
+        return questionnaires.value
+      } finally {
+        loading.value = false
+      }
+    }
+
+    async function fetchQuestionnaire(
+      id,
+      {
+        programId = null,
+        programStageId = null,
+      } = {},
+    ) {
+      const { $api } = useNuxtApp()
+
+      loading.value = true
+
+      try {
+        currentQuestionnaire.value = await $api(
+          `/api/v1/questionnaires/${id}`,
+          {
+            query: {
+              program_id: programId || undefined,
+              program_stage_id:
+                programStageId || undefined,
+            },
+          },
+        )
+
+        return currentQuestionnaire.value
+      } finally {
+        loading.value = false
+      }
+    }
+
+    async function createQuestionnaire(payload) {
+      const { $api } = useNuxtApp()
+
+      return await $api(
+        '/api/v1/questionnaires',
+        {
+          method: 'POST',
+          body: payload,
+        },
+      )
+    }
+
+    async function setVisibility(
+      questionnaireId,
+      isHidden,
+    ) {
+      const { $api } = useNuxtApp()
+
+      return await $api(
+        `/api/v1/questionnaires/${questionnaireId}/visibility`,
+        {
+          method: 'PATCH',
+          body: {
+            is_hidden: isHidden,
+          },
+        },
+      )
+    }
+
+    async function fetchMyProgress() {
+      const { $api } = useNuxtApp()
+
+      return await $api(
+        '/api/v1/questionnaires/submissions/mine/progress',
+      )
+    }
+
+    async function startQuestionnaire(
+      questionnaireId,
+      {
+        programId = null,
+        programStageId = null,
+      } = {},
+    ) {
+      const { $api } = useNuxtApp()
+
+      return await $api(
+        `/api/v1/questionnaires/${questionnaireId}/start`,
+        {
+          method: 'POST',
+          query: {
+            program_id: programId || undefined,
+            program_stage_id:
+              programStageId || undefined,
+          },
+        },
+      )
+    }
+
+    async function fetchSubmission(submissionId) {
+      const { $api } = useNuxtApp()
+
+      return await $api(
+        `/api/v1/questionnaires/submissions/${submissionId}`,
+      )
+    }
+
+    async function saveAnswer(
+      submissionId,
+      questionId,
+      value,
+    ) {
+      const { $api } = useNuxtApp()
+
+      return await $api(
+        `/api/v1/questionnaires/submissions/${submissionId}/answer`,
+        {
+          method: 'PUT',
+          body: {
+            question_id: questionId,
+            value,
+          },
+        },
+      )
+    }
+
+    async function completeSubmission(
+      submissionId,
+      answers,
+    ) {
+      const { $api } = useNuxtApp()
+
+      return await $api(
+        `/api/v1/questionnaires/submissions/${submissionId}/complete`,
+        {
+          method: 'POST',
+          body: {
+            answers,
+          },
+        },
+      )
+    }
+
+    return {
+      questionnaires,
+      currentQuestionnaire,
+      loading,
+
+      fetchQuestionnaires,
+      fetchQuestionnaire,
+      createQuestionnaire,
+      setVisibility,
+
+      fetchMyProgress,
+      startQuestionnaire,
+      fetchSubmission,
+      saveAnswer,
+      completeSubmission,
+    }
+  },
+)
+
+// ./frontend/app/stores/programs.js
+export const useProgramsStore = defineStore(
+  'programs',
+  () => {
+    const programs = ref([])
+    const currentProgram = ref(null)
+
+    const patientAccessPrograms = ref([])
+
+    const loading = ref(false)
+    const saving = ref(false)
+
+    const patientProgressPrograms = ref([])
+
+    async function fetchProgramsForStaff() {
+      const { $api } = useNuxtApp()
+
+      loading.value = true
+
+      try {
+        programs.value = await $api(
+          '/api/v1/programs/manage',
+        )
+
+        return programs.value
+      } finally {
+        loading.value = false
+      }
+    }
+
+    async function fetchProgramsForPatient() {
+      const { $api } = useNuxtApp()
+
+      loading.value = true
+
+      try {
+        programs.value = await $api(
+          '/api/v1/programs/patient',
+        )
+
+        return programs.value
+      } finally {
+        loading.value = false
+      }
+    }
+
+    async function fetchProgramForStaff(programId) {
+      const { $api } = useNuxtApp()
+
+      loading.value = true
+
+      try {
+        currentProgram.value = await $api(
+          `/api/v1/programs/manage/${programId}`,
+        )
+
+        return currentProgram.value
+      } finally {
+        loading.value = false
+      }
+    }
+
+    async function fetchProgramForPatient(programId) {
+      const { $api } = useNuxtApp()
+
+      loading.value = true
+
+      try {
+        currentProgram.value = await $api(
+          `/api/v1/programs/patient/${programId}`,
+        )
+
+        return currentProgram.value
+      } finally {
+        loading.value = false
+      }
+    }
+
+    async function createProgram(payload) {
+      const { $api } = useNuxtApp()
+
+      saving.value = true
+
+      try {
+        return await $api(
+          '/api/v1/programs/manage',
+          {
+            method: 'POST',
+            body: payload,
+          },
+        )
+      } finally {
+        saving.value = false
+      }
+    }
+
+    async function updateProgram(
+      programId,
+      payload,
+    ) {
+      const { $api } = useNuxtApp()
+
+      saving.value = true
+
+      try {
+        return await $api(
+          `/api/v1/programs/manage/${programId}`,
+          {
+            method: 'PUT',
+            body: payload,
+          },
+        )
+      } finally {
+        saving.value = false
+      }
+    }
+
+    async function setVisibility(
+      programId,
+      isHidden,
+    ) {
+      const { $api } = useNuxtApp()
+
+      return await $api(
+        `/api/v1/programs/manage/${programId}/visibility`,
+        {
+          method: 'PATCH',
+          body: {
+            is_hidden: isHidden,
+          },
+        },
+      )
+    }
+
+    async function startProgram(programId) {
+      const { $api } = useNuxtApp()
+
+      return await $api(
+        `/api/v1/programs/patient/${programId}/start`,
+        {
+          method: 'POST',
+        },
+      )
+    }
+
+    async function requestPurchase(programId) {
+      const { $api } = useNuxtApp()
+
+      return await $api(
+        `/api/v1/programs/patient/${programId}/request-purchase`,
+        {
+          method: 'POST',
+        },
+      )
+    }
+
+    async function fetchPatientProgramAccess(
+      patientId,
+    ) {
+      const { $api } = useNuxtApp()
+
+      patientAccessPrograms.value = await $api(
+        `/api/v1/programs/manage/patient/${patientId}/access`,
+      )
+
+      return patientAccessPrograms.value
+    }
+
+    async function setPatientProgramAccess(
+      patientId,
+      programId,
+      isActive,
+    ) {
+      const { $api } = useNuxtApp()
+
+      const response = await $api(
+        `/api/v1/programs/manage/patient/${patientId}/access/${programId}`,
+        {
+          method: 'PATCH',
+          body: {
+            is_active: isActive,
+          },
+        },
+      )
+
+      const item = patientAccessPrograms.value.find(
+        (program) =>
+          program.program_id === programId,
+      )
+
+      if (item) {
+        Object.assign(item, response)
+      }
+
+      return response
+    }
+
+    async function fetchPatientProgramProgress(
+        patientId,
+        ) {
+        const { $api } = useNuxtApp()
+
+        patientProgressPrograms.value = await $api(
+            `/api/v1/programs/manage/patient/${patientId}/progress`,
+        )
+
+        return patientProgressPrograms.value
+        }
+
+    return {
+      programs,
+      currentProgram,
+      patientAccessPrograms,
+
+      loading,
+      saving,
+
+      fetchProgramsForStaff,
+      fetchProgramsForPatient,
+      fetchProgramForStaff,
+      fetchProgramForPatient,
+
+      createProgram,
+      updateProgram,
+      setVisibility,
+
+      startProgram,
+      requestPurchase,
+
+      fetchPatientProgramAccess,
+      setPatientProgramAccess,
+
+      patientProgressPrograms,
+      fetchPatientProgramProgress,
+    }
+  },
+)
+
+// ./frontend/app/stores/tag-access.js
+export const useTagAccessStore = defineStore(
+  'tag-access',
+  () => {
+    const tags = ref([])
+
+    const doctorEffectiveTags = ref([])
+    const doctorOverrides = ref([])
+
+    const patientEffectiveTags = ref([])
+    const patientOverrides = ref([])
+
+    const loadingDoctor = ref(false)
+    const loadingPatient = ref(false)
+    const saving = ref(false)
+
+    async function fetchTags() {
+      const { $api } = useNuxtApp()
+
+      tags.value = await $api(
+        '/api/v1/tags',
+      )
+
+      return tags.value
+    }
+
+    async function fetchDoctorState() {
+      const { $api } = useNuxtApp()
+
+      loadingDoctor.value = true
+
+      try {
+        const [
+          catalog,
+          effective,
+          overrides,
+        ] = await Promise.all([
+          $api('/api/v1/tags'),
+          $api('/api/v1/tags/me/effective'),
+          $api(
+            '/api/v1/tags/doctors/me/overrides',
+          ),
+        ])
+
+        tags.value = catalog
+        doctorEffectiveTags.value =
+          effective.tags || []
+        doctorOverrides.value = overrides
+
+        return {
+          effective: effective.tags || [],
+          overrides,
+        }
+      } finally {
+        loadingDoctor.value = false
+      }
+    }
+
+    async function setDoctorOverride(
+      tagId,
+      action,
+    ) {
+      const { $api } = useNuxtApp()
+
+      saving.value = true
+
+      try {
+        await $api(
+          '/api/v1/tags/doctors/me/overrides',
+          {
+            method: 'PUT',
+            body: {
+              tag_id: tagId,
+              action,
+            },
+          },
+        )
+
+        await fetchDoctorState()
+      } finally {
+        saving.value = false
+      }
+    }
+
+    async function resetDoctorOverride(tagId) {
+      const { $api } = useNuxtApp()
+
+      saving.value = true
+
+      try {
+        await $api(
+          `/api/v1/tags/doctors/me/overrides/${tagId}`,
+          {
+            method: 'DELETE',
+          },
+        )
+
+        await fetchDoctorState()
+      } finally {
+        saving.value = false
+      }
+    }
+
+    async function fetchPatientState(patientId) {
+      const { $api } = useNuxtApp()
+
+      loadingPatient.value = true
+
+      try {
+        const [
+          catalog,
+          effective,
+          overrides,
+        ] = await Promise.all([
+          $api('/api/v1/tags'),
+          $api(
+            `/api/v1/tags/patients/${patientId}/effective`,
+          ),
+          $api(
+            `/api/v1/tags/patients/${patientId}/overrides`,
+          ),
+        ])
+
+        tags.value = catalog
+        patientEffectiveTags.value =
+          effective.tags || []
+        patientOverrides.value = overrides
+
+        return {
+          effective: effective.tags || [],
+          overrides,
+        }
+      } finally {
+        loadingPatient.value = false
+      }
+    }
+
+    async function setPatientOverride(
+      patientId,
+      tagId,
+      action,
+    ) {
+      const { $api } = useNuxtApp()
+
+      saving.value = true
+
+      try {
+        await $api(
+          `/api/v1/tags/patients/${patientId}/overrides`,
+          {
+            method: 'PUT',
+            body: {
+              tag_id: tagId,
+              action,
+            },
+          },
+        )
+
+        await fetchPatientState(patientId)
+      } finally {
+        saving.value = false
+      }
+    }
+
+    async function resetPatientOverride(
+      patientId,
+      tagId,
+    ) {
+      const { $api } = useNuxtApp()
+
+      saving.value = true
+
+      try {
+        await $api(
+          `/api/v1/tags/patients/${patientId}/overrides/${tagId}`,
+          {
+            method: 'DELETE',
+          },
+        )
+
+        await fetchPatientState(patientId)
+      } finally {
+        saving.value = false
+      }
+    }
+
+    return {
+      tags,
+
+      doctorEffectiveTags,
+      doctorOverrides,
+
+      patientEffectiveTags,
+      patientOverrides,
+
+      loadingDoctor,
+      loadingPatient,
+      saving,
+
+      fetchTags,
+      fetchDoctorState,
+      setDoctorOverride,
+      resetDoctorOverride,
+
+      fetchPatientState,
+      setPatientOverride,
+      resetPatientOverride,
+    }
+  },
+)
+
+// ./frontend/app/stores/user.js
+export const useUserStore = defineStore(
+  'user',
+  () => {
+    const user = ref(null)
+    const loading = ref(false)
+    const saving = ref(false)
+
+    const fullName = computed(() => {
+      if (!user.value) return ''
+
+      return (
+        [
+          user.value.last_name,
+          user.value.first_name,
+          user.value.middle_name,
+        ]
+          .filter(Boolean)
+          .join(' ')
+        || user.value.email
+        || ''
+      )
+    })
+
+    const initials = computed(() => {
+      if (!user.value) return '?'
+
+      const first = (
+        user.value.first_name
+        || user.value.email
+        || '?'
+      ).charAt(0)
+
+      const last = (
+        user.value.last_name || ''
+      ).charAt(0)
+
+      return `${first}${last}`.toUpperCase()
+    })
+
+    const isEmailVerified = computed(() =>
+      Boolean(user.value?.is_email_verified),
+    )
+
+    async function fetchMe() {
+      const { $api } = useNuxtApp()
+
+      loading.value = true
+
+      try {
+        user.value = await $api(
+          '/api/v1/users/me',
+        )
+
+        return user.value
+      } finally {
+        loading.value = false
+      }
+    }
+
+    async function updateProfile(payload) {
+      const { $api } = useNuxtApp()
+
+      saving.value = true
+
+      try {
+        user.value = await $api(
+          '/api/v1/users/me',
+          {
+            method: 'PATCH',
+            body: payload,
+          },
+        )
+
+        return user.value
+      } finally {
+        saving.value = false
+      }
+    }
+
+    async function resendVerificationEmail() {
+      const { $api } = useNuxtApp()
+
+      return await $api(
+        '/api/v1/auth/email-verification/resend',
+        {
+          method: 'POST',
+        },
+      )
+    }
+
+    function clear() {
+      user.value = null
+    }
+
+    return {
+      user,
+      loading,
+      saving,
+
+      fullName,
+      initials,
+      isEmailVerified,
+
+      fetchMe,
+      updateProfile,
+      resendVerificationEmail,
+      clear,
+    }
+  },
+)
+
+<!-- ./frontend/app/components/ui/Modal.vue -->
+<script setup>
+const model = defineModel({
+  type: Boolean,
+  default: false,
+})
+
+const props = defineProps({
+  title: {
+    type: String,
+    default: '',
+  },
+  closeOnBackdrop: {
+    type: Boolean,
+    default: true,
+  },
+  showCloseButton: {
+    type: Boolean,
+    default: true,
+  },
+  maxWidthClass: {
+    type: String,
+    default: 'max-w-lg',
+  },
+})
+
+const emit = defineEmits([
+  'close',
+  'opened',
+])
+
+const opened = computed(() => model.value)
+
+useBodyScrollLock(opened)
+
+function close() {
+  model.value = false
+  emit('close')
+}
+
+function handleBackdrop() {
+  if (props.closeOnBackdrop) {
+    close()
+  }
+}
+
+function handleKeydown(event) {
+  if (event.key === 'Escape' && model.value) {
+    close()
+  }
+}
+
+watch(model, (value) => {
+  if (value) {
+    emit('opened')
+  }
+})
+
+onMounted(() => {
+  window.addEventListener('keydown', handleKeydown)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener(
+    'keydown',
+    handleKeydown,
+  )
+})
+</script>
+
+<template>
+  <Teleport to="body">
+    <Transition name="ui-modal">
+      <div
+        v-if="model"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-[2px]"
+        role="presentation"
+        @mousedown.self="handleBackdrop"
+      >
+        <section
+          class="bg-base-100 relative flex max-h-[calc(100dvh-2rem)] w-full flex-col overflow-hidden rounded-2xl shadow-2xl"
+          :class="maxWidthClass"
+          role="dialog"
+          aria-modal="true"
+          :aria-label="title || 'Диалоговое окно'"
+        >
+          <header
+            v-if="title || showCloseButton || $slots.header"
+            class="border-base-300 flex shrink-0 items-center gap-3 border-b px-5 py-4"
+          >
+            <slot name="header">
+              <h2 class="min-w-0 flex-1 text-lg font-semibold">
+                {{ title }}
+              </h2>
+            </slot>
+
+            <button
+              v-if="showCloseButton"
+              type="button"
+              class="btn btn-circle btn-ghost btn-sm shrink-0"
+              aria-label="Закрыть"
+              @click="close"
+            >
+              <Icon
+                name="lucide:x"
+                class="size-5"
+              />
+            </button>
+          </header>
+
+          <div class="min-h-0 flex-1 overflow-y-auto px-5 py-5">
+            <slot />
+          </div>
+
+          <footer
+            v-if="$slots.footer"
+            class="border-base-300 shrink-0 border-t px-5 py-4"
+          >
+            <slot name="footer" />
+          </footer>
+        </section>
+      </div>
+    </Transition>
+  </Teleport>
+</template>
+
+<style scoped>
+.ui-modal-enter-active,
+.ui-modal-leave-active {
+  transition: opacity 180ms ease;
+}
+
+.ui-modal-enter-active section,
+.ui-modal-leave-active section {
+  transition:
+    transform 180ms ease,
+    opacity 180ms ease;
+}
+
+.ui-modal-enter-from,
+.ui-modal-leave-to {
+  opacity: 0;
+}
+
+.ui-modal-enter-from section,
+.ui-modal-leave-to section {
+  opacity: 0;
+  transform: scale(0.96) translateY(0.5rem);
+}
+</style>
+
+<!-- ./frontend/app/components/ui/BottomSheet.vue -->
+<script setup>
+const model = defineModel({
+  type: Boolean,
+  default: false,
+})
+
+const props = defineProps({
+  title: {
+    type: String,
+    default: '',
+  },
+  closeOnBackdrop: {
+    type: Boolean,
+    default: true,
+  },
+  showCloseButton: {
+    type: Boolean,
+    default: true,
+  },
+})
+
+const emit = defineEmits([
+  'close',
+  'opened',
+])
+
+const opened = computed(() => model.value)
+
+const translateY = ref(0)
+const dragging = ref(false)
+
+let pointerStartY = 0
+
+useBodyScrollLock(opened)
+
+const sheetStyle = computed(() => ({
+  transform: translateY.value
+    ? `translateY(${translateY.value}px)`
+    : undefined,
+  transition: dragging.value
+    ? 'none'
+    : 'transform 180ms ease',
+}))
+
+function close() {
+  model.value = false
+  translateY.value = 0
+  dragging.value = false
+  emit('close')
+}
+
+function handleBackdrop() {
+  if (props.closeOnBackdrop) {
+    close()
+  }
+}
+
+function handlePointerDown(event) {
+  dragging.value = true
+  pointerStartY = event.clientY
+
+  event.currentTarget.setPointerCapture?.(
+    event.pointerId,
+  )
+}
+
+function handlePointerMove(event) {
+  if (!dragging.value) return
+
+  translateY.value = Math.max(
+    0,
+    event.clientY - pointerStartY,
+  )
+}
+
+function handlePointerUp() {
+  if (!dragging.value) return
+
+  dragging.value = false
+
+  if (translateY.value > 100) {
+    close()
+    return
+  }
+
+  translateY.value = 0
+}
+
+function handleKeydown(event) {
+  if (event.key === 'Escape' && model.value) {
+    close()
+  }
+}
+
+watch(model, (value) => {
+  if (value) {
+    translateY.value = 0
+    emit('opened')
+  }
+})
+
+onMounted(() => {
+  window.addEventListener('keydown', handleKeydown)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener(
+    'keydown',
+    handleKeydown,
+  )
+})
+</script>
+
+<template>
+  <Teleport to="body">
+    <Transition name="ui-sheet">
+      <div
+        v-if="model"
+        class="fixed inset-0 z-50 flex items-end bg-black/50 backdrop-blur-[2px]"
+        role="presentation"
+        @mousedown.self="handleBackdrop"
+      >
+        <section
+          class="bg-base-100 safe-area-bottom flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-3xl shadow-2xl"
+          :style="sheetStyle"
+          role="dialog"
+          aria-modal="true"
+          :aria-label="title || 'Диалоговое окно'"
+        >
+          <div
+            class="flex shrink-0 touch-none justify-center py-3"
+            @pointerdown="handlePointerDown"
+            @pointermove="handlePointerMove"
+            @pointerup="handlePointerUp"
+            @pointercancel="handlePointerUp"
+          >
+            <div
+              class="bg-base-300 h-1.5 w-12 rounded-full"
+            />
+          </div>
+
+          <header
+            v-if="title || showCloseButton || $slots.header"
+            class="border-base-300 flex shrink-0 items-center gap-3 border-b px-4 pb-4"
+          >
+            <slot name="header">
+              <h2 class="min-w-0 flex-1 text-lg font-semibold">
+                {{ title }}
+              </h2>
+            </slot>
+
+            <button
+              v-if="showCloseButton"
+              type="button"
+              class="btn btn-circle btn-ghost btn-sm shrink-0"
+              aria-label="Закрыть"
+              @click="close"
+            >
+              <Icon
+                name="lucide:x"
+                class="size-5"
+              />
+            </button>
+          </header>
+
+          <div class="min-h-0 flex-1 overflow-y-auto px-4 py-5">
+            <slot />
+          </div>
+
+          <footer
+            v-if="$slots.footer"
+            class="border-base-300 shrink-0 border-t px-4 py-4"
+          >
+            <slot name="footer" />
+          </footer>
+        </section>
+      </div>
+    </Transition>
+  </Teleport>
+</template>
+
+<style scoped>
+.ui-sheet-enter-active,
+.ui-sheet-leave-active {
+  transition: opacity 220ms ease;
+}
+
+.ui-sheet-enter-active section,
+.ui-sheet-leave-active section {
+  transition: transform 220ms ease;
+}
+
+.ui-sheet-enter-from,
+.ui-sheet-leave-to {
+  opacity: 0;
+}
+
+.ui-sheet-enter-from section,
+.ui-sheet-leave-to section {
+  transform: translateY(100%);
+}
+</style>
+<!-- ./frontend/app/components/ui/Pagination.vue -->
+<script setup>
+const model = defineModel({
+  type: Number,
+  default: 1,
+})
+
+const props = defineProps({
+  totalItems: {
+    type: Number,
+    default: 0,
+  },
+  pageSize: {
+    type: Number,
+    default: 10,
+  },
+})
+
+const totalPages = computed(() =>
+  Math.max(
+    1,
+    Math.ceil(props.totalItems / props.pageSize),
+  ),
+)
+
+watch(totalPages, (value) => {
+  if (model.value > value) {
+    model.value = value
+  }
+})
+</script>
+
+<template>
+  <nav
+    v-if="totalPages > 1"
+    class="flex items-center justify-center gap-2"
+    aria-label="Пагинация"
+  >
+    <button
+      type="button"
+      class="btn btn-square btn-sm"
+      :disabled="model <= 1"
+      aria-label="Предыдущая страница"
+      @click="model -= 1"
+    >
+      <Icon
+        name="lucide:chevron-left"
+        class="size-4"
+      />
+    </button>
+
+    <span class="px-3 text-sm">
+      {{ model }} из {{ totalPages }}
+    </span>
+
+    <button
+      type="button"
+      class="btn btn-square btn-sm"
+      :disabled="model >= totalPages"
+      aria-label="Следующая страница"
+      @click="model += 1"
+    >
+      <Icon
+        name="lucide:chevron-right"
+        class="size-4"
+      />
+    </button>
+  </nav>
+</template>
+// ./frontend/app/plugins/api.js
+export default defineNuxtPlugin(() => {
+  const config = useRuntimeConfig()
+
+  const api = $fetch.create({
+    baseURL: config.public.apiBase,
+
+    onRequest({ options }) {
+      if (!import.meta.client) return
+
+      const accessToken = localStorage.getItem(
+        'mentalme_access_token',
+      )
+
+      if (!accessToken) return
+
+      const headers = new Headers(options.headers || {})
+      headers.set(
+        'Authorization',
+        `Bearer ${accessToken}`,
+      )
+
+      options.headers = headers
+    },
+
+    async onResponseError({ response }) {
+      if (!import.meta.client) return
+
+      if (response.status !== 401) return
+
+      const hadAccessToken = Boolean(
+        localStorage.getItem('mentalme_access_token'),
+      )
+
+      if (!hadAccessToken) return
+
+      localStorage.removeItem('mentalme_access_token')
+      localStorage.removeItem('mentalme_active_role')
+
+      const publicPaths = [
+        '/login',
+        '/forgot-password',
+        '/reset-password',
+        '/verify-email',
+        '/register',
+      ]
+
+      const isPublicPath = publicPaths.some((path) =>
+        window.location.pathname.startsWith(path),
+      )
+
+      if (!isPublicPath) {
+        window.location.href = '/login?sessionExpired=1'
+      }
+    },
+  })
+
+  return {
+    provide: {
+      api,
+    },
+  }
+})
+{
+  "name": "frontend",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "nuxt build",
+    "dev": "nuxt dev",
+    "generate": "nuxt generate",
+    "preview": "nuxt preview",
+    "postinstall": "nuxt prepare"
+  },
+  "dependencies": {
+    "@nuxt/icon": "^2.5.0",
+    "@pinia/nuxt": "^1.0.2",
+    "@tailwindcss/vite": "^4.3.3",
+    "@tiptap/extension-link": "^3.30.3",
+    "@tiptap/extension-placeholder": "^3.30.3",
+    "@tiptap/extension-underline": "^3.30.3",
+    "@tiptap/starter-kit": "^3.30.3",
+    "@tiptap/vue-3": "^3.30.3",
+    "daisyui": "^5.7.21",
+    "dompurify": "^3.4.14",
+    "nuxt": "^4.5.2",
+    "pinia": "^4.0.3",
+    "qrcode": "^1.5.4",
+    "tailwindcss": "^4.3.3",
+    "vue": "^3.5.41",
+    "vue-draggable-plus": "^0.6.1",
+    "vue-router": "^5.2.0"
+  },
+  "devDependencies": {
+    "@iconify-json/lucide": "^1.2.125"
+  }
+}
+<!-- ./frontend/app/components/patient/Home.vue -->
+<script setup>
+const store = usePatientHomeStore()
+
+onMounted(() => {
+  store.load()
+})
+
+onBeforeUnmount(() => {
+  store.clear()
+})
+</script>
+
+<template>
+  <div class="mx-auto max-w-4xl space-y-7">
+    <UiContentSkeleton
+      v-if="store.loading"
+      variant="card"
+      :count="2"
+    />
+
+    <section
+      v-else-if="store.errorMessage"
+      class="border-base-300 bg-base-100 rounded-3xl border p-6"
+    >
+      <p role="alert">
+        {{ store.errorMessage }}
+      </p>
+
+      <button
+        type="button"
+        class="btn btn-primary mt-4"
+        @click="store.load"
+      >
+        Попробовать ещё раз
+      </button>
+    </section>
+
+    <template v-else>
+      <PatientNextStep
+        v-if="store.primaryProgram"
+        :key="store.primaryProgram.id"
+        :program="store.primaryProgram"
+      />
+
+      <section
+        v-else
+        class="border-base-300 bg-base-100 rounded-3xl border p-5 sm:p-8"
+      >
+        <h1 class="text-2xl font-bold">
+          {{
+            store.hasCompletedStart
+              ? 'Первый маршрут пройден'
+              : 'Здравствуйте'
+          }}
+        </h1>
+
+        <p class="text-base-content/70 mt-3">
+          {{
+            store.hasCompletedStart
+              ? 'Можно вернуться к материалам или обсудить дальнейшую поддержку со специалистом.'
+              : 'Здесь можно познакомиться с материалами клиники и доступными программами.'
+          }}
+        </p>
+
+        <NuxtLink
+          to="/programs"
+          class="btn btn-primary mt-5"
+        >
+          {{
+            store.hasCompletedStart
+              ? 'Посмотреть дальнейшие варианты'
+              : 'Посмотреть программы'
+          }}
+        </NuxtLink>
+      </section>
+
+      <PatientJourney
+        v-if="store.primaryProgram?.is_start"
+        :program="store.primaryProgram"
+      />
+
+      <AssignmentsPatientList />
+
+      <details
+        v-if="store.otherActivePrograms.length"
+        class="border-base-300 rounded-2xl border p-4"
+      >
+        <summary class="cursor-pointer font-medium">
+          Другие начатые программы
+        </summary>
+
+        <div class="mt-4 space-y-3">
+          <NuxtLink
+            v-for="program in store.otherActivePrograms"
+            :key="program.id"
+            :to="`/programs/${program.id}`"
+            class="border-base-300 block rounded-xl border p-4"
+          >
+            <span class="font-medium">
+              {{ program.title }}
+            </span>
+
+            <span class="text-base-content/60 mt-1 block text-sm">
+              Продолжить программу
+            </span>
+          </NuxtLink>
+        </div>
+      </details>
+
+      <PatientSupport />
+
+      <details
+        v-if="store.completedPrograms.length"
+        class="border-base-300 rounded-2xl border p-4"
+      >
+        <summary class="cursor-pointer font-medium">
+          Пройденные материалы программ
+        </summary>
+
+        <div class="mt-4 space-y-3">
+          <NuxtLink
+            v-for="program in store.completedPrograms"
+            :key="program.id"
+            :to="`/programs/${program.id}`"
+            class="link link-primary block"
+          >
+            {{ program.title }}
+          </NuxtLink>
+        </div>
+      </details>
+
+      <nav
+        class="text-base-content/70 flex flex-wrap gap-x-5 gap-y-3 text-sm"
+        aria-label="Материалы и программы"
+      >
+        <NuxtLink
+          to="/content/articles"
+          class="link"
+        >
+          Все статьи
+        </NuxtLink>
+
+        <NuxtLink
+          to="/questionnaires"
+          class="link"
+        >
+          Опросники
+        </NuxtLink>
+
+        <NuxtLink
+          to="/programs"
+          class="link"
+        >
+          Все программы
+        </NuxtLink>
+      </nav>
+    </template>
+  </div>
+</template>
+<!-- ./frontend/app/components/patient/Journey.vue -->
+<script setup>
+const props = defineProps({
+  program: {
+    type: Object,
+    required: true,
+  },
+})
+
+const items = computed(() =>
+  (props.program.stages || [])
+    .flatMap(stage =>
+      (stage.items || []).map(item => ({
+        ...item,
+        stageId: stage.id,
+      })),
+    )
+    .filter(
+      item =>
+        item.item_type !== 'consultation'
+        && !item.is_hidden,
+    ),
+)
+
+const previewItems = computed(() =>
+  items.value.slice(0, 3),
+)
+</script>
+
+<template>
+  <section
+    v-if="previewItems.length"
+    class="space-y-3"
+  >
+    <h2 class="text-lg font-semibold">
+      Что входит в маршрут
+    </h2>
+
+    <ol class="space-y-3">
+      <li
+        v-for="(item, index) in previewItems"
+        :key="item.id"
+        class="flex items-start gap-3"
+      >
+        <span
+          class="flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold"
+          :class="
+            item.is_completed
+              ? 'bg-success/15 text-success'
+              : 'bg-base-200 text-base-content/70'
+          "
+        >
+          <Icon
+            v-if="item.is_completed"
+            name="lucide:check"
+            class="size-4"
+          />
+
+          <template v-else>
+            {{ index + 1 }}
+          </template>
+        </span>
+
+        <span class="pt-0.5 text-sm">
+          {{ item.title }}
+        </span>
+      </li>
+    </ol>
+
+    <NuxtLink
+      v-if="items.length > previewItems.length"
+      :to="`/programs/${program.id}`"
+      class="link link-primary text-sm"
+    >
+      Посмотреть весь маршрут
+    </NuxtLink>
+  </section>
+</template>
+<!-- ./frontend/app/components/patient/NextStep.vue -->
+<script setup>
+const props = defineProps({
+  program: {
+    type: Object,
+    required: true,
+  },
+})
+
+const store = usePatientHomeStore()
+
+const opening = ref(false)
+const errorMessage = ref('')
+
+const nextStep = computed(() => {
+  const stages = props.program.stages || []
+
+  for (const stage of stages) {
+    if (
+      props.program.enrollment
+      && stage.status === 'upcoming'
+    ) {
+      continue
+    }
+
+    const item = (stage.items || []).find(
+      current =>
+        current.item_type !== 'consultation'
+        && !current.is_hidden
+        && current.can_access
+        && !current.is_completed,
+    )
+
+    if (item) {
+      return { stage, item }
+    }
+  }
+
+  return null
+})
+
+const progressValue = computed(() => {
+  const value = Number(props.program.progress_percent)
+
+  return Number.isFinite(value)
+    ? Math.min(Math.max(value, 0), 100)
+    : 0
+})
+
+const actionText = computed(() => {
+  if (!props.program.enrollment) {
+    return props.program.is_start
+      ? 'Начать с первого шага'
+      : 'Открыть мой план'
+  }
+
+  return nextStep.value
+    ? 'Продолжить'
+    : 'Посмотреть план'
+})
+
+async function openProgram() {
+  if (opening.value) return
+
+  opening.value = true
+  errorMessage.value = ''
+
+  try {
+    if (!props.program.enrollment) {
+      await store.startProgram(props.program.id)
+    }
+
+    await navigateTo({
+      path: `/programs/${props.program.id}`,
+      query: nextStep.value
+        ? { stage: nextStep.value.stage.id }
+        : {},
+    })
+  } catch (error) {
+    errorMessage.value =
+      typeof error?.data?.detail === 'string'
+        ? error.data.detail
+        : 'Не удалось открыть программу'
+  } finally {
+    opening.value = false
+  }
+}
+</script>
+
+<template>
+  <section
+    class="border-primary/20 bg-base-100 rounded-3xl border p-5 shadow-sm sm:p-8"
+  >
+    <p class="text-primary text-sm font-medium">
+      {{
+        program.enrollment
+          ? 'Ваш следующий шаг'
+          : program.is_start
+            ? 'Начните с небольшого шага'
+            : 'Ваша программа доступна'
+      }}
+    </p>
+
+    <h1 class="mt-3 text-2xl font-bold sm:text-3xl">
+      {{ program.title }}
+    </h1>
+
+    <p
+      v-if="program.description"
+      class="text-base-content/70 mt-3 max-w-2xl"
+    >
+      {{ program.description }}
+    </p>
+
+    <div
+      v-if="nextStep"
+      class="bg-base-200 mt-6 rounded-2xl p-4"
+    >
+      <p class="text-base-content/60 text-xs">
+        {{
+          nextStep.item.item_type === 'article'
+            ? 'Материал для чтения'
+            : 'Вопросы для размышления'
+        }}
+      </p>
+
+      <h2 class="mt-1 font-semibold">
+        {{ nextStep.item.title }}
+      </h2>
+    </div>
+
+    <div
+      v-if="program.enrollment"
+      class="mt-5"
+    >
+      <div class="mb-2 flex justify-between gap-3 text-xs">
+        <span>Прогресс по материалам</span>
+        <span>{{ progressValue }}%</span>
+      </div>
+
+      <progress
+        class="progress progress-primary w-full"
+        :value="progressValue"
+        max="100"
+      />
+    </div>
+
+    <div
+      v-if="errorMessage"
+      class="alert alert-error mt-5"
+      role="alert"
+    >
+      {{ errorMessage }}
+    </div>
+
+    <button
+      type="button"
+      class="btn btn-primary mt-6 w-full sm:w-auto"
+      :disabled="opening"
+      @click="openProgram"
+    >
+      <span
+        v-if="opening"
+        class="loading loading-spinner loading-sm"
+      />
+
+      {{ actionText }}
+
+      <Icon
+        v-if="!opening"
+        name="lucide:arrow-right"
+        class="size-4"
+      />
+    </button>
+
+    <p
+      v-if="program.is_start"
+      class="text-base-content/60 mt-3 text-sm"
+    >
+      Бесплатно. Можно остановиться и продолжить позже.
+    </p>
+  </section>
+</template>
+<!-- ./frontend/app/components/patient/Support.vue -->
+<script setup>
+const store = usePatientHomeStore()
+
+const selectedProgram = ref(null)
+const dialogOpen = ref(false)
+const requesting = ref(false)
+const errorMessage = ref('')
+
+function openDialog(program) {
+  selectedProgram.value = program
+  errorMessage.value = ''
+  dialogOpen.value = true
+}
+
+async function sendRequest() {
+  if (!selectedProgram.value || requesting.value) return
+
+  requesting.value = true
+  errorMessage.value = ''
+
+  try {
+    await store.requestPurchase(
+      selectedProgram.value.id,
+    )
+
+    dialogOpen.value = false
+    selectedProgram.value = null
+  } catch (error) {
+    errorMessage.value =
+      typeof error?.data?.detail === 'string'
+        ? error.data.detail
+        : 'Не удалось отправить запрос. Попробуйте ещё раз.'
+  } finally {
+    requesting.value = false
+  }
+}
+</script>
+
+<template>
+  <section
+    v-if="
+      store.supportPrograms.length
+      || store.pendingRequests.length
+    "
+    class="border-base-300 bg-base-100 rounded-3xl border p-5 sm:p-6"
+  >
+    <h2 class="text-xl font-semibold">
+      Поддержка специалиста
+    </h2>
+
+    <p class="text-base-content/70 mt-2 text-sm">
+      Можно обсудить программу сопровождения с ассистентом
+      клиники. Он объяснит состав, стоимость и порядок записи.
+    </p>
+
+    <div
+      v-if="store.pendingRequests.length"
+      class="mt-5 space-y-3"
+      aria-live="polite"
+    >
+      <div
+        v-for="program in store.pendingRequests"
+        :key="program.id"
+        class="bg-success/10 rounded-2xl p-4"
+      >
+        <p class="font-medium">
+          Запрос отправлен
+        </p>
+
+        <p class="mt-1 text-sm">
+          {{ program.title }}
+        </p>
+
+        <p class="text-base-content/70 mt-2 text-sm">
+          Ассистент обычно связывается в течение 1–2 дней
+          по телефону, указанному в клинике.
+        </p>
+      </div>
+    </div>
+
+    <div class="mt-5 space-y-4">
+      <article
+        v-for="program in store.supportPrograms"
+        :key="program.id"
+        class="border-base-300 rounded-2xl border p-4"
+      >
+        <p class="text-base-content/60 text-xs">
+          Платная программа сопровождения
+        </p>
+
+        <h3 class="mt-1 font-semibold">
+          {{ program.title }}
+        </h3>
+
+        <p
+          v-if="program.description"
+          class="text-base-content/70 mt-2 text-sm"
+        >
+          {{ program.description }}
+        </p>
+
+        <div class="mt-4 flex flex-wrap gap-2">
+          <NuxtLink
+            :to="`/programs/${program.id}`"
+            class="btn btn-outline btn-sm"
+          >
+            Состав и стоимость
+          </NuxtLink>
+
+          <button
+            type="button"
+            class="btn btn-ghost btn-sm"
+            @click="openDialog(program)"
+          >
+            Обсудить с ассистентом
+          </button>
+        </div>
+      </article>
+    </div>
+
+    <p class="text-base-content/60 mt-4 text-xs">
+      Запрос не обязывает покупать программу.
+      Это не канал срочной медицинской помощи.
+    </p>
+  </section>
+
+  <UiResponsiveDialog
+    v-model="dialogOpen"
+    title="Обсудить программу"
+    max-width-class="max-w-md"
+  >
+    <div class="space-y-4">
+      <p class="font-medium">
+        {{ selectedProgram?.title }}
+      </p>
+
+      <p class="text-base-content/70 text-sm">
+        Отправим ассистенту запрос на обсуждение этой программы.
+        Он обычно связывается в течение 1–2 дней по телефону,
+        указанному в клинике.
+      </p>
+
+      <p class="text-base-content/70 text-sm">
+        Состав и стоимость согласуются до покупки.
+        Оплата в приложении не производится.
+      </p>
+
+      <div
+        v-if="errorMessage"
+        class="alert alert-error"
+        role="alert"
+      >
+        {{ errorMessage }}
+      </div>
+    </div>
+
+    <template #footer>
+      <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <button
+          type="button"
+          class="btn btn-ghost"
+          :disabled="requesting"
+          @click="dialogOpen = false"
+        >
+          Пока не нужно
+        </button>
+
+        <button
+          type="button"
+          class="btn btn-primary"
+          :disabled="requesting"
+          @click="sendRequest"
+        >
+          <span
+            v-if="requesting"
+            class="loading loading-spinner loading-sm"
+          />
+
+          Прошу связаться со мной
+        </button>
+      </div>
+    </template>
+  </UiResponsiveDialog>
+</template>
+
+В nuxt4 компоненты, и т.д. располагаются внутри ./app/, например: ./fronted/app/components/
+аналогично с composables, layouts, middleware, pages, plugins, stores, assets
+
+если, например, компонент: ./frontend/app/components/User/Data.vue, то при импорте в другие компоненты он будет выглядеть так: UserData.vue
+если компонент в такой директории: ./frontend/app/components/User/UserData.vue, то в других компонентах он все равно будет вяглядеть так: UserData.vue. Лучше не дублируй у названия компонента название родительской директории.
+Постарайся разделять компоненты, чтобы код был максимально читаемым
+у каждого файла в самой первой строке в комментариях пиши его полный путь
+
+в pinia store нужно чтобы файлы были .js (а не .ts), написаны на composition api. как ты видел выше
+
+
+---
+
+Надо сделать несколько мелких вещей:
+1. Добавить статьям и опросникам поле для того, чтобы скрывать их из общего списка статей и опросников, чтобы их было видно только внутри программ, потому что не все статьи и опросники подходят для общего отображения. Придется делать миграции, но что делать
+
+2. В конфигураторе программ сейчас неудобно организована библиотека: статьи и опросники без пагинации, никак не организованы... Сделай окно бибилиотеки шире. Пусть будет возможность фильтровать контет по тегам . Допустим, при пагинации будет 5 статей/опросников, под ними пусть располагаются теги. Я нажимаю на теги и нерелевантные элементы исчезают, а тег с бледного цвета становится цветным, то есть, активным. 
+
+3. Также, мне не нравится, что у пациента на главной странице показывается только одна стартовая программа. Надо показывать все, чтобы можно было скроллить. оставь значение Приоритета на главной, пусть если у какой-то программы приоритет выше, она была в саом верху, но если нет, то ... не знаю... пусть как-то располагаются. пусть платные программы также располагаются в списке, у них стоимость будет по запросу, но рамка платных программ пусть будет золотой. то есть, они должны отличаться от бесплатных визуально. Главное, чтобы плантые программы располагались не в самом верху, чтоыб первичный пациент не попадал сразу на них. 
+
+4. Сделай карточки программ компактнее и удобнее, особенно для мобильных телефонов. Сейчас одна стартовая программа занимает почти всю страницу на мобильном устройстве. Например, шаги убери под раскрывающийся список.
+
+5. На странице чтения статьи справа в нижмнем углу сделай кнопку назад типо такой: 
+<div class="fab">
+  <button class="btn btn-lg btn-circle btn-primary">F</button>
+</div>
+только цвет не сильно яркий и написано Х, чтобы закрыть статью и обратно в список статей/опросников, когда я в самом верху или в самом низу, а пока скроллю или нахожусь не в самом верху или в самом низу, кнопка вверх - то есть, в начало статьи. Эту кнопку сделай в виде отдельного элемента
+
+ЕСЛИ ТЕБЕ НУЖНЫ ЕЩЕ КАКИЕ-ТО ФАЙЛЫ, попроси прислать! ЕСЛИ ЕСТЬ ВОПРОСЫ, задавай
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+---------------------
+«Только внутри программ» — это скрытие из каталога или строгое ограничение доступа? - скрытие из каталога, ну и чтобы бекенд их просто не отдавал, чтобы не нагружать сервис. блокировать api к такой статье не надо. короче, как ты предложил
+Нужно ли менять новый флаг у уже созданных опросников? как ты преложил
+Куда закрывать статью, открытую из программы? - да, как ты предложил
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+------------------------\
+
+Описание переписки с нейронкой для планирования сервиса
+Теперь сценарий достаточно понятен. Для MVP я рекомендую не «витрину программ», а короткий маршрут с одним очевидным следующим шагом. Программы и обращение к специалисту должны быть доступны сразу, но не конкурировать на первом экране с шестью статьями, настройками и согласиями.
+
+Ниже — предлагаемая траектория, важные замечания по присланному коду и первое изменение, которое уже можно внедрить: вход сразу после регистрации.
+
+1. Какую траекторию делаем
+Приглашение терапевта → короткий полезный материал → небольшой бесплатный маршрут → объяснение роли специалиста → запрос на связь.
+
+При этом пациенту не нужно сначала «заслужить» консультацию прочтением материалов. Ссылка «Обсудить со специалистом» доступна с самого начала — просто это второстепенное действие, а не главное.
+
+Что говорит терапевт
+В вашем варианте хороша идея комплексного наблюдения. Но слова «ваша проблема требует» и «конкретные шаги для решения проблемы» звучат одновременно директивно и немного неопределённо.
+
+Я бы предложил такую основу:
+
+«Иван Иванович, мы продолжим разбираться с причинами ваших жалоб. При этом сон, питание и употребление алкоголя тоже могут влиять на самочувствие. Можно предложить вам короткий материал нашей клиники о том, с чего начать изменения без попытки поменять всё сразу?
+
+Здесь можно бесплатно познакомиться с рекомендациями. А если захотите обсудить ситуацию лично, ассистент поможет записаться к специалисту. Открытие материалов ни к чему вас не обязывает».
+
+Если необходимость помощи по поводу алкоголя уже обсуждалась:
+
+«В вашей ситуации я также рекомендую консультацию психиатра-нарколога. Он поможет оценить, как алкоголь влияет на состояние, и подобрать безопасный план изменений. Начать можно с одной консультации — покупать большую программу заранее не обязательно».
+
+Использовать нужно реальную специальность и квалификацию врача. «Специалист по зависимостям» допустим как понятное пояснение, но не как способ скрыть, к кому записывается пациент.
+
+Снижаем стигму объяснением, а не неожиданной подменой «образа жизни» психиатрической помощью.
+
+Отметку алгоритма необязательно выносить в начало разговора. Если она обсуждается, важно объяснять: это сигнал обратить внимание, а не установленный диагноз.
+
+Важная граница для выбранного сценария
+Бесплатная программа про изменения образа жизни подходит как образовательный маршрут, но не как самостоятельная программа отмены алкоголя при зависимости.
+
+В материалах об изменении употребления нужен короткий, заметный блок:
+
+«При регулярном употреблении алкоголя резкая отмена может быть опасной. Если при сокращении появляются дрожь, потливость, сердцебиение или выраженная тревога, обратитесь за медицинской помощью, не дожидаясь звонка ассистента. При судорогах, спутанности сознания или галлюцинациях — звоните 112 или 103».
+
+Полный кризисный модуль можно отложить. Эту базовую границу безопасности — нет. Аналогично, цепочка «соблюдал гигиену сна → не помогло → нужны лекарства» слишком упрощена: следующий шаг — оценка причин нарушения сна врачом, а не автоматический вывод о медикаментах.
+
+2. Главная пациента: конкретная структура
+Первый экран
+Не показываем сверху роль, номер карты, технические теги и настройки безопасности.
+
+Пример текста:
+
+Изменения начинаются с небольшого шага
+
+Необязательно менять всё сразу. Начните с короткого материала о том, как выбрать посильный первый шаг.
+
+Не всё сразу: с чего начать изменения
+
+Бесплатный материал · около 3 минут
+
+[Читать первый материал]
+
+Обсудить помощь специалиста
+
+Время чтения должно соответствовать реальному тексту. Если сна среди жалоб нет, не стоит начинать с утверждения «давайте восстановим ваш сон» — это будет ложная персонализация.
+
+Надпись «Рекомендовано вашим врачом» используем только для материала, который врач действительно назначил. Совпадение тегов ещё не означает личную рекомендацию.
+
+Ниже — один бесплатный маршрут
+Ваш первый маршрут
+
+Три небольших шага, чтобы разобраться в ситуации и понять, какая поддержка вам подходит.
+
+С чего начать изменения.
+Что сейчас важно именно вам.
+Как может помочь специалист.
+Бесплатно. Проходите в удобном темпе.
+
+На главной это краткий обзор, а не ещё одна большая панель с несколькими равнозначными кнопками.
+
+Предлагаю сделать первый материал первым элементом бесплатной программы. Пациент нажимает «Читать первый материал», приложение начинает бесплатный маршрут и открывает статью. Не заставляем его сначала изучать страницу программы и отдельно нажимать «Начать программу».
+
+С технической стороны переход должен учитывать успешный ответ на запуск программы; если запуск не удался, нельзя молча отображать её как начатую.
+
+Далее — понятное предложение поддержки
+Необязательно разбираться в этом одному
+
+Специалист поможет оценить влияние алкоголя на самочувствие, обсудить сон и подобрать безопасный план изменений.
+
+Можно начать с одной консультации или обсудить программу сопровождения.
+
+[Обсудить варианты помощи]
+
+Ассистент обычно связывается в течение 1–2 дней. Обращение не обязывает покупать программу. Это не канал срочной помощи.
+
+Уточните перед публикацией, календарные это дни или рабочие.
+
+При повторном входе
+Вот что я имел в виду под «возвращением пациента»:
+
+Состояние	Главное действие
+Ещё ничего не начал	Читать первый материал
+Начал маршрут	Продолжить текущий шаг
+Завершил бесплатный маршрут	Выбрать дальнейший шаг: материалы или помощь специалиста
+Отправил запрос	Увидеть подтверждение запроса и продолжить бесплатные материалы
+Получил доступ к сопровождению	Продолжить свою программу
+На первом месте всегда один актуальный шаг, а не весь каталог.
+
+Показывать состояние «Запрос отправлен» уже позволяет ваш purchase_requested. Это не большой новый модуль, а полезное применение имеющихся данных.
+
+3. Содержание бесплатного маршрута
+Я бы оставил название Life Balance как бренд, а пациенту показывал понятный подзаголовок:
+
+Life Balance — первые шаги
+
+Шаг	Содержание	Задача
+С чего начать	«Не всё сразу: как начинать изменения небольшими шагами»	Уменьшить ощущение чрезмерной сложности
+Что важно для меня	Короткая версия «Моя мотивация и цели»	Связать маршрут с собственной целью пациента
+Какая поддержка подходит	Новая статья «Как проходит первая консультация специалиста по зависимостям»	Снять конкретные вопросы и опасения
+«Моя ситуация по модели ABC» и «Мой план профилактики рецидива» я бы не ставил на первый экран. Они полезны, но требуют больше вовлечённости, а слово «рецидив» предполагает контекст, которого у впервые обратившегося пациента может ещё не быть.
+
+В статье о консультации нужно ответить на практические вопросы:
+
+о чём врач будет спрашивать;
+нужно ли заранее готовиться;
+обязательно ли назначают лекарства;
+как согласовывается план помощи;
+что входит в консультацию, а что оплачивается отдельно;
+кто имеет доступ к информации.
+Последний пункт — по реальным правилам клиники, без обещаний абсолютной анонимности.
+
+Бесплатный маршрут должен приносить самостоятельную пользу. Не следует специально делать его недостаточным, чтобы пациент пришёл к выводу, что без покупки он не справится.
+
+4. Программы и цена
+Я бы не предлагал пациенту на первом экране выбирать между FREE, Lite и Personal. Это выбор между внутренними названиями продукта, смысл которых пока неясен.
+
+Лучше:
+
+Самостоятельный старт — бесплатные материалы.
+Первая консультация — разобраться в ситуации с врачом.
+Индивидуальное сопровождение — согласованный план консультаций и работы между ними.
+Lite и Personal можно оставить внутри страницы сопровождения или для обсуждения с ассистентом.
+
+Убрать цену с первого экрана — разумно. Полностью скрывать её ради того, чтобы пациент сначала оставил заявку, я бы не рекомендовал. Если цена фиксированная, дайте возможность посмотреть её до обращения. Если состав индивидуальный, честно напишите, от чего зависит стоимость и что она согласуется до оплаты.
+
+Количество консультаций лучше объяснять содержанием и задачами сопровождения, а не делать большую упаковку вариантом «по умолчанию».
+
+давай сделаем бесплатную программу по этому сценарию. она должна включать в себя 3 шага. Каждый шаг должен содержать по 2-3-4 статьи и 1 опросник, либо опросник в начале и опросник в конце шага. 
+
+Опросники делай в виде json:
+образец:
+{
+  "title": "AUDIT — тест для выявления расстройств, связанных с употреблением алкоголя",
+  "description": "Alcohol Use Disorders Identification Test (AUDIT), разработанный Всемирной организацией здравоохранения. Опросник состоит из 10 вопросов об употреблении алкоголя.",
+  "pro_content": false,
+  "tag_ids": [],
+  "questions": [
+    {
+      "question_type": "single_choice",
+      "text": "Как часто вы употребляете алкогольные напитки?",
+      "is_required": true,
+      "order_index": 0,
+      "options": [
+        {
+          "text": "Никогда",
+          "order_index": 0
+        },
+        {
+          "text": "Раз в месяц или реже",
+          "order_index": 1
+        },
+        {
+          "text": "2–4 раза в месяц",
+          "order_index": 2
+        },
+        {
+          "text": "2–3 раза в неделю",
+          "order_index": 3
+        },
+        {
+          "text": "4 раза в неделю или чаще",
+          "order_index": 4
+        }
+      ]
+    },
+    {
+      "question_type": "single_choice",
+      "text": "Сколько стандартных порций алкоголя вы обычно выпиваете в день, когда употребляете алкоголь?",
+      "is_required": true,
+      "order_index": 1,
+      "options": [
+        {
+          "text": "1–2",
+          "order_index": 0
+        },
+        {
+          "text": "3–4",
+          "order_index": 1
+        },
+        {
+          "text": "5–6",
+          "order_index": 2
+        },
+        {
+          "text": "7–9",
+          "order_index": 3
+        },
+        {
+          "text": "10 или больше",
+          "order_index": 4
+        }
+      ]
+    },
+    {
+      "question_type": "single_choice",
+      "text": "Как часто вы выпиваете 6 или более стандартных порций алкоголя за один раз?",
+      "is_required": true,
+      "order_index": 2,
+      "options": [
+        {
+          "text": "Никогда",
+          "order_index": 0
+        },
+        {
+          "text": "Реже одного раза в месяц",
+          "order_index": 1
+        },
+        {
+          "text": "Ежемесячно",
+          "order_index": 2
+        },
+        {
+          "text": "Еженедельно",
+          "order_index": 3
+        },
+        {
+          "text": "Ежедневно или почти ежедневно",
+          "order_index": 4
+        }
+      ]
+    },
+    {
+      "question_type": "single_choice",
+      "text": "Как часто за последний год вы обнаруживали, что не можете прекратить употребление алкоголя после того, как начали пить?",
+      "is_required": true,
+      "order_index": 3,
+      "options": [
+        {
+          "text": "Никогда",
+          "order_index": 0
+        },
+        {
+          "text": "Реже одного раза в месяц",
+          "order_index": 1
+        },
+        {
+          "text": "Ежемесячно",
+          "order_index": 2
+        },
+        {
+          "text": "Еженедельно",
+          "order_index": 3
+        },
+        {
+          "text": "Ежедневно или почти ежедневно",
+          "order_index": 4
+        }
+      ]
+    },
+    {
+      "question_type": "single_choice",
+      "text": "Как часто за последний год из-за употребления алкоголя вы не могли выполнить то, что обычно от вас ожидалось?",
+      "is_required": true,
+      "order_index": 4,
+      "options": [
+        {
+          "text": "Никогда",
+          "order_index": 0
+        },
+        {
+          "text": "Реже одного раза в месяц",
+          "order_index": 1
+        },
+        {
+          "text": "Ежемесячно",
+          "order_index": 2
+        },
+        {
+          "text": "Еженедельно",
+          "order_index": 3
+        },
+        {
+          "text": "Ежедневно или почти ежедневно",
+          "order_index": 4
+        }
+      ]
+    },
+    {
+      "question_type": "single_choice",
+      "text": "Как часто за последний год вам требовалось выпить утром, чтобы прийти в себя после употребления большого количества алкоголя накануне?",
+      "is_required": true,
+      "order_index": 5,
+      "options": [
+        {
+          "text": "Никогда",
+          "order_index": 0
+        },
+        {
+          "text": "Реже одного раза в месяц",
+          "order_index": 1
+        },
+        {
+          "text": "Ежемесячно",
+          "order_index": 2
+        },
+        {
+          "text": "Еженедельно",
+          "order_index": 3
+        },
+        {
+          "text": "Ежедневно или почти ежедневно",
+          "order_index": 4
+        }
+      ]
+    },
+    {
+      "question_type": "single_choice",
+      "text": "Как часто за последний год после употребления алкоголя вы испытывали чувство вины или угрызения совести?",
+      "is_required": true,
+      "order_index": 6,
+      "options": [
+        {
+          "text": "Никогда",
+          "order_index": 0
+        },
+        {
+          "text": "Реже одного раза в месяц",
+          "order_index": 1
+        },
+        {
+          "text": "Ежемесячно",
+          "order_index": 2
+        },
+        {
+          "text": "Еженедельно",
+          "order_index": 3
+        },
+        {
+          "text": "Ежедневно или почти ежедневно",
+          "order_index": 4
+        }
+      ]
+    },
+    {
+      "question_type": "single_choice",
+      "text": "Как часто за последний год из-за употребления алкоголя вы не могли вспомнить, что происходило накануне вечером?",
+      "is_required": true,
+      "order_index": 7,
+      "options": [
+        {
+          "text": "Никогда",
+          "order_index": 0
+        },
+        {
+          "text": "Реже одного раза в месяц",
+          "order_index": 1
+        },
+        {
+          "text": "Ежемесячно",
+          "order_index": 2
+        },
+        {
+          "text": "Еженедельно",
+          "order_index": 3
+        },
+        {
+          "text": "Ежедневно или почти ежедневно",
+          "order_index": 4
+        }
+      ]
+    },
+    {
+      "question_type": "single_choice",
+      "text": "Получали ли вы или кто-либо другой травму в результате вашего употребления алкоголя?",
+      "is_required": true,
+      "order_index": 8,
+      "options": [
+        {
+          "text": "Нет",
+          "order_index": 0
+        },
+        {
+          "text": "Да, но не за последний год",
+          "order_index": 1
+        },
+        {
+          "text": "Да, за последний год",
+          "order_index": 2
+        }
+      ]
+    },
+    {
+      "question_type": "single_choice",
+      "text": "Выражал ли родственник, друг, врач или другой медицинский работник обеспокоенность вашим употреблением алкоголя или советовал вам сократить его?",
+      "is_required": true,
+      "order_index": 9,
+      "options": [
+        {
+          "text": "Нет",
+          "order_index": 0
+        },
+        {
+          "text": "Да, но не за последний год",
+          "order_index": 1
+        },
+        {
+          "text": "Да, за последний год",
+          "order_index": 2
+        }
+      ]
+    }
+  ]
+}
+<!-- ./frontend/app/components/questionnaires/JsonImporter.vue -->
+<script setup>
+const model = defineModel({
+  type: Boolean,
+  default: false,
+})
+
+const emit = defineEmits([
+  'import',
+])
+
+const jsonText = ref('')
+const errorMessage = ref('')
+
+const supportedTypes = new Set([
+  'text',
+  'number',
+  'boolean',
+  'scale',
+  'single_choice',
+  'multiple_choice',
+])
+
+function normalizeQuestionnaire(source) {
+  const data = source.questionnaire || source
+
+  if (!data || typeof data !== 'object') {
+    throw new Error('JSON должен содержать объект')
+  }
+
+  if (
+    typeof data.title !== 'string'
+    || !data.title.trim()
+  ) {
+    throw new Error('Поле title обязательно')
+  }
+
+  if (!Array.isArray(data.questions)) {
+    throw new Error(
+      'Поле questions должно быть массивом',
+    )
+  }
+
+  if (data.questions.length === 0) {
+    throw new Error(
+      'Опросник должен содержать вопросы',
+    )
+  }
+
+  const questions = data.questions.map(
+    (question, questionIndex) => {
+      const questionType = String(
+        question.question_type
+        || question.type
+        || '',
+      ).toLowerCase()
+
+      if (!supportedTypes.has(questionType)) {
+        throw new Error(
+          `Неизвестный тип вопроса №${questionIndex + 1}: ${questionType}`,
+        )
+      }
+
+      const options = Array.isArray(question.options)
+        ? question.options.map(
+            (option, optionIndex) => ({
+              client_id: crypto.randomUUID(),
+              text:
+                typeof option === 'string'
+                  ? option
+                  : String(option.text || ''),
+              order_index: optionIndex,
+            }),
+          )
+        : []
+
+      return {
+        client_id: crypto.randomUUID(),
+        question_type: questionType,
+        text: String(question.text || ''),
+        is_required:
+          question.is_required !== false,
+        order_index: questionIndex,
+        is_library_hidden: data.is_library_hidden === true,
+
+        scale_min:
+          questionType === 'scale'
+            ? Number(question.scale_min ?? 0)
+            : null,
+
+        scale_max:
+          questionType === 'scale'
+            ? Number(question.scale_max ?? 10)
+            : null,
+
+        scale_min_label:
+          question.scale_min_label ?? null,
+
+        scale_max_label:
+          question.scale_max_label ?? null,
+
+        options,
+      }
+    },
+  )
+
+  return {
+    title: data.title.trim(),
+    description: data.description || '',
+    pro_content: data.pro_content !== false,
+    tag_ids: Array.isArray(data.tag_ids)
+      ? data.tag_ids
+      : [],
+    copied_from_id: data.copied_from_id || null,
+    questions,
+  }
+}
+
+function importJson() {
+  errorMessage.value = ''
+
+  try {
+    const parsed = JSON.parse(jsonText.value)
+    const normalized = normalizeQuestionnaire(parsed)
+
+    emit('import', normalized)
+    model.value = false
+    jsonText.value = ''
+  } catch (error) {
+    errorMessage.value =
+      error?.message
+      || 'Не удалось прочитать JSON'
+  }
+}
+
+async function handleFile(event) {
+  errorMessage.value = ''
+
+  const file = event.target.files?.[0]
+
+  if (!file) return
+
+  if (
+    !file.name.toLowerCase().endsWith('.json')
+    && file.type !== 'application/json'
+  ) {
+    errorMessage.value =
+      'Выберите файл в формате JSON'
+    return
+  }
+
+  try {
+    jsonText.value = await file.text()
+  } catch {
+    errorMessage.value =
+      'Не удалось прочитать файл'
+  } finally {
+    event.target.value = ''
+  }
+}
+</script>
+
+<template>
+  <UiResponsiveDialog
+    v-model="model"
+    title="Импорт опросника из JSON"
+    max-width-class="max-w-3xl"
+  >
+    <div class="space-y-5">
+      <div
+        class="border-primary/30 bg-primary/5 rounded-2xl border p-4"
+      >
+        <div class="flex items-start gap-3">
+          <Icon
+            name="lucide:info"
+            class="text-primary mt-0.5 size-5 shrink-0"
+          />
+
+          <div class="text-sm">
+            <p class="font-medium">
+              Можно загрузить JSON-файл или вставить JSON
+              вручную.
+            </p>
+
+            <p class="text-base-content/60 mt-1">
+              После импорта опросник можно проверить
+              и отредактировать перед сохранением.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <label class="form-control block">
+        <span class="label">
+          <span class="label-text font-medium">
+            JSON-файл
+          </span>
+        </span>
+
+        <input
+          type="file"
+          accept=".json,application/json"
+          class="file-input file-input-bordered w-full"
+          @change="handleFile"
+        >
+      </label>
+
+      <div class="divider">
+        ИЛИ
+      </div>
+
+      <label class="form-control block">
+        <span class="label">
+          <span class="label-text font-medium">
+            JSON
+          </span>
+        </span>
+
+        <textarea
+          v-model="jsonText"
+          class="textarea textarea-bordered min-h-72 w-full font-mono text-sm"
+          placeholder="{ ... }"
+        />
+      </label>
+
+      <div
+        v-if="errorMessage"
+        class="alert alert-error"
+      >
+        <Icon
+          name="lucide:circle-alert"
+          class="size-5"
+        />
+        <span>{{ errorMessage }}</span>
+      </div>
+    </div>
+
+    <template #footer>
+      <div
+        class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"
+      >
+        <button
+          type="button"
+          class="btn"
+          @click="model = false"
+        >
+          Отмена
+        </button>
+
+        <button
+          type="button"
+          class="btn btn-primary"
+          :disabled="!jsonText.trim()"
+          @click="importJson"
+        >
+          <Icon
+            name="lucide:upload"
+            class="size-4"
+          />
+          Импортировать
+        </button>
+      </div>
+    </template>
+  </UiResponsiveDialog>
+</template>
+
+также, для кадого этапа надо сделать короткое описание, которое пациент видит - он должен понимать смысл, какие конкретно пробемы реашет этот шаг
+
+сама программа тоже должна включать короткое описание, чего пациент добьется балгодаря нее
+
+также, каждый этап включает Инструкция для врача - хотя, работа это самостоятельноая и не предполагает консультации специалитса, пусть у врача будут короткие инструкции, вдруг пациент спросит его по какому-то шагу. Надо описать, что конкретно делает данный шаг, какие туда входят инструменты и что решает: работа с мотивацией/ улучшение контроля, и т.д.
+
+каждый этап включает шаги. Собственно, шаг - это либо статья либо опросник. Надо сохранить преемственность каждой статьи у каждого шага и сделать так, чтобы сложность увеличивалась
+
+Смотри, у меня приложение настроено на то, чтобы замотивировать пациента на консультацию психиатра. Тут сценарий тавкой: пациент обратился к гастроэнтерологу и специалист решил, что пациент выпивает алкоголь больше обычного. Но просграмма должна включать лишь элементы решения проблемы алкоголя, чтобы не спугнуть пациента от консультации - надо сделать решение пролемы с алкоголем в составе комплекса по измеению образа жизни, а не как самоцель, чтобы пацуиент сам пришел к выводу, что ему нужна консультация психиатра
+
+Если надо, сначала задай необходимые вопросы, приведи заголовки статей и варианты опросников.

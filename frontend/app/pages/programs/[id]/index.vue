@@ -19,7 +19,7 @@ const purchaseActionLabel = computed(() =>
 
 const loading = ref(true)
 const starting = ref(false)
-const requestingPurchase = ref(false)
+const purchaseDialogOpen = ref(false)
 
 const message = ref('')
 const errorMessage = ref('')
@@ -47,6 +47,7 @@ const selectedStage = computed(
 
 async function loadProgram() {
   loading.value = true
+  errorMessage.value = ''
 
   try {
     if (isPatient.value) {
@@ -109,6 +110,7 @@ async function loadProgram() {
 async function startProgram() {
   starting.value = true
   errorMessage.value = ''
+  if (starting.value || !program.value) return
 
   try {
     await store.startProgram(program.value.id)
@@ -125,29 +127,24 @@ async function startProgram() {
 }
 
 async function requestPurchase() {
+  if (!program.value) return
+
+  errorMessage.value = ''
+
   if (program.value.purchase_requested) {
     message.value =
       'Запрос уже отправлен медицинскому ассистенту.'
     return
   }
 
-  requestingPurchase.value = true
-  errorMessage.value = ''
+  purchaseDialogOpen.value = true
+}
 
-  try {
-    const response = await store.requestPurchase(
-      program.value.id,
-    )
+function handlePurchaseRequested({ programId, response }) {
+  if (program.value?.id !== programId) return
 
-    program.value.purchase_requested = true
-    message.value = response.message
-  } catch (error) {
-    errorMessage.value =
-      error?.data?.detail
-      || 'Не удалось отправить запрос'
-  } finally {
-    requestingPurchase.value = false
-  }
+  program.value.purchase_requested = true
+  message.value = response.message
 }
 
 onMounted(loadProgram)
@@ -230,6 +227,15 @@ onMounted(loadProgram)
             class="text-base-content/70 mt-3 max-w-3xl"
           >
             {{ program.description }}
+          </p>
+
+          <p
+            v-if="isPatient && program.service"
+            class="border-primary/20 bg-primary/5 mt-4 rounded-2xl border p-4 text-sm"
+          >
+            Начать можно бесплатно. Материалы без отметки Pro доступны
+            без покупки. Консультации и Pro-материалы относятся
+            к программе сопровождения со специалистами.
           </p>
 
           <div
@@ -385,7 +391,14 @@ onMounted(loadProgram)
         :program-id="program.id"
         :is-patient="isPatient"
         :purchase-label="purchaseActionLabel"
+        :purchase-requested="Boolean(program.purchase_requested)"
         @purchase="requestPurchase"
+      />
+      <PatientPurchaseDialog
+        v-if="isPatient"
+        v-model="purchaseDialogOpen"
+        :program="program"
+        @requested="handlePurchaseRequested"
       />
   </div>
 </template>

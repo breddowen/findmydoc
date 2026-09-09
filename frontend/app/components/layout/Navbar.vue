@@ -3,6 +3,7 @@
 const auth = useAuthStore()
 const userStore = useUserStore()
 const ui = useUiStore()
+const notifications = useNotificationsStore()
 
 const {
   isStaff,
@@ -78,6 +79,23 @@ async function handlePatientAttached(response) {
     `/patients/${response.patient_id}`,
   )
 }
+
+const isPatient = computed(() =>
+  isClientReady.value
+  && auth.activeRole === 'patient',
+)
+
+onMounted(() => {
+  notifications.connect()
+
+  void notifications.fetchUnreadCount().catch(() => {
+    // Ошибка фоновой загрузки не блокирует навигацию.
+  })
+})
+
+onBeforeUnmount(() => {
+  notifications.disconnect()
+})
 </script>
 
 <template>
@@ -85,52 +103,72 @@ async function handlePatientAttached(response) {
     class="bg-base-100 border-base-300 sticky top-0 z-30 border-b"
   >
     <div
-        class="mx-auto grid min-h-16 w-full max-w-7xl grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 px-3 py-1 sm:min-h-20 sm:px-4"
-      >
-      <div class="flex min-w-0 items-center">
-        <button
-          v-if="isStaff"
-          type="button"
-          class="btn btn-circle btn-ghost"
-          :aria-label="
-            ui.sidebarOpen
-              ? 'Свернуть боковое меню'
-              : 'Открыть боковое меню'
-          "
-          @click="ui.toggleSidebar"
-        >
-          <Icon
-            :name="
+      class="mx-auto grid min-h-16 w-full max-w-7xl items-center gap-2 px-3 py-1 sm:min-h-20 sm:px-4"
+      :class="
+        isPatient
+          ? 'grid-cols-[minmax(0,1fr)_auto]'
+          : 'grid-cols-[auto_minmax(0,1fr)_auto]'
+      "
+    >
+      <div class="flex min-w-0 items-center gap-1">
+        <template v-if="isPatient">
+          <div class="patient-navbar-brand">
+            <LayoutLogo
+              to="/dashboard"
+              variant="navbar"
+            />
+          </div>
+
+          <LayoutPatientActions
+            @menu="mobileMenuOpen = true"
+          />
+        </template>
+
+        <template v-else>
+          <button
+            v-if="isStaff"
+            type="button"
+            class="btn btn-circle btn-ghost"
+            :aria-label="
               ui.sidebarOpen
-                ? 'lucide:panel-left-close'
-                : 'lucide:menu'
+                ? 'Свернуть боковое меню'
+                : 'Открыть боковое меню'
             "
-            class="size-5"
-          />
-        </button>
+            @click="ui.toggleSidebar"
+          >
+            <Icon
+              :name="
+                ui.sidebarOpen
+                  ? 'lucide:panel-left-close'
+                  : 'lucide:menu'
+              "
+              class="size-5"
+            />
+          </button>
 
-        <button
-          v-else
-          type="button"
-          class="btn btn-circle btn-ghost lg:hidden"
-          aria-label="Открыть меню"
-          @click="mobileMenuOpen = true"
-        >
-          <Icon
-            name="lucide:menu"
-            class="size-5"
-          />
-        </button>
+          <button
+            v-else
+            type="button"
+            class="btn btn-circle btn-ghost lg:hidden"
+            aria-label="Открыть меню"
+            @click="mobileMenuOpen = true"
+          >
+            <Icon
+              name="lucide:menu"
+              class="size-5"
+            />
+          </button>
 
-        <LayoutLogo
-          v-if="!isStaff"
-          to="/dashboard"
-          variant="navbar"
-        />
+          <LayoutLogo
+            v-if="!isStaff"
+            to="/dashboard"
+            variant="navbar"
+          />
+        </template>
       </div>
 
       <div
-        v-if="!isStaff"
+        v-if="!isStaff && !isPatient"
         class="hidden min-w-0 items-center justify-center px-2 lg:flex"
       >
         <UiMegaMenu
@@ -140,7 +178,7 @@ async function handlePatientAttached(response) {
       </div>
 
       <div
-        v-else
+        v-else-if="isStaff"
         class="flex min-w-0 items-center px-2"
       >
         <button
@@ -240,6 +278,10 @@ async function handlePatientAttached(response) {
               </NuxtLink>
             </li>
 
+            <li v-if="isStaff">
+              <NotificationsBrowserPermission />
+            </li>
+
             <li>
               <button
                 type="button"
@@ -336,3 +378,28 @@ async function handlePatientAttached(response) {
     @send-email="sendPatientInvitationEmail"
   />
 </template>
+<style scoped>
+.patient-navbar-brand {
+  width: clamp(3rem, 16vw, 5rem);
+  min-width: 0;
+  flex-shrink: 1;
+}
+
+.patient-navbar-brand :deep(a) {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.patient-navbar-brand :deep(svg),
+.patient-navbar-brand :deep(img) {
+  max-width: 100%;
+  height: auto;
+}
+
+@media (min-width: 640px) {
+  .patient-navbar-brand {
+    width: auto;
+    max-width: 10rem;
+  }
+}
+</style>

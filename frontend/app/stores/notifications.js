@@ -18,72 +18,95 @@ export const useNotificationsStore = defineStore(
     let manuallyDisconnected = false
     let assignmentRefreshTimer = null
 
-    async function fetchNotifications(
-      requestedPage = 1,
-    ) {
-      const { $api } = useNuxtApp()
+    let notificationRefreshTimer = null
+    let notificationSessionVersion = 0
 
-      loading.value = true
+    const seenNotificationIds = new Set()
 
-      try {
-        const response = await $api(
-          '/api/v1/notifications',
-          {
-            query: {
-              page: requestedPage,
-              page_size: 10,
-            },
-          },
-        )
+    async function fetchNotifications(requestedPage = 1) {
+    const { $api } = useNuxtApp()
+    const version = notificationSessionVersion
 
-        items.value = response.items
-        unreadCount.value = response.unread_count
-        page.value = response.page
-        totalItems.value = response.total_items
-        totalPages.value = response.total_pages
+    loading.value = true
 
-        return response
-      } finally {
-        loading.value = false
-      }
-    }
-
-    async function fetchUnreadCount() {
-      const { $api } = useNuxtApp()
-
+    try {
       const response = await $api(
-        '/api/v1/notifications/unread-count',
-      )
-
-      unreadCount.value = response.unread_count
-    }
-
-    async function markAsRead(notification) {
-      if (notification.is_read) return
-
-      const { $api } = useNuxtApp()
-
-      const response = await $api(
-        `/api/v1/notifications/${notification.id}/read`,
+        '/api/v1/notifications',
         {
-          method: 'PATCH',
+          query: {
+            page: requestedPage,
+            page_size: 10,
+          },
         },
       )
 
-      const item = items.value.find(
-        (current) => current.id === notification.id,
-      )
-
-      if (item) {
-        item.is_read = true
-        item.read_at = response.read_at
+      if (version !== notificationSessionVersion) {
+        return response
       }
 
-      unreadCount.value = Math.max(
-        unreadCount.value - 1,
-        0,
-      )
+      items.value = response.items
+      unreadCount.value = response.unread_count
+      page.value = response.page
+      totalItems.value = response.total_items
+      totalPages.value = response.total_pages
+
+      return response
+    } finally {
+      if (version === notificationSessionVersion) {
+        loading.value = false
+      }
     }
+  }
+
+  async function fetchUnreadCount() {
+    const { $api } = useNuxtApp()
+    const version = notificationSessionVersion
+
+    const response = await $api(
+      '/api/v1/notifications/unread-count',
+    )
+
+    if (version === notificationSessionVersion) {
+      unreadCount.value = response.unread_count
+    }
+  }
+
+  function scheduleNotificationsRefresh() {
+    window.clearTimeout(notificationRefreshTimer)
+
+    notificationRefreshTimer = window.setTimeout(() => {
+      void fetchNotifications(page.value).catch(() => {
+        // Уведомление уже сохранено на backend.
+        // Не ломаем интерфейс при временной ошибке сети.
+      })
+    }, 200)
+  }
+  async function markAsRead(notification) {
+        if (notification.is_read) return
+  
+        const { $api } = useNuxtApp()
+  
+        const response = await $api(
+          `/api/v1/notifications/${notification.id}/read`,
+          {
+            method: 'PATCH',
+          },
+        )
+  
+        const item = items.value.find(
+          (current) => current.id === notification.id,
+        )
+  
+        if (item) {
+          item.is_read = true
+          item.read_at = response.read_at
+        }
+  
+        unreadCount.value = Math.max(
+          unreadCount.value - 1,
+          0,
+        )
+      }
 
     async function markAllAsRead() {
       const { $api } = useNuxtApp()
@@ -103,34 +126,45 @@ export const useNotificationsStore = defineStore(
     }
 
     function showBrowserNotification(notification) {
-      if (!notification.channels?.includes('browser')) {
-        return
-      }
+      if (!import.meta.client) return
 
       if (
-        !('Notification' in window)
+        !notification.channels?.includes('browser')
+        || !('Notification' in window)
         || Notification.permission !== 'granted'
       ) {
         return
       }
 
-      const browserNotification = new Notification(
-        notification.title,
-        {
-          body: notification.message,
-          tag: notification.id,
-          icon: '/favicon.ico',
-        },
-      )
+      try {
+        const browserNotification = new Notification(
+          notification.title,
+          {
+            body: notification.message,
+            tag: notification.id,
+            icon: '/favicon.ico',
+          },
+        )
 
-      browserNotification.onclick = () => {
-        window.focus()
+        browserNotification.onclick = () => {
+          window.focus()
 
-        if (notification.action_url) {
-          navigateTo(notification.action_url)
+          const actionUrl = notification.action_url
+
+          if (
+            typeof actionUrl === 'string'
+            && actionUrl.startsWith('/')
+            && !actionUrl.startsWith('//')
+          ) {
+            void navigateTo(actionUrl)
+          }
+
+          browserNotification.close()
         }
-
-        browserNotification.close()
+      } catch {
+        // Некоторые мобильные браузеры не поддерживают
+        // создание Notification без Service Worker.
+        // Колокольчик при этом должен продолжать работать.
       }
     }
 
@@ -145,39 +179,43 @@ export const useNotificationsStore = defineStore(
 
       if (data.type === 'authenticated') {
         connected.value = true
+        scheduleNotificationsRefresh()
         return
       }
 
       if (
         data.type !== 'notification'
-        || !data.notification
+        || !data.notification?.id
       ) {
         return
       }
 
       const notification = data.notification
 
-      if (
-            [
-                'article_assigned',
-                'questionnaire_assigned',
-            ].includes(notification.notification_type)
-            ) {
-            scheduleAssignmentsRefresh()
-            }
+      if (seenNotificationIds.has(notification.id)) {
+        return
+      }
+
+      seenNotificationIds.add(notification.id)
+
+      if (seenNotificationIds.size > 1000) {
+        const oldestId = seenNotificationIds.values().next().value
+        seenNotificationIds.delete(oldestId)
+      }
 
       if (
-        notification.channels?.includes('in_app')
+        [
+          'article_assigned',
+          'questionnaire_assigned',
+        ].includes(notification.notification_type)
       ) {
-        items.value = [
-          notification,
-          ...items.value.filter(
-            (item) => item.id !== notification.id,
-          ),
-        ].slice(0, 10)
+        scheduleAssignmentsRefresh()
+      }
 
-        unreadCount.value += 1
-        totalItems.value += 1
+      if (notification.channels?.includes('in_app')) {
+        // Счётчики берём с backend, не увеличиваем вслепую:
+        // уведомление могло уже попасть в HTTP-ответ.
+        scheduleNotificationsRefresh()
       }
 
       showBrowserNotification(notification)
@@ -193,72 +231,109 @@ export const useNotificationsStore = defineStore(
       if (!token || socket) return
 
       manuallyDisconnected = false
+      window.clearTimeout(reconnectTimer)
 
       const config = useRuntimeConfig()
 
-      const websocketBase =
-        config.public.apiBase
-          .replace(/^http:/, 'ws:')
-          .replace(/^https:/, 'wss:')
-
-      socket = new WebSocket(
-        `${websocketBase}/api/v1/notifications/ws`,
+      const websocketUrl = new URL(
+        config.public.apiBase,
+        window.location.origin,
       )
 
-      socket.addEventListener('open', () => {
-        socket.send(
+      websocketUrl.protocol =
+        websocketUrl.protocol === 'https:' ? 'wss:' : 'ws:'
+
+      websocketUrl.pathname =
+        websocketUrl.pathname.replace(/\/$/, '')
+        + '/api/v1/notifications/ws'
+
+      websocketUrl.search = ''
+      websocketUrl.hash = ''
+
+      const currentSocket = new WebSocket(
+        websocketUrl.toString(),
+      )
+
+      socket = currentSocket
+
+      currentSocket.addEventListener('open', () => {
+        if (socket !== currentSocket) return
+
+        currentSocket.send(
           JSON.stringify({
             type: 'authenticate',
             token,
           }),
         )
 
+        window.clearInterval(pingTimer)
+
         pingTimer = window.setInterval(() => {
-          if (socket?.readyState === WebSocket.OPEN) {
-            socket.send(
-              JSON.stringify({
-                type: 'ping',
-              }),
+          if (
+            socket === currentSocket
+            && currentSocket.readyState === WebSocket.OPEN
+          ) {
+            currentSocket.send(
+              JSON.stringify({ type: 'ping' }),
             )
           }
         }, 30000)
       })
 
-      socket.addEventListener(
-        'message',
-        handleSocketMessage,
-      )
+      currentSocket.addEventListener('message', (event) => {
+        if (socket === currentSocket) {
+          handleSocketMessage(event)
+        }
+      })
 
-      socket.addEventListener('close', () => {
+      currentSocket.addEventListener('close', () => {
+        if (socket !== currentSocket) return
+
         connected.value = false
         socket = null
 
         window.clearInterval(pingTimer)
 
         if (!manuallyDisconnected) {
-          reconnectTimer = window.setTimeout(
-            connect,
-            3000,
-          )
+          reconnectTimer = window.setTimeout(connect, 3000)
         }
       })
     }
 
     function disconnect() {
+      if (!import.meta.client) return
+
       manuallyDisconnected = true
+      notificationSessionVersion += 1
 
       window.clearTimeout(reconnectTimer)
       window.clearInterval(pingTimer)
       window.clearTimeout(assignmentRefreshTimer)
+      window.clearTimeout(notificationRefreshTimer)
 
-      socket?.close()
+      const previousSocket = socket
       socket = null
 
+      previousSocket?.close()
+
       connected.value = false
+      loading.value = false
+
+      items.value = []
+      unreadCount.value = 0
+      page.value = 1
+      totalItems.value = 0
+      totalPages.value = 1
+
+      seenNotificationIds.clear()
     }
 
     async function requestBrowserPermission() {
-      if (!('Notification' in window)) {
+      if (
+        !import.meta.client
+        || !window.isSecureContext
+        || !('Notification' in window)
+      ) {
         return 'unsupported'
       }
 

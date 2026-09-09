@@ -75,6 +75,7 @@ from app.modules.programs.utils import (
 )
 from app.modules.questionnaires.models import (
     Questionnaire,
+    QuestionnaireSubmission,
 )
 from app.modules.tags.models import Tag
 from app.modules.users.enums import UserRole
@@ -95,6 +96,9 @@ from app.modules.notifications.transactional import (
     create_in_app_notification,
     publish_saved_notifications,
     snapshot_notifications,
+)
+from app.modules.consents.contact_service import (
+    ensure_assistant_contact_allowed,
 )
 
 router = APIRouter(
@@ -954,16 +958,21 @@ async def list_programs_for_patient(
             is_hidden=program.is_hidden,
         )
 
-        if not has_access and not can_see_by_tags:
-            continue
+        # if not has_access and not can_see_by_tags:
+        #     continue
 
-        result.append(
-            serialize_patient_program(
-                session=session,
-                program=program,
-                patient=patient,
-            )
+        response = serialize_patient_program(
+            session=session,
+            program=program,
+            patient=patient,
         )
+
+        response.is_recommended = (
+            bool(response.tags)
+            and can_see_by_tags
+        )
+
+        result.append(response)
 
     return result
 
@@ -1008,17 +1017,24 @@ async def get_program_for_patient(
         is_hidden=program.is_hidden,
     )
 
-    if not has_access and not can_see_by_tags:
-        raise HTTPException(
-            status_code=403,
-            detail="Программа недоступна пациенту",
-        )
+    # if not has_access and not can_see_by_tags:
+    #     raise HTTPException(
+    #         status_code=403,
+    #         detail="Программа недоступна пациенту",
+    #     )
 
-    return serialize_patient_program(
+    response = serialize_patient_program(
         session=session,
         program=program,
         patient=patient,
     )
+
+    response.is_recommended = (
+        bool(response.tags)
+        and can_see_by_tags
+    )
+
+    return response
 
 
 @router.patch(
@@ -1082,6 +1098,41 @@ async def update_program(
         raise HTTPException(
             status_code=404,
             detail="Программа не найдена",
+        )
+
+    # Временная защита.
+    # Текущий редактор удаляет этапы и создаёт их заново.
+    # При наличии попыток опросников это повреждает
+    # привязку результатов к этапам программы.
+    current_stage_ids = select(ProgramStage.id).where(
+        ProgramStage.program_id == program.id
+    )
+
+    existing_submission_id = session.exec(
+        select(QuestionnaireSubmission.id)
+        .where(
+            (
+                QuestionnaireSubmission.program_id
+                == program.id
+            )
+            | QuestionnaireSubmission.program_stage_id.in_(
+                current_stage_ids
+            )
+        )
+        .limit(1)
+    ).first()
+
+    if existing_submission_id is not None:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Сохранение временно недоступно: "
+                "по программе уже есть попытки опросников. "
+                "Текущий редактор пересоздаёт этапы "
+                "и может нарушить связь с результатами. "
+                "Сначала необходимо обновить механизм "
+                "редактирования программы."
+            ),
         )
 
     # Старые клиенты, которые ещё не отправляют новые поля,
@@ -1186,22 +1237,22 @@ async def start_program(
         program_id=program.id,
     )
 
-    if (
-        not has_program_access
-        and not patient_can_see_content(
-            session=session,
-            patient=patient,
-            content_tag_ids=get_program_tag_ids(
-                session=session,
-                program_id=program.id,
-            ),
-            is_hidden=program.is_hidden,
-        )
-    ):
-        raise HTTPException(
-            status_code=403,
-            detail="Программа недоступна пациенту",
-        )
+    # if (
+    #     not has_program_access
+    #     and not patient_can_see_content(
+    #         session=session,
+    #         patient=patient,
+    #         content_tag_ids=get_program_tag_ids(
+    #             session=session,
+    #             program_id=program.id,
+    #         ),
+    #         is_hidden=program.is_hidden,
+    #     )
+    # ):
+    #     raise HTTPException(
+    #         status_code=403,
+    #         detail="Программа недоступна пациенту",
+    #     )
 
     enrollment = get_program_enrollment(
         session=session,
@@ -1284,21 +1335,12 @@ async def request_program_purchase(
 
         has_access = bool(access and access.is_active)
 
-        can_see_by_tags = patient_can_see_content(
+        ensure_assistant_contact_allowed(
             session=session,
-            patient=patient,
-            content_tag_ids=get_program_tag_ids(
-                session=session,
-                program_id=program.id,
-            ),
-            is_hidden=program.is_hidden,
+            patient_id=patient.id,
+            user_id=auth.user.id,
+            source="program_purchase_request",
         )
-
-        if not has_access and not can_see_by_tags:
-            raise HTTPException(
-                status_code=403,
-                detail="Программа недоступна пациенту",
-            )
 
         if program.service_id is None:
             raise HTTPException(

@@ -505,6 +505,76 @@ def get_program_content_item(
     return session.exec(statement).first()
 
 
+# def ensure_patient_program_content_access(
+#     *,
+#     session: Session,
+#     patient,
+#     program_id: uuid.UUID,
+#     content_type: ProgramItemType,
+#     content_id: uuid.UUID,
+#     pro_content: bool,
+#     stage_id: uuid.UUID | None = None,
+# ) -> ProgramStageItem:
+#     from app.modules.content.utils import (
+#         patient_can_see_content,
+#     )
+
+#     program = session.get(Program, program_id)
+
+#     if not program or program.is_hidden:
+#         raise HTTPException(
+#             status_code=404,
+#             detail="Программа не найдена",
+#         )
+
+#     item = get_program_content_item(
+#         session=session,
+#         program_id=program.id,
+#         content_type=content_type,
+#         content_id=content_id,
+#         stage_id=stage_id,
+#     )
+
+#     if not item:
+#         raise HTTPException(
+#             status_code=404,
+#             detail="Контент не входит в эту программу",
+#         )
+
+#     has_access = patient_has_program_access(
+#         session=session,
+#         patient_id=patient.id,
+#         program_id=program.id,
+#     )
+
+#     can_see_program = patient_can_see_content(
+#         session=session,
+#         patient=patient,
+#         content_tag_ids=get_program_tag_ids(
+#             session=session,
+#             program_id=program.id,
+#         ),
+#         is_hidden=program.is_hidden,
+#     )
+
+#     if not has_access and not can_see_program:
+#         raise HTTPException(
+#             status_code=403,
+#             detail="Программа недоступна пациенту",
+#         )
+
+#     # Глобальный Pro здесь намеренно не используется.
+#     if pro_content and not has_access:
+#         raise HTTPException(
+#             status_code=403,
+#             detail=(
+#                 "Для этого материала необходима "
+#                 "покупка программы"
+#             ),
+#         )
+
+#     return item
+
 def ensure_patient_program_content_access(
     *,
     session: Session,
@@ -515,10 +585,6 @@ def ensure_patient_program_content_access(
     pro_content: bool,
     stage_id: uuid.UUID | None = None,
 ) -> ProgramStageItem:
-    from app.modules.content.utils import (
-        patient_can_see_content,
-    )
-
     program = session.get(Program, program_id)
 
     if not program or program.is_hidden:
@@ -541,36 +607,26 @@ def ensure_patient_program_content_access(
             detail="Контент не входит в эту программу",
         )
 
-    has_access = patient_has_program_access(
-        session=session,
-        patient_id=patient.id,
-        program_id=program.id,
-    )
-
-    can_see_program = patient_can_see_content(
-        session=session,
-        patient=patient,
-        content_tag_ids=get_program_tag_ids(
+    # Теги определяют рекомендации, а не доступ
+    # к материалам внутри выбранной программы.
+    #
+    # Бесплатные материалы доступны без покупки.
+    # Pro-материалы требуют индивидуального доступа
+    # именно к этой программе.
+    if pro_content:
+        has_access = patient_has_program_access(
             session=session,
+            patient_id=patient.id,
             program_id=program.id,
-        ),
-        is_hidden=program.is_hidden,
-    )
-
-    if not has_access and not can_see_program:
-        raise HTTPException(
-            status_code=403,
-            detail="Программа недоступна пациенту",
         )
 
-    # Глобальный Pro здесь намеренно не используется.
-    if pro_content and not has_access:
-        raise HTTPException(
-            status_code=403,
-            detail=(
-                "Для этого материала необходима "
-                "покупка программы"
-            ),
-        )
+        if not has_access:
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    "Для этого материала необходим "
+                    "доступ к программе сопровождения"
+                ),
+            )
 
     return item
