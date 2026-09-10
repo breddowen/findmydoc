@@ -1,7 +1,23 @@
 <!-- ./frontend/app/pages/questionnaires/[id].vue -->
 <script setup>
+definePageMeta({
+  key: route => route.fullPath,
+})
+
 const route = useRoute()
 const store = useQuestionnairesStore()
+const context = useProgramContext()
+
+const questionnaireId = String(route.params.id)
+
+// Контекст фиксируется для экземпляра страницы.
+// При смене fullPath Nuxt создаёт новый экземпляр.
+const programId = context.programId.value
+const programStageId = context.stageId.value
+
+const isProgramQuestionnaire = Boolean(
+  programId && programStageId,
+)
 
 const questionnaire = ref(null)
 const submissionId = ref(null)
@@ -11,74 +27,75 @@ const savingQuestions = reactive({})
 
 const loading = ref(true)
 const completing = ref(false)
+const leaving = ref(false)
 const completed = ref(false)
 
 const errorMessage = ref('')
 
 const saveTimers = new Map()
+const revisions = new Map()
+const savedRevisions = new Map()
+
+let saveQueue = Promise.resolve()
+let disposed = false
+let submissionCompleted = false
+
+function errorText(error, fallback) {
+  return typeof error?.data?.detail === 'string'
+    ? error.data.detail
+    : fallback
+}
+
+function hasAnswer(value) {
+  return value !== undefined
+    && value !== null
+    && value !== ''
+}
 
 const answeredCount = computed(() =>
   questionnaire.value?.questions.filter(
-    (question) =>
-      answers[question.id] !== undefined
-      && answers[question.id] !== null
-      && answers[question.id] !== '',
-  ).length || 0
+    question => hasAnswer(answers[question.id]),
+  ).length || 0,
 )
 
 const progress = computed(() => {
-  const total =
-    questionnaire.value?.questions.length || 0
+  const total = questionnaire.value?.questions.length || 0
 
   return total
     ? Math.round(answeredCount.value / total * 100)
     : 0
 })
-const programId = computed(() =>
-  typeof route.query.program === 'string'
-    ? route.query.program
-    : null
-)
 
-const programStageId = computed(() =>
-  typeof route.query.stage === 'string'
-    ? route.query.stage
-    : null
-)
-
-const isProgramQuestionnaire = computed(
-  () => Boolean(
-    programId.value
-    && programStageId.value,
-  ),
-)
 async function initialize() {
   loading.value = true
   errorMessage.value = ''
 
   try {
-    questionnaire.value =
-      await store.fetchQuestionnaire(
-        route.params.id,
-        {
-          programId: programId.value,
-          programStageId: programStageId.value,
-        },
-      )
+    const response = await store.fetchQuestionnaire(
+      questionnaireId,
+      {
+        programId,
+        programStageId,
+      },
+    )
 
-    const allProgress =
-      await store.fetchMyProgress()
+    if (disposed) return
+
+    questionnaire.value = response
+
+    const allProgress = await store.fetchMyProgress()
+
+    if (disposed) return
 
     const existing = allProgress.find(
-      (item) =>
-        item.questionnaire_id === route.params.id
+      item =>
+        item.questionnaire_id === questionnaireId
         && item.status === 'in_progress'
         && (
-          isProgramQuestionnaire.value
+          isProgramQuestionnaire
             ? (
-                item.program_id === programId.value
-                && item.program_stage_id
-                  === programStageId.value
+                item.program_id === programId
+                && item.program_stage_id === programStageId
               )
             : (
                 !item.program_id
@@ -88,95 +105,168 @@ async function initialize() {
     )
 
     if (existing) {
-      submissionId.value =
-        existing.submission_id
+      const submission = await store.fetchSubmission(
+        existing.submission_id,
+      )
 
-      const submission =
-        await store.fetchSubmission(
-          existing.submission_id,
-        )
+      if (disposed) return
 
-      for (
-        const answer
-        of submission.answers || []
-      ) {
-        answers[answer.question_id] =
-          answer.value
+      submissionId.value = existing.submission_id
+
+      for (const answer of submission.answers || []) {
+        answers[answer.question_id] = answer.value
       }
     } else {
-      const submission =
-        await store.startQuestionnaire(
-          route.params.id,
-          {
-            programId: programId.value,
-            programStageId:
-              programStageId.value,
-          },
-        )
+      const submission = await store.startQuestionnaire(
+        questionnaireId,
+        {
+          programId,
+          programStageId,
+        },
+      )
 
-      submissionId.value =
-        submission.submission_id
+      if (disposed) return
+
+      submissionId.value = submission.submission_id
     }
   } catch (error) {
-    errorMessage.value =
-      error?.data?.detail
-      || 'Не удалось открыть опросник'
+    if (!disposed) {
+      errorMessage.value = errorText(
+        error,
+        'Не удалось открыть опросник',
+      )
+    }
   } finally {
-    loading.value = false
+    if (!disposed) {
+      loading.value = false
+    }
   }
 }
 
-function scheduleAnswerSave(question) {
-  const oldTimer = saveTimers.get(question.id)
-
-  if (oldTimer) {
-    window.clearTimeout(oldTimer)
+function clearSaveTimers() {
+  for (const timer of saveTimers.values()) {
+    window.clearTimeout(timer)
   }
 
-  const timer = window.setTimeout(async () => {
-    savingQuestions[question.id] = true
+  saveTimers.clear()
+}
+
+function enqueueSave(questionId) {
+  const revision = revisions.get(questionId) || 0
+
+  if (
+    !submissionId.value
+    || submissionCompleted
+    || revision <= (savedRevisions.get(questionId) || 0)
+  ) {
+    return Promise.resolve()
+  }
+
+  const currentSubmissionId = submissionId.value
+  const rawValue = answers[questionId]
+
+  // Снимок не должен измениться, пока запрос ждёт очереди.
+  const value = rawValue === undefined
+    ? null
+    : JSON.parse(JSON.stringify(rawValue))
+
+  const operation = saveQueue.then(async () => {
+    savingQuestions[questionId] = true
 
     try {
       await store.saveAnswer(
-        submissionId.value,
-        question.id,
-        answers[question.id],
+        currentSubmissionId,
+        questionId,
+        value,
       )
-    } catch (error) {
-      errorMessage.value =
-        error?.data?.detail
-        || 'Не удалось сохранить ответ'
+
+      savedRevisions.set(questionId, revision)
     } finally {
-      savingQuestions[question.id] = false
-      saveTimers.delete(question.id)
+      savingQuestions[questionId] = false
     }
+  })
+
+  // Ошибка конкретного запроса не блокирует всю очередь.
+  // Вызывающий код при этом получает отклонённый operation.
+  saveQueue = operation.catch(() => {})
+
+  return operation
+}
+
+function scheduleAnswerSave(question) {
+  if (
+    completing.value
+    || leaving.value
+    || submissionCompleted
+    || !submissionId.value
+  ) {
+    return
+  }
+
+  const questionId = question.id
+
+  revisions.set(
+    questionId,
+    (revisions.get(questionId) || 0) + 1,
+  )
+
+  window.clearTimeout(saveTimers.get(questionId))
+
+  const timer = window.setTimeout(() => {
+    saveTimers.delete(questionId)
+
+    void enqueueSave(questionId).catch(error => {
+      if (!disposed) {
+        errorMessage.value = errorText(
+          error,
+          'Не удалось сохранить ответ. Перед выходом сохранение будет повторено.',
+        )
+      }
+    })
   }, 500)
 
-  saveTimers.set(question.id, timer)
+  saveTimers.set(questionId, timer)
+}
+
+async function flushAnswers() {
+  clearSaveTimers()
+
+  // Сначала завершаем уже отправленные сохранения.
+  await saveQueue
+
+  // Затем сохраняем актуальные версии, включая ответы,
+  // debounce которых ещё не успел сработать.
+  for (const [questionId, revision] of revisions) {
+    if (revision > (savedRevisions.get(questionId) || 0)) {
+      await enqueueSave(questionId)
+    }
+  }
 }
 
 async function complete() {
+  if (
+    completing.value
+    || leaving.value
+    || !questionnaire.value
+    || !submissionId.value
+  ) {
+    return
+  }
+
   errorMessage.value = ''
 
-  const missingRequired =
-    questionnaire.value.questions.find(
-      (question) =>
-        question.is_required
-        && (
-          answers[question.id] === undefined
-          || answers[question.id] === null
-          || answers[question.id] === ''
-        ),
-    )
+  const missingRequired = questionnaire.value.questions.find(
+    question =>
+      question.is_required
+      && !hasAnswer(answers[question.id]),
+  )
 
   if (missingRequired) {
     errorMessage.value =
       `Ответьте на обязательный вопрос: ${missingRequired.text}`
 
     document
-      .getElementById(
-        `question-${missingRequired.id}`,
-      )
+      .getElementById(`question-${missingRequired.id}`)
       ?.scrollIntoView({
         behavior: 'smooth',
         block: 'center',
@@ -188,12 +278,13 @@ async function complete() {
   completing.value = true
 
   try {
+    // После completeSubmission не должны приходить
+    // запоздалые запросы автосохранения.
+    await flushAnswers()
+
     const payload = questionnaire.value.questions
-      .filter(
-        (question) =>
-          answers[question.id] !== undefined,
-      )
-      .map((question) => ({
+      .filter(question => answers[question.id] !== undefined)
+      .map(question => ({
         question_id: question.id,
         value: answers[question.id],
       }))
@@ -203,11 +294,13 @@ async function complete() {
       payload,
     )
 
-    if (isProgramQuestionnaire.value) {
+    submissionCompleted = true
+
+    if (isProgramQuestionnaire) {
       await navigateTo({
-        path: `/programs/${programId.value}`,
+        path: `/programs/${programId}`,
         query: {
-          stage: programStageId.value,
+          stage: programStageId,
         },
       })
 
@@ -216,20 +309,49 @@ async function complete() {
 
     completed.value = true
   } catch (error) {
-    errorMessage.value =
-      error?.data?.detail
-      || 'Не удалось завершить опросник'
+    errorMessage.value = errorText(
+      error,
+      'Не удалось завершить опросник',
+    )
   } finally {
     completing.value = false
   }
 }
 
+async function persistBeforeNavigation() {
+  if (submissionCompleted) return true
+
+  if (completing.value || leaving.value) {
+    return false
+  }
+
+  if (!submissionId.value) return true
+
+  leaving.value = true
+
+  try {
+    await flushAnswers()
+    return true
+  } catch (error) {
+    errorMessage.value = errorText(
+      error,
+      'Не удалось сохранить ответы. Проверьте соединение и повторите переход.',
+    )
+
+    return false
+  } finally {
+    leaving.value = false
+  }
+}
+
+onBeforeRouteLeave(persistBeforeNavigation)
+onBeforeRouteUpdate(persistBeforeNavigation)
+
 onMounted(initialize)
 
 onBeforeUnmount(() => {
-  for (const timer of saveTimers.values()) {
-    window.clearTimeout(timer)
-  }
+  disposed = true
+  clearSaveTimers()
 })
 </script>
 
@@ -316,7 +438,7 @@ onBeforeUnmount(() => {
         v-for="(question, index) in questionnaire.questions"
         :id="`question-${question.id}`"
         :key="question.id"
-        class="bg-base-100 border-base-300 rounded-2xl border p-4 sm:p-6"
+        class="bg-base-100 border-base-300 scroll-mt-24 rounded-2xl border p-4 sm:p-6"
       >
         <div class="mb-5 flex items-start gap-3">
           <div
@@ -344,13 +466,13 @@ onBeforeUnmount(() => {
           />
         </div>
 
-        <QuestionnairesQuestionField
-          v-model="answers[question.id]"
-          :question="question"
-          @update:model-value="
-            scheduleAnswerSave(question)
-          "
-        />
+        <fieldset :disabled="completing || leaving || !submissionId">
+          <QuestionnairesQuestionField
+            v-model="answers[question.id]"
+            :question="question"
+            @update:model-value="scheduleAnswerSave(question)"
+          />
+        </fieldset>
       </article>
     </section>
 
@@ -360,7 +482,7 @@ onBeforeUnmount(() => {
       <button
         type="button"
         class="btn btn-primary w-full"
-        :disabled="completing"
+        :disabled="completing || leaving || !submissionId"
         @click="complete"
       >
         <span

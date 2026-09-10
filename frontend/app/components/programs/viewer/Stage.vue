@@ -25,6 +25,10 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  guided: {
+    type: Boolean,
+    default: false,
+  },
 })
 
 const emit = defineEmits([
@@ -102,6 +106,7 @@ function getItemLink(item) {
 
   return null
 }
+
 function canOpenItem(item) {
   if (item.item_type === 'consultation') {
     return false
@@ -140,6 +145,40 @@ function getActionText(item) {
 
   return ''
 }
+
+const displayedStatus = computed(() => {
+  if (!props.guided || !props.isPatient) {
+    return statusMeta[props.stage.status] || {
+      title: props.stage.status,
+      class: 'badge-neutral',
+      icon: 'lucide:circle',
+    }
+  }
+
+  const progress = Number(props.stage.progress_percent) || 0
+
+  if (progress >= 100) {
+    return {
+      title: 'Выполнен',
+      class: 'badge-success',
+      icon: 'lucide:circle-check',
+    }
+  }
+
+  if (progress > 0) {
+    return {
+      title: 'В процессе',
+      class: 'badge-warning',
+      icon: 'lucide:loader-circle',
+    }
+  }
+
+  return {
+    title: 'Можно проходить',
+    class: 'badge-info',
+    icon: 'lucide:play',
+  }
+})
 </script>
 
 <template>
@@ -167,28 +206,20 @@ function getActionText(item) {
       </div>
 
       <span
-        class="badge gap-1"
-        :class="
-          statusMeta[stage.status]?.class
-        "
+        class="badge h-auto gap-1 py-1"
+        :class="displayedStatus.class"
       >
         <Icon
-          :name="
-            statusMeta[stage.status]?.icon
-            || 'lucide:circle'
-          "
-          class="size-3"
+          :name="displayedStatus.icon"
+          class="size-3 shrink-0"
         />
 
-        {{
-          statusMeta[stage.status]?.title
-          || stage.status
-        }}
+        {{ displayedStatus.title }}
       </span>
     </div>
 
     <div
-      v-if="isPatient"
+      v-if="isPatient && !guided"
       class="mt-5"
     >
       <div class="mb-2 flex justify-between text-sm">
@@ -315,83 +346,84 @@ function getActionText(item) {
           </div>
 
           <div
-                v-if="
-                    item.item_type !== 'consultation'
-                "
-                class="mt-4"
+            v-if="item.item_type !== 'consultation'"
+            class="mt-4"
+          >
+            <!-- Пациент -->
+            <template v-if="isPatient">
+              <NuxtLink
+                v-if="item.can_access"
+                :to="getItemLink(item)"
+                class="btn btn-primary btn-sm"
+              >
+                {{ getActionText(item) }}
+              </NuxtLink>
+
+              <template v-else-if="item.pro_content">
+                <p class="text-base-content/60 mb-2 text-xs">
+                  Этот материал доступен в программе сопровождения.
+                </p>
+
+                <button
+                  type="button"
+                  class="btn btn-warning btn-sm"
+                  :disabled="purchaseRequested"
+                  @click="emit('purchase')"
                 >
-                <!-- Пациент -->
-                <template v-if="isPatient">
-                  <NuxtLink
-                    v-if="item.can_access"
-                    :to="getItemLink(item)"
-                    class="btn btn-primary btn-sm"
-                  >
-                    {{ getActionText(item) }}
-                  </NuxtLink>
-
-                  <template v-else-if="item.pro_content">
-                    <p class="text-base-content/60 mb-2 text-xs">
-                      Этот материал доступен в программе сопровождения.
-                    </p>
-
-                    <button
-                      type="button"
-                      class="btn btn-warning btn-sm"
-                      :disabled="purchaseRequested"
-                      @click="emit('purchase')"
-                    >
-                      <Icon
-                        :name="
-                          purchaseRequested
-                            ? 'lucide:check'
-                            : 'lucide:shopping-cart'
-                        "
-                        class="size-4"
-                      />
-
-                      {{
-                        purchaseRequested
-                          ? 'Запрос отправлен'
-                          : purchaseLabel
-                      }}
-                    </button>
-                  </template>
-
-                  <p v-else class="text-base-content/60 text-sm">
-                    Материал пока недоступен.
-                  </p>
-                </template>
-
-                <!-- Врач, ассистент или суперпользователь -->
-                <template v-else>
-                    <NuxtLink
-                    v-if="canOpenItem(item)"
-                    :to="getItemLink(item)"
-                    class="btn btn-outline btn-sm"
-                    >
-                    <Icon
-                        :name="
-                        item.item_type === 'article'
-                            ? 'lucide:external-link'
-                            : 'lucide:clipboard-check'
-                        "
-                        class="size-4"
-                    />
-
-                    {{ getActionText(item) }}
-                    </NuxtLink>
-
-                    <span
-                    v-else-if="
-                        item.item_type === 'questionnaire'
+                  <Icon
+                    :name="
+                      purchaseRequested
+                        ? 'lucide:check'
+                        : 'lucide:shopping-cart'
                     "
-                    class="badge badge-ghost"
-                    >
-                    Пациент не начинал
-                    </span>
-                </template>
-                </div>
+                    class="size-4"
+                  />
+
+                  {{
+                    purchaseRequested
+                      ? 'Запрос отправлен'
+                      : purchaseLabel
+                  }}
+                </button>
+              </template>
+
+              <p
+                v-else
+                class="text-base-content/60 text-sm"
+              >
+                Материал пока недоступен.
+              </p>
+            </template>
+
+            <!-- Врач, ассистент или суперпользователь -->
+            <template v-else>
+              <NuxtLink
+                v-if="canOpenItem(item)"
+                :to="getItemLink(item)"
+                class="btn btn-outline btn-sm"
+              >
+                <Icon
+                  :name="
+                    item.item_type === 'article'
+                      ? 'lucide:external-link'
+                      : 'lucide:clipboard-check'
+                  "
+                  class="size-4"
+                />
+
+                {{ getActionText(item) }}
+              </NuxtLink>
+
+              <span
+                v-else-if="
+                  item.item_type === 'questionnaire'
+                "
+                class="badge badge-ghost"
+              >
+                Пациент не начинал
+              </span>
+            </template>
+          </div>
 
           <div
             v-else

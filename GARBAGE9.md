@@ -11,6 +11,7 @@ backend/alembic/versions/95f734785945_program_home_fields.py (71 lines)
 backend/alembic/versions/9f31b8c4d2e7_medical_services.py (454 lines)
 backend/alembic/versions/b1e4c7d902af_content_library_visibility.py (40 lines)
 backend/alembic/versions/c8d174f29a31_patient_tag_overrides.py (141 lines)
+backend/alembic/versions/d3f8a2c6e901_life_aspects.py (157 lines)
 backend/app/.env (14 lines)
 backend/app/__init__.py (0 lines)
 backend/app/core/__init__.py (0 lines)
@@ -21,7 +22,7 @@ backend/app/core/security.py (232 lines)
 backend/app/core/transactions.py (60 lines)
 backend/app/core/websockets/__init__.py (0 lines)
 backend/app/core/websockets/manager.py (72 lines)
-backend/app/main.py (107 lines)
+backend/app/main.py (113 lines)
 backend/app/modules/__init__.py (0 lines)
 backend/app/modules/articles/__init__.py (0 lines)
 backend/app/modules/articles/access.py (64 lines)
@@ -42,9 +43,12 @@ backend/app/modules/auth/routers.py (753 lines)
 backend/app/modules/auth/schemas.py (97 lines)
 backend/app/modules/auth/utils.py (148 lines)
 backend/app/modules/consents/__init__.py (0 lines)
+backend/app/modules/consents/contact_routers.py (187 lines)
+backend/app/modules/consents/contact_schemas.py (20 lines)
+backend/app/modules/consents/contact_service.py (123 lines)
 backend/app/modules/consents/enums.py (15 lines)
 backend/app/modules/consents/models.py (83 lines)
-backend/app/modules/consents/routers.py (245 lines)
+backend/app/modules/consents/routers.py (252 lines)
 backend/app/modules/consents/schemas.py (38 lines)
 backend/app/modules/consents/utils.py (37 lines)
 backend/app/modules/content/__init__.py (0 lines)
@@ -70,6 +74,7 @@ backend/app/modules/notifications/models.py (64 lines)
 backend/app/modules/notifications/routers.py (288 lines)
 backend/app/modules/notifications/schemas.py (47 lines)
 backend/app/modules/notifications/service.py (163 lines)
+backend/app/modules/notifications/ToDo.md (1 lines)
 backend/app/modules/notifications/transactional.py (91 lines)
 backend/app/modules/patients/__init__.py (0 lines)
 backend/app/modules/patients/enums.py (7 lines)
@@ -80,9 +85,9 @@ backend/app/modules/programs/__init__.py (0 lines)
 backend/app/modules/programs/enums.py (22 lines)
 backend/app/modules/programs/models.py (358 lines)
 backend/app/modules/programs/Readme.md (30 lines)
-backend/app/modules/programs/routers.py (1806 lines)
-backend/app/modules/programs/schemas.py (271 lines)
-backend/app/modules/programs/utils.py (576 lines)
+backend/app/modules/programs/routers.py (1848 lines)
+backend/app/modules/programs/schemas.py (274 lines)
+backend/app/modules/programs/utils.py (632 lines)
 backend/app/modules/questionnaires/__init__.py (0 lines)
 backend/app/modules/questionnaires/enums.py (17 lines)
 backend/app/modules/questionnaires/json_q/audit.json (272 lines)
@@ -111,7 +116,11 @@ backend/app/modules/specialities/routers.py (331 lines)
 backend/app/modules/specialities/schemas.py (50 lines)
 backend/app/modules/tags/__init__.py (0 lines)
 backend/app/modules/tags/enums.py (7 lines)
-backend/app/modules/tags/models.py (192 lines)
+backend/app/modules/tags/life_aspect_catalog.py (227 lines)
+backend/app/modules/tags/life_aspect_patient_routers.py (46 lines)
+backend/app/modules/tags/life_aspect_routers.py (360 lines)
+backend/app/modules/tags/life_aspect_schemas.py (131 lines)
+backend/app/modules/tags/models.py (279 lines)
 backend/app/modules/tags/routers.py (957 lines)
 backend/app/modules/tags/schemas.py (104 lines)
 backend/app/modules/tags/utils.py (246 lines)
@@ -122,16 +131,19 @@ backend/app/modules/users/routers.py (360 lines)
 backend/app/modules/users/schemas.py (145 lines)
 backend/app/modules/users/utils.py (126 lines)
 backend/requirements.txt (47 lines)
+backend/seed/check_program_progress.py (140 lines)
 backend/seed/create_superuser.py (153 lines)
 backend/seed/data/tags.json (52 lines)
 backend/seed/data/users.json (149 lines)
 backend/seed/Readme.md (1 lines)
+backend/seed/repair_program_submission_stage.py (193 lines)
 backend/seed/upload_tags.py (123 lines)
 backend/seed/upload_users.py (381 lines)
-backend/test_database.db (?)
+backend/test_database — копия.db (1254 lines)
+backend/test_database.db (1393 lines)
 ```
 
-*Files: 129*
+*Files: 141*
 
 ---
 
@@ -163,16 +175,27 @@ frontend/app/components/invitations/PatientDialog.vue (435 lines)
 frontend/app/components/layout/EmailVerificationBanner.vue (88 lines)
 frontend/app/components/layout/Footer.vue (52 lines)
 frontend/app/components/layout/Logo.vue (86 lines)
-frontend/app/components/layout/Navbar.vue (338 lines)
+frontend/app/components/layout/Navbar.vue (405 lines)
+frontend/app/components/layout/PatientActions.vue (29 lines)
 frontend/app/components/layout/Sidebar.vue (178 lines)
 frontend/app/components/layout/ThemeToggle.vue (28 lines)
+frontend/app/components/life-aspects/FormDialog.vue (165 lines)
+frontend/app/components/life-aspects/Tag.vue (85 lines)
+frontend/app/components/life-aspects/TagLinks.vue (392 lines)
+frontend/app/components/notifications/BrowserPermission.vue (96 lines)
 frontend/app/components/notifications/Center.vue (181 lines)
-frontend/app/components/patient/Home.vue (148 lines)
+frontend/app/components/patient/ContactDialog.vue (208 lines)
+frontend/app/components/patient/Home.vue (179 lines)
+frontend/app/components/patient/home/ContinueCard.vue (74 lines)
+frontend/app/components/patient/home/Hero.vue (51 lines)
+frontend/app/components/patient/home/LifeAspects.vue (69 lines)
+frontend/app/components/patient/home/Recommendations.vue (265 lines)
+frontend/app/components/patient/home/RotatingText.vue (119 lines)
 frontend/app/components/patient/Journey.vue (79 lines)
 frontend/app/components/patient/NextStep.vue (184 lines)
-frontend/app/components/patient/ProgramCard.vue (258 lines)
+frontend/app/components/patient/ProgramCard.vue (233 lines)
 frontend/app/components/patient/ProgramSteps.vue (96 lines)
-frontend/app/components/patient/PurchaseDialog.vue (110 lines)
+frontend/app/components/patient/PurchaseDialog.vue (129 lines)
 frontend/app/components/patient/Support.vue (186 lines)
 frontend/app/components/patients/ContactStatus.vue (66 lines)
 frontend/app/components/patients/Item.vue (111 lines)
@@ -189,7 +212,7 @@ frontend/app/components/programs/configurator/Stage.vue (251 lines)
 frontend/app/components/programs/PatientAccess.vue (240 lines)
 frontend/app/components/programs/PatientOverview.vue (154 lines)
 frontend/app/components/programs/PatientProgress.vue (208 lines)
-frontend/app/components/programs/viewer/Stage.vue (389 lines)
+frontend/app/components/programs/viewer/Stage.vue (411 lines)
 frontend/app/components/programs/VisibilityDialog.vue (128 lines)
 frontend/app/components/questionnaires/Editor.vue (537 lines)
 frontend/app/components/questionnaires/JsonImporter.vue (265 lines)
@@ -211,7 +234,7 @@ frontend/app/components/users/InviteDialog.vue (29 lines)
 frontend/app/components/users/InviteForm.vue (367 lines)
 frontend/app/components/users/List.vue (182 lines)
 ```
-*Files: 70*
+*Files: 81*
 
 ### pages
 
@@ -225,13 +248,13 @@ frontend/app/pages/content/questionnaires/index.vue (166 lines)
 frontend/app/pages/content/questionnaires/new.vue (9 lines)
 frontend/app/pages/dashboard.vue (159 lines)
 frontend/app/pages/forgot-password.vue (102 lines)
-frontend/app/pages/index.vue (4 lines)
+frontend/app/pages/index.vue (25 lines)
 frontend/app/pages/login.vue (238 lines)
 frontend/app/pages/patients/[id]/index.vue (469 lines)
 frontend/app/pages/patients/[id]/questionnaires/[submissionId].vue (184 lines)
 frontend/app/pages/patients/index.vue (37 lines)
 frontend/app/pages/programs/[id]/edit.vue (16 lines)
-frontend/app/pages/programs/[id]/index.vue (391 lines)
+frontend/app/pages/programs/[id]/index.vue (404 lines)
 frontend/app/pages/programs/index.vue (285 lines)
 frontend/app/pages/programs/new.vue (12 lines)
 frontend/app/pages/questionnaires/[id].vue (375 lines)
@@ -240,13 +263,14 @@ frontend/app/pages/register/invitation.vue (379 lines)
 frontend/app/pages/reset-password.vue (122 lines)
 frontend/app/pages/services/index.vue (205 lines)
 frontend/app/pages/settings/directories.vue (90 lines)
+frontend/app/pages/settings/life-aspects.vue (382 lines)
 frontend/app/pages/settings/profile.vue (265 lines)
 frontend/app/pages/settings/security.vue (325 lines)
 frontend/app/pages/settings/tags.vue (123 lines)
 frontend/app/pages/users/index.vue (529 lines)
 frontend/app/pages/verify-email.vue (81 lines)
 ```
-*Files: 29*
+*Files: 30*
 
 ### layouts
 
@@ -259,7 +283,7 @@ frontend/app/layouts/default.vue (22 lines)
 ### composables
 
 ```
-frontend/app/composables/useAppNavigation.js (193 lines)
+frontend/app/composables/useAppNavigation.js (199 lines)
 frontend/app/composables/useBodyScrollLock.js (48 lines)
 frontend/app/composables/useBreakpoint.js (30 lines)
 frontend/app/composables/useClientReady.js (12 lines)
@@ -277,8 +301,9 @@ frontend/app/stores/assignments.js (99 lines)
 frontend/app/stores/auth.js (205 lines)
 frontend/app/stores/directories.js (208 lines)
 frontend/app/stores/invitations.js (53 lines)
-frontend/app/stores/notifications.js (312 lines)
-frontend/app/stores/patient-home.js (225 lines)
+frontend/app/stores/life-aspects.js (158 lines)
+frontend/app/stores/notifications.js (387 lines)
+frontend/app/stores/patient-home.js (339 lines)
 frontend/app/stores/patients.js (105 lines)
 frontend/app/stores/programs.js (237 lines)
 frontend/app/stores/questionnaires.js (206 lines)
@@ -288,18 +313,19 @@ frontend/app/stores/ui.js (203 lines)
 frontend/app/stores/user.js (111 lines)
 frontend/app/stores/users.js (266 lines)
 ```
-*Files: 15*
+*Files: 16*
 
 ### middleware
 
 ```
 frontend/app/middleware/auth.global.js (39 lines)
 frontend/app/middleware/doctor-only.js (14 lines)
+frontend/app/middleware/life-aspect-manager.js (20 lines)
 frontend/app/middleware/program-manager.js (19 lines)
 frontend/app/middleware/service-manager.js (19 lines)
 frontend/app/middleware/user-manager.js (19 lines)
 ```
-*Files: 5*
+*Files: 6*
 
 ### plugins
 
@@ -308,1408 +334,2031 @@ frontend/app/plugins/api.js (63 lines)
 ```
 *Files: 1*
 
----- 
 
-Возможно, тебе пригодятся:
-
-# ./backend/app/modules/tags/enums.py
-from enum import Enum
-
-
-class DoctorTagOverrideAction(str, Enum):
-    ADD = "add"
-    REMOVE = "remove"
-
-# ./backend/app/modules/tags/models.py
-import uuid
-from datetime import datetime, timezone
-from typing import Optional
-
-from sqlalchemy import UniqueConstraint
-from sqlmodel import Field, Relationship, SQLModel
-
-from app.modules.tags.enums import DoctorTagOverrideAction
-from app.modules.users.models import (
-    DoctorProfile,
-    PatientProfile,
-    Speciality,
-)
-
-
-def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
-
-
-class Tag(SQLModel, table=True):
-    __tablename__ = "tags"
-
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-
-    name: str = Field(
-        unique=True,
-        index=True,
-        max_length=100,
-    )
-    description: Optional[str] = Field(default=None)
-
-    # Системные теги нельзя удалить через обычный API.
-    is_system: bool = Field(default=False, index=True)
-
-    is_hidden: bool = Field(default=False, index=True)
-    hidden_at: Optional[datetime] = Field(default=None)
-
-    created_at: datetime = Field(default_factory=utc_now)
-    updated_at: datetime = Field(default_factory=utc_now)
-
-    speciality_links: list["SpecialityTagLink"] = Relationship(
-        back_populates="tag",
-        sa_relationship_kwargs={
-            "cascade": "all, delete-orphan",
-        },
-    )
-
-    doctor_overrides: list["DoctorTagOverride"] = Relationship(
-        back_populates="tag",
-        sa_relationship_kwargs={
-            "cascade": "all, delete-orphan",
-        },
-    )
-
-    patient_overrides: list["PatientTagOverride"] = Relationship(
-        back_populates="tag",
-        sa_relationship_kwargs={
-            "cascade": "all, delete-orphan",
-        },
-    )
-
-
-class SpecialityTagLink(SQLModel, table=True):
-    __tablename__ = "speciality_tag_links"
-    __table_args__ = (
-        UniqueConstraint(
-            "speciality_id",
-            "tag_id",
-            name="uq_speciality_tag",
-        ),
-    )
-
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-
-    speciality_id: uuid.UUID = Field(
-        foreign_key="specialities.id",
-        index=True,
-    )
-    tag_id: uuid.UUID = Field(
-        foreign_key="tags.id",
-        index=True,
-    )
-
-    created_at: datetime = Field(default_factory=utc_now)
-
-    speciality: Optional[Speciality] = Relationship(
-        sa_relationship_kwargs={
-            "foreign_keys": "[SpecialityTagLink.speciality_id]",
-        }
-    )
-
-    tag: Optional[Tag] = Relationship(
-        back_populates="speciality_links",
-        sa_relationship_kwargs={
-            "foreign_keys": "[SpecialityTagLink.tag_id]",
-        },
-    )
-
-
-class DoctorTagOverride(SQLModel, table=True):
-    __tablename__ = "doctor_tag_overrides"
-    __table_args__ = (
-        UniqueConstraint(
-            "doctor_id",
-            "tag_id",
-            name="uq_doctor_tag_override",
-        ),
-    )
-
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-
-    doctor_id: uuid.UUID = Field(
-        foreign_key="doctor_profiles.id",
-        index=True,
-    )
-    tag_id: uuid.UUID = Field(
-        foreign_key="tags.id",
-        index=True,
-    )
-
-    action: DoctorTagOverrideAction = Field(index=True)
-
-    created_at: datetime = Field(default_factory=utc_now)
-    updated_at: datetime = Field(default_factory=utc_now)
-
-    doctor: Optional[DoctorProfile] = Relationship(
-        sa_relationship_kwargs={
-            "foreign_keys": "[DoctorTagOverride.doctor_id]",
-        }
-    )
-
-    tag: Optional[Tag] = Relationship(
-        back_populates="doctor_overrides",
-        sa_relationship_kwargs={
-            "foreign_keys": "[DoctorTagOverride.tag_id]",
-        },
-    )
-
-class PatientTagOverride(SQLModel, table=True):
-    __tablename__ = "patient_tag_overrides"
-    __table_args__ = (
-        UniqueConstraint(
-            "patient_id",
-            "tag_id",
-            name="uq_patient_tag_override",
-        ),
-    )
-
-    id: uuid.UUID = Field(
-        default_factory=uuid.uuid4,
-        primary_key=True,
-    )
-
-    patient_id: uuid.UUID = Field(
-        foreign_key="patient_profiles.id",
-        index=True,
-    )
-    tag_id: uuid.UUID = Field(
-        foreign_key="tags.id",
-        index=True,
-    )
-
-    # Используем тот же enum ADD/REMOVE,
-    # что и для индивидуальных тегов врача.
-    action: DoctorTagOverrideAction = Field(
-        index=True,
-    )
-
-    created_at: datetime = Field(
-        default_factory=utc_now,
-    )
-    updated_at: datetime = Field(
-        default_factory=utc_now,
-    )
-
-    patient: Optional[PatientProfile] = Relationship(
-        sa_relationship_kwargs={
-            "foreign_keys": (
-                "[PatientTagOverride.patient_id]"
-            ),
-        }
-    )
-
-    tag: Optional[Tag] = Relationship(
-        back_populates="patient_overrides",
-        sa_relationship_kwargs={
-            "foreign_keys": (
-                "[PatientTagOverride.tag_id]"
-            ),
-        },
-    )
-
-# ./backend/app/modules/tags/schemas.py
-import uuid
-from datetime import datetime
-from typing import Literal
-
-from pydantic import BaseModel, ConfigDict, Field
-
-from app.modules.tags.enums import DoctorTagOverrideAction
-
-
-class TagCreateRequest(BaseModel):
-    name: str = Field(min_length=1, max_length=100)
-    description: str | None = None
-
-
-class TagUpdateRequest(BaseModel):
-    name: str | None = Field(
-        default=None,
-        min_length=1,
-        max_length=100,
-    )
-    description: str | None = None
-
-
-class TagResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: uuid.UUID
-    name: str
-    description: str | None
-    is_system: bool
-    created_at: datetime
-    updated_at: datetime
-
-
-class SpecialityTagResponse(BaseModel):
-    speciality_id: uuid.UUID
-    speciality_name: str
-    tags: list[TagResponse]
-
-
-class DoctorTagOverrideRequest(BaseModel):
-    tag_id: uuid.UUID
-    action: DoctorTagOverrideAction
-
-
-class DoctorTagOverrideResponse(BaseModel):
-    id: uuid.UUID
-    doctor_id: uuid.UUID
-    tag: TagResponse
-    action: DoctorTagOverrideAction
-    created_at: datetime
-    updated_at: datetime
-
-
-class EffectiveTagResponse(BaseModel):
-    id: uuid.UUID
-    name: str
-    description: str | None
-    is_system: bool
-
-    # default, custom, doctor, patient или system.
-    sources: list[str]
-
-
-class EffectiveTagsResponse(BaseModel):
-    owner_type: Literal["doctor", "patient", "relative"]
-    owner_id: uuid.UUID
-    tags: list[EffectiveTagResponse]
-
-
-class MessageResponse(BaseModel):
-    message: str
-
-class TagResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: uuid.UUID
-    name: str
-    description: str | None
-
-    is_system: bool
-    is_hidden: bool
-    hidden_at: datetime | None
-
-    created_at: datetime
-    updated_at: datetime
-
-
-class TagVisibilityRequest(BaseModel):
-    is_hidden: bool
-
-class PatientTagOverrideRequest(BaseModel):
-    tag_id: uuid.UUID
-    action: DoctorTagOverrideAction
-
-
-class PatientTagOverrideResponse(BaseModel):
-    id: uuid.UUID
-    patient_id: uuid.UUID
-    tag: TagResponse
-    action: DoctorTagOverrideAction
-    created_at: datetime
-    updated_at: datetime
-
-далее, некоторые файлы будут урезаны, чтобы сэкономить место:
-
-# ./backend/app/modules/tags/utils.py
-
-import uuid
-from dataclasses import dataclass, field
-
-from sqlmodel import Session, select
-
-from app.modules.tags.enums import DoctorTagOverrideAction
-from app.modules.tags.models import (
-    DoctorTagOverride,
-    PatientTagOverride,
-    SpecialityTagLink,
-    Tag,
-)
-from app.modules.tags.schemas import (
-    EffectiveTagResponse,
-    EffectiveTagsResponse,
-)
-from app.modules.users.enums import (
-    DoctorPatientStatus,
-    RelativePatientStatus,
-)
-from app.modules.users.models import (
-    DoctorPatientLink,
-    DoctorProfile,
-    PatientProfile,
-    RelativePatientLink,
-    RelativeProfile,
-)
-
-
-@dataclass
-class EffectiveTagData:
-    tag: Tag
-    sources: set[str] = field(default_factory=set)
-
-
-def merge_tag_data(
-    target: dict[uuid.UUID, EffectiveTagData],
-    source: dict[uuid.UUID, EffectiveTagData],
-    source_prefix: str | None = None,
-) -> None:
-    for tag_id, source_data in source.items():
-        if tag_id not in target:
-            target[tag_id] = EffectiveTagData(tag=source_data.tag)
-
-        if source_prefix:
-            target[tag_id].sources.add(source_prefix)
-        else:
-            target[tag_id].sources.update(source_data.sources)
-
-
-def get_doctor_effective_tag_data(
-    *,
-    session: Session,
-    doctor: DoctorProfile,
-) -> dict[uuid.UUID, EffectiveTagData]:
-    result: dict[uuid.UUID, EffectiveTagData] = {}
-
-    default_links = session.exec(
-        select(SpecialityTagLink).where(
-            SpecialityTagLink.speciality_id
-            == doctor.speciality_id
-        )
-    ).all()
-
-    for link in default_links:
-        tag = session.get(Tag, link.tag_id)
-
-        if not tag or tag.is_hidden:
-            continue
-
-        result[tag.id] = EffectiveTagData(
-            tag=tag,
-            sources={"default"},
-        )
-
-    overrides = session.exec(
-        select(DoctorTagOverride).where(
-            DoctorTagOverride.doctor_id == doctor.id
-        )
-    ).all()
-
-    for override in overrides:
-        tag = session.get(Tag, override.tag_id)
-
-        if not tag or tag.is_hidden:
-            continue
-
-        if override.action == DoctorTagOverrideAction.REMOVE:
-            result.pop(tag.id, None)
-            continue
-
-        if tag.id not in result:
-            result[tag.id] = EffectiveTagData(tag=tag)
-
-        # Кастомное добавление имеет приоритет над default.
-        result[tag.id].sources = {"custom"}
-
-    return result
-
-
-def get_patient_effective_tag_data(
-    *,
-    session: Session,
-    patient: PatientProfile,
-) -> dict[uuid.UUID, EffectiveTagData]:
-    result: dict[uuid.UUID, EffectiveTagData] = {}
-
-    active_links = session.exec(
-        select(DoctorPatientLink).where(
-            DoctorPatientLink.patient_id == patient.id,
-            DoctorPatientLink.status
-            == DoctorPatientStatus.ACTIVE,
-        )
-    ).all()
-
-    for link in active_links:
-        doctor = session.get(
-            DoctorProfile,
-            link.doctor_id,
-        )
-
-        if not doctor:
-            continue
-
-        doctor_tags = get_doctor_effective_tag_data(
-            session=session,
-            doctor=doctor,
-        )
-
-        merge_tag_data(
-            target=result,
-            source=doctor_tags,
-            source_prefix=f"doctor:{doctor.id}",
-        )
-
-    # Настройки пациента перекрывают результат
-    # наследования от всех врачей.
-    patient_overrides = session.exec(
-        select(PatientTagOverride).where(
-            PatientTagOverride.patient_id
-            == patient.id
-        )
-    ).all()
-
-    for override in patient_overrides:
-        tag = session.get(Tag, override.tag_id)
-
-        if not tag or tag.is_hidden:
-            continue
-
-        if (
-            override.action
-            == DoctorTagOverrideAction.REMOVE
-        ):
-            result.pop(tag.id, None)
-            continue
-
-        if tag.id not in result:
-            result[tag.id] = EffectiveTagData(
-                tag=tag
-            )
-
-        result[tag.id].sources = {
-            "patient:custom",
-        }
-
-    return result
-
-
-def get_relative_effective_tag_data(
-    *,
-    session: Session,
-    relative: RelativeProfile,
-) -> dict[uuid.UUID, EffectiveTagData]:
-    result: dict[uuid.UUID, EffectiveTagData] = {}
-
-    active_links = session.exec(
-        select(RelativePatientLink).where(
-            RelativePatientLink.relative_id == relative.id,
-            RelativePatientLink.status
-            == RelativePatientStatus.ACTIVE,
-        )
-    ).all()
-
-    for link in active_links:
-        patient = session.get(
-            PatientProfile,
-            link.patient_id,
-        )
-
-        if not patient:
-            continue
-
-        patient_tags = get_patient_effective_tag_data(
-            session=session,
-            patient=patient,
-        )
-
-        merge_tag_data(
-            target=result,
-            source=patient_tags,
-            source_prefix=f"patient:{patient.id}",
-        )
-
-    relative_tag = session.exec(
-        select(Tag).where(
-            Tag.name == "relative",
-            Tag.is_system.is_(True),
-        )
-    ).first()
-
-    if relative_tag and not relative_tag.is_hidden:
-        result[relative_tag.id] = EffectiveTagData(
-            tag=relative_tag,
-            sources={"system"},
-        )
-
-    return result
-
-
-def serialize_effective_tags(
-    *,
-    owner_type: str,
-    owner_id: uuid.UUID,
-    tag_data: dict[uuid.UUID, EffectiveTagData],
-) -> EffectiveTagsResponse:
-    sorted_items = sorted(
-        tag_data.values(),
-        key=lambda item: item.tag.name.lower(),
-    )
-
-    return EffectiveTagsResponse(
-        owner_type=owner_type,
-        owner_id=owner_id,
-        tags=[
-            EffectiveTagResponse(
-                id=item.tag.id,
-                name=item.tag.name,
-                description=item.tag.description,
-                is_system=item.tag.is_system,
-                sources=sorted(item.sources),
-            )
-            for item in sorted_items
-        ],
-    )
-
-# ./backend/app/modules/tags/routers.py
-
-import uuid
-from datetime import datetime, timezone
-from fastapi import (
-    APIRouter,
-    Depends,
-    HTTPException,
-    Query,
-    status,
-)
-from sqlalchemy.exc import IntegrityError
-from sqlmodel import Session, select
-from app.core.db import get_session
-from app.core.security import (
-    AuthContext,
-    get_current_auth,
-    require_roles,
-)
-from app.modules.tags.enums import DoctorTagOverrideAction
-from app.modules.tags.models import (
-    DoctorTagOverride,
-    PatientTagOverride,
-    SpecialityTagLink,
-    Tag,
-)
-from app.modules.tags.schemas import (
-    DoctorTagOverrideRequest,
-    DoctorTagOverrideResponse,
-    EffectiveTagsResponse,
-    MessageResponse,
-    SpecialityTagResponse,
-    TagCreateRequest,
-    TagResponse,
-    TagUpdateRequest,
-    TagVisibilityRequest,
-    PatientTagOverrideRequest,
-    PatientTagOverrideResponse,
-)
-from app.modules.tags.utils import (
-    get_doctor_effective_tag_data,
-    get_patient_effective_tag_data,
-    get_relative_effective_tag_data,
-    serialize_effective_tags,
-)
-from app.modules.users.enums import UserRole
-from app.modules.users.models import (
-    DoctorProfile,
-    PatientProfile,
-    RelativeProfile,
-    Speciality,
-)
-from app.modules.articles.models import ArticleTagLink
-from app.modules.programs.models import ProgramTagLink
-from app.modules.questionnaires.models import (
-    QuestionnaireTagLink,
-)
-from app.modules.patients.utils import (
-    ensure_patient_access,
-)
-
-def utc_now() -> datetime:
-    FUNCTION BODY
-    return datetime.now(timezone.utc)
-def get_patient_for_tag_management(
-    *,
-    session: Session,
-    auth: AuthContext,
-    patient_id: uuid.UUID,
-) -> PatientProfile:
-    FUNCTION BODY
-    return patient
-def get_current_doctor_profile(
-    *,
-    session: Session,
-    auth: AuthContext,
-) -> DoctorProfile:
-    FUNCTION BODY
-    return doctor
-def serialize_override(
-    *,
-    session: Session,
-    override: DoctorTagOverride,
-) -> DoctorTagOverrideResponse:
-    FUNCTION BODY
-    return DoctorTagOverrideResponse(
-        id=override.id,
-        doctor_id=override.doctor_id,
-        tag=TagResponse.model_validate(tag),
-        action=override.action,
-        created_at=override.created_at,
-        updated_at=override.updated_at,
-    )
-def serialize_patient_override(
-    *,
-    session: Session,
-    override: PatientTagOverride,
-) -> PatientTagOverrideResponse:
-    FUNCTION BODY
-    return PatientTagOverrideResponse(
-        id=override.id,
-        patient_id=override.patient_id,
-        tag=TagResponse.model_validate(tag),
-        action=override.action,
-        created_at=override.created_at,
-        updated_at=override.updated_at,
-    )
-@@router.get("", response_model=list[TagResponse])
-async def list_tags(
-    include_hidden: bool = Query(default=False),
-    _: AuthContext = Depends(get_current_auth),
-    session: Session = Depends(get_session),
-) -> list[Tag]:
-    FUNCTION BODY
-    return list(
-        session.exec(
-            statement.order_by(Tag.name)
-        ).all()
-    )
-@@router.post(
-    "",
-    response_model=TagResponse,
-    status_code=status.HTTP_201_CREATED,
-)
-async def create_tag(
-    payload: TagCreateRequest,
-    _: AuthContext = Depends(
-        require_roles(
-            UserRole.SUPERUSER,
-            UserRole.MED_ASSISTANT,
-        )
-    ),
-    session: Session = Depends(get_session),
-) -> Tag:
-    FUNCTION BODY
-    return tag
-@@router.patch(
-    "/{tag_id}",
-    response_model=TagResponse,
-)
-async def update_tag(
-    tag_id: uuid.UUID,
-    payload: TagUpdateRequest,
-    _: AuthContext = Depends(
-        require_roles(
-            UserRole.SUPERUSER,
-            UserRole.MED_ASSISTANT,
-        )
-    ),
-    session: Session = Depends(get_session),
-) -> Tag:
-    FUNCTION BODY
-    return tag
-@@router.delete(
-    "/{tag_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-)
-async def delete_tag(
-    tag_id: uuid.UUID,
-    _: AuthContext = Depends(
-        require_roles(UserRole.SUPERUSER)
-    ),
-    session: Session = Depends(get_session),
-) -> None:
-    FUNCTION BODY
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=(
-                    f"Тег используется {usage_name}. "
-                    "Вместо удаления скройте его."
-                ),
-            )
-@@router.patch(
-    "/{tag_id}/visibility",
-    response_model=TagResponse,
-)
-async def set_tag_visibility(
-    tag_id: uuid.UUID,
-    payload: TagVisibilityRequest,
-    _: AuthContext = Depends(
-        require_roles(UserRole.SUPERUSER)
-    ),
-    session: Session = Depends(get_session),
-) -> Tag:
-    FUNCTION BODY
-    return tag
-@@router.get(
-    "/specialities/{speciality_id}",
-    response_model=SpecialityTagResponse,
-)
-async def get_speciality_tags(
-    speciality_id: uuid.UUID,
-    _: AuthContext = Depends(get_current_auth),
-    session: Session = Depends(get_session),
-) -> SpecialityTagResponse:
-    FUNCTION BODY
-    return SpecialityTagResponse(
-        speciality_id=speciality.id,
-        speciality_name=speciality.name,
-        tags=[
-            TagResponse.model_validate(tag)
-            for tag in tags
-        ],
-    )
-@@router.post(
-    "/specialities/{speciality_id}/{tag_id}",
-    response_model=MessageResponse,
-)
-async def add_tag_to_speciality(
-    speciality_id: uuid.UUID,
-    tag_id: uuid.UUID,
-    _: AuthContext = Depends(
-        require_roles(
-            UserRole.SUPERUSER,
-            UserRole.MED_ASSISTANT,
-        )
-    ),
-    session: Session = Depends(get_session),
-) -> MessageResponse:
-    FUNCTION BODY
-    return MessageResponse(
-        message="Тег добавлен к специальности"
-    )
-@@router.delete(
-    "/specialities/{speciality_id}/{tag_id}",
-    response_model=MessageResponse,
-)
-async def remove_tag_from_speciality(
-    speciality_id: uuid.UUID,
-    tag_id: uuid.UUID,
-    _: AuthContext = Depends(
-        require_roles(
-            UserRole.SUPERUSER,
-            UserRole.MED_ASSISTANT,
-        )
-    ),
-    session: Session = Depends(get_session),
-) -> MessageResponse:
-    FUNCTION BODY
-    return MessageResponse(
-        message="Тег удалён из специальности"
-    )
-@@router.get(
-    "/doctors/me/overrides",
-    response_model=list[DoctorTagOverrideResponse],
-)
-async def list_my_doctor_tag_overrides(
-    auth: AuthContext = Depends(
-        require_roles(UserRole.DOCTOR)
-    ),
-    session: Session = Depends(get_session),
-) -> list[DoctorTagOverrideResponse]:
-    FUNCTION BODY
-    return [
-        serialize_override(
-            session=session,
-            override=override,
-        )
-        for override in overrides
-    ]
-@@router.put(
-    "/doctors/me/overrides",
-    response_model=DoctorTagOverrideResponse,
-)
-async def set_my_doctor_tag_override(
-    payload: DoctorTagOverrideRequest,
-    auth: AuthContext = Depends(
-        require_roles(UserRole.DOCTOR)
-    ),
-    session: Session = Depends(get_session),
-) -> DoctorTagOverrideResponse:
-    FUNCTION BODY
-    return serialize_override(
-        session=session,
-        override=override,
-    )
-@@router.delete(
-    "/doctors/me/overrides/{tag_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-)
-async def reset_my_doctor_tag_override(
-    tag_id: uuid.UUID,
-    auth: AuthContext = Depends(
-        require_roles(UserRole.DOCTOR)
-    ),
-    session: Session = Depends(get_session),
-) -> None:
-    FUNCTION BODY
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Индивидуальная настройка тега не найдена",
-        )
-@@router.get(
-    "/patients/{patient_id}/effective",
-    response_model=EffectiveTagsResponse,
-)
-async def get_patient_effective_tags_for_staff(
-    patient_id: uuid.UUID,
-    auth: AuthContext = Depends(
-        require_roles(
-            UserRole.DOCTOR,
-            UserRole.MED_ASSISTANT,
-            UserRole.SUPERUSER,
-        )
-    ),
-    session: Session = Depends(get_session),
-) -> EffectiveTagsResponse:
-    FUNCTION BODY
-    return serialize_effective_tags(
-        owner_type="patient",
-        owner_id=patient.id,
-        tag_data=tag_data,
-    )
-@@router.get(
-    "/patients/{patient_id}/overrides",
-    response_model=list[PatientTagOverrideResponse],
-)
-async def list_patient_tag_overrides(
-    patient_id: uuid.UUID,
-    auth: AuthContext = Depends(
-        require_roles(
-            UserRole.DOCTOR,
-            UserRole.MED_ASSISTANT,
-            UserRole.SUPERUSER,
-        )
-    ),
-    session: Session = Depends(get_session),
-) -> list[PatientTagOverrideResponse]:
-    FUNCTION BODY
-    return [
-        serialize_patient_override(
-            session=session,
-            override=override,
-        )
-        for override in overrides
-    ]
-@@router.put(
-    "/patients/{patient_id}/overrides",
-    response_model=PatientTagOverrideResponse,
-)
-async def set_patient_tag_override(
-    patient_id: uuid.UUID,
-    payload: PatientTagOverrideRequest,
-    auth: AuthContext = Depends(
-        require_roles(
-            UserRole.DOCTOR,
-            UserRole.MED_ASSISTANT,
-            UserRole.SUPERUSER,
-        )
-    ),
-    session: Session = Depends(get_session),
-) -> PatientTagOverrideResponse:
-    FUNCTION BODY
-    return serialize_patient_override(
-        session=session,
-        override=override,
-    )
-@@router.delete(
-    "/patients/{patient_id}/overrides/{tag_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-)
-async def reset_patient_tag_override(
-    patient_id: uuid.UUID,
-    tag_id: uuid.UUID,
-    auth: AuthContext = Depends(
-        require_roles(
-            UserRole.DOCTOR,
-            UserRole.MED_ASSISTANT,
-            UserRole.SUPERUSER,
-        )
-    ),
-    session: Session = Depends(get_session),
-) -> None:
-    FUNCTION BODY
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=(
-                "Индивидуальная настройка "
-                "тега пациента не найдена"
-            ),
-        )
-@@router.get(
-    "/me/effective",
-    response_model=EffectiveTagsResponse,
-)
-async def get_my_effective_tags(
-    auth: AuthContext = Depends(get_current_auth),
-    session: Session = Depends(get_session),
-) -> EffectiveTagsResponse:
-    FUNCTION BODY
-    raise HTTPException(
-        status_code=status.HTTP_403_FORBIDDEN,
-        detail="Для активной роли эффективные теги не предусмотрены",
-    )
-
-// ./frontend/app/stores/tag-access.js
-export const useTagAccessStore = defineStore(
-  'tag-access',
-  () => {
-    const tags = ref([])
-
-    const doctorEffectiveTags = ref([])
-    const doctorOverrides = ref([])
-
-    const patientEffectiveTags = ref([])
-    const patientOverrides = ref([])
-
-    const loadingDoctor = ref(false)
-    const loadingPatient = ref(false)
-    const saving = ref(false)
-
-    async function fetchTags() {
-      const { $api } = useNuxtApp()
-
-      tags.value = await $api(
-        '/api/v1/tags',
-      )
-
-      return tags.value
-    }
-
-    async function fetchDoctorState() {
-      const { $api } = useNuxtApp()
-
-      loadingDoctor.value = true
-
-      try {
-        const [
-          catalog,
-          effective,
-          overrides,
-        ] = await Promise.all([
-          $api('/api/v1/tags'),
-          $api('/api/v1/tags/me/effective'),
-          $api(
-            '/api/v1/tags/doctors/me/overrides',
-          ),
-        ])
-
-        tags.value = catalog
-        doctorEffectiveTags.value =
-          effective.tags || []
-        doctorOverrides.value = overrides
-
-        return {
-          effective: effective.tags || [],
-          overrides,
-        }
-      } finally {
-        loadingDoctor.value = false
-      }
-    }
-
-    async function setDoctorOverride(
-      tagId,
-      action,
-    ) {
-      const { $api } = useNuxtApp()
-
-      saving.value = true
-
-      try {
-        await $api(
-          '/api/v1/tags/doctors/me/overrides',
-          {
-            method: 'PUT',
-            body: {
-              tag_id: tagId,
-              action,
-            },
-          },
-        )
-
-        await fetchDoctorState()
-      } finally {
-        saving.value = false
-      }
-    }
-
-    async function resetDoctorOverride(tagId) {
-      const { $api } = useNuxtApp()
-
-      saving.value = true
-
-      try {
-        await $api(
-          `/api/v1/tags/doctors/me/overrides/${tagId}`,
-          {
-            method: 'DELETE',
-          },
-        )
-
-        await fetchDoctorState()
-      } finally {
-        saving.value = false
-      }
-    }
-
-    async function fetchPatientState(patientId) {
-      const { $api } = useNuxtApp()
-
-      loadingPatient.value = true
-
-      try {
-        const [
-          catalog,
-          effective,
-          overrides,
-        ] = await Promise.all([
-          $api('/api/v1/tags'),
-          $api(
-            `/api/v1/tags/patients/${patientId}/effective`,
-          ),
-          $api(
-            `/api/v1/tags/patients/${patientId}/overrides`,
-          ),
-        ])
-
-        tags.value = catalog
-        patientEffectiveTags.value =
-          effective.tags || []
-        patientOverrides.value = overrides
-
-        return {
-          effective: effective.tags || [],
-          overrides,
-        }
-      } finally {
-        loadingPatient.value = false
-      }
-    }
-
-    async function setPatientOverride(
-      patientId,
-      tagId,
-      action,
-    ) {
-      const { $api } = useNuxtApp()
-
-      saving.value = true
-
-      try {
-        await $api(
-          `/api/v1/tags/patients/${patientId}/overrides`,
-          {
-            method: 'PUT',
-            body: {
-              tag_id: tagId,
-              action,
-            },
-          },
-        )
-
-        await fetchPatientState(patientId)
-      } finally {
-        saving.value = false
-      }
-    }
-
-    async function resetPatientOverride(
-      patientId,
-      tagId,
-    ) {
-      const { $api } = useNuxtApp()
-
-      saving.value = true
-
-      try {
-        await $api(
-          `/api/v1/tags/patients/${patientId}/overrides/${tagId}`,
-          {
-            method: 'DELETE',
-          },
-        )
-
-        await fetchPatientState(patientId)
-      } finally {
-        saving.value = false
-      }
-    }
-
-    return {
-      tags,
-
-      doctorEffectiveTags,
-      doctorOverrides,
-
-      patientEffectiveTags,
-      patientOverrides,
-
-      loadingDoctor,
-      loadingPatient,
-      saving,
-
-      fetchTags,
-      fetchDoctorState,
-      setDoctorOverride,
-      resetDoctorOverride,
-
-      fetchPatientState,
-      setPatientOverride,
-      resetPatientOverride,
-    }
-  },
-)
-// ./frontend/app/plugins/api.js
-export default defineNuxtPlugin(() => {
-  const config = useRuntimeConfig()
-
-  const api = $fetch.create({
-    baseURL: config.public.apiBase,
-
-    onRequest({ options }) {
-      if (!import.meta.client) return
-
-      const accessToken = localStorage.getItem(
-        'mentalme_access_token',
-      )
-
-      if (!accessToken) return
-
-      const headers = new Headers(options.headers || {})
-      headers.set(
-        'Authorization',
-        `Bearer ${accessToken}`,
-      )
-
-      options.headers = headers
-    },
-
-    async onResponseError({ response }) {
-      if (!import.meta.client) return
-
-      if (response.status !== 401) return
-
-      const hadAccessToken = Boolean(
-        localStorage.getItem('mentalme_access_token'),
-      )
-
-      if (!hadAccessToken) return
-
-      localStorage.removeItem('mentalme_access_token')
-      localStorage.removeItem('mentalme_active_role')
-
-      const publicPaths = [
-        '/login',
-        '/forgot-password',
-        '/reset-password',
-        '/verify-email',
-        '/register',
-      ]
-
-      const isPublicPath = publicPaths.some((path) =>
-        window.location.pathname.startsWith(path),
-      )
-
-      if (!isPublicPath) {
-        window.location.href = '/login?sessionExpired=1'
-      }
-    },
-  })
-
-  return {
-    provide: {
-      api,
-    },
-  }
-})
-// https://nuxt.com/docs/api/configuration/nuxt-config
-import tailwindcss from "@tailwindcss/vite";
-export default defineNuxtConfig({
-  compatibilityDate: '2025-07-15',
-  devtools: { enabled: false },
-  modules: [
-    '@pinia/nuxt',
-    '@nuxt/icon',
-  ],
-  icon: {
-    serverBundle: {
-      collections: [
-        'lucide',
-      ],
-    },
-
-    clientBundle: {
-      scan: true,
-      sizeLimitKb: 512,
-    },
-  },
-  vite: {
-    plugins: [tailwindcss() as any],
-  },
-  css: ['~/assets/css/main.css'],
-  runtimeConfig: {
-    public: {
-      apiBase:
-        process.env.NUXT_PUBLIC_API_BASE
-        || 'http://localhost:8000',
-      siteUrl:
-        process.env.NUXT_PUBLIC_SITE_URL
-        || 'http://localhost:3000',
-    },
-  },
-  app: {
-    head: {
-      title: 'MentalConnect',
-      meta: [
-        {
-          charset: 'utf-8',
-        },
-        {
-          name: 'viewport',
-          content:
-            'width=device-width, initial-scale=1, viewport-fit=cover',
-        },
-        {
-          name: 'description',
-          content:
-            'MentalConnect — сервис сопровождения пациентов',
-        },
-        {
-          name: 'theme-color',
-          content: '#f4f0eb',
-        },
-      ],
-      link: [
-        {
-          rel: 'icon',
-          type: 'image/x-icon',
-          href: '/favicon.ico',
-        },
-        {
-          rel: 'icon',
-          type: 'image/png',
-          sizes: '32x32',
-          href: '/favicon-32x32.png',
-        },
-        {
-          rel: 'icon',
-          type: 'image/png',
-          sizes: '16x16',
-          href: '/favicon-16x16.png',
-        },
-        {
-          rel: 'apple-touch-icon',
-          sizes: '180x180',
-          href: '/apple-touch-icon.png',
-        },
-        {
-          rel: 'manifest',
-          href: '/site.webmanifest',
-        },
-      ],
-    },
-  },
-})
-<!-- ./frontend/app/pages/settings/tags.vue -->
+---
+Файлы, которые могут пригодиться:
+<!-- ./frontend/app/components/programs/PatientProgress.vue -->
 <script setup>
-definePageMeta({
-  middleware: [
-    'doctor-only',
-  ],
+const props = defineProps({
+  patientId: {
+    type: String,
+    required: true,
+  },
 })
 
-const store = useTagAccessStore()
+const store = useProgramsStore()
+
+const loading = ref(true)
 const errorMessage = ref('')
-const message = ref('')
 
-async function load() {
-  errorMessage.value = ''
+const selectedProgramIndex = ref(0)
+const selectedStageIndexes = reactive({})
 
-  try {
-    await store.fetchDoctorState()
-  } catch (error) {
-    errorMessage.value =
-      error?.data?.detail
-      || 'Не удалось загрузить теги врача'
-  }
+const selectedProgram = computed(
+  () =>
+    store.patientProgressPrograms[
+      selectedProgramIndex.value
+    ],
+)
+
+function getSelectedStage(program) {
+  const index =
+    selectedStageIndexes[program.id] || 0
+
+  return program.stages[index]
 }
 
-async function setOverride({ tag, action }) {
-  errorMessage.value = ''
-  message.value = ''
+function statusName(program) {
+  if (!program.enrollment) {
+    if (program.purchase_requested) {
+      return 'Запрошена пациентом'
+    }
 
+    return 'Доступ открыт, не начата'
+  }
+
+  if (
+    program.enrollment.status === 'completed'
+  ) {
+    return 'Завершена'
+  }
+
+  return 'В процессе'
+}
+
+onMounted(async () => {
   try {
-    await store.setDoctorOverride(
-      tag.id,
-      action,
+    await store.fetchPatientProgramProgress(
+      props.patientId,
     )
-
-    message.value = 'Настройка тега сохранена'
   } catch (error) {
     errorMessage.value =
       error?.data?.detail
-      || 'Не удалось изменить тег'
+      || 'Не удалось загрузить программы пациента'
+  } finally {
+    loading.value = false
   }
-}
-
-async function resetOverride(tag) {
-  errorMessage.value = ''
-  message.value = ''
-
-  try {
-    await store.resetDoctorOverride(tag.id)
-
-    message.value = (
-      'Восстановлено значение специальности'
-    )
-  } catch (error) {
-    errorMessage.value =
-      error?.data?.detail
-      || 'Не удалось сбросить настройку'
-  }
-}
-
-onMounted(load)
+})
 </script>
 
 <template>
-  <div class="mx-auto max-w-4xl space-y-6">
-    <header>
-      <h1 class="text-2xl font-bold sm:text-3xl">
-        Мои теги
-      </h1>
+  <UiContentSkeleton
+    v-if="loading"
+    variant="card"
+    :count="2"
+  />
 
-      <p class="text-base-content/60 mt-1">
-        Индивидуальная настройка тегов,
-        унаследованных от специальности.
+  <div
+    v-else-if="errorMessage"
+    class="alert alert-error"
+  >
+    {{ errorMessage }}
+  </div>
+
+  <div
+    v-else-if="store.patientProgressPrograms.length"
+    class="space-y-5"
+  >
+    <div class="overflow-x-auto pb-1">
+      <div
+        role="tablist"
+        class="tabs tabs-box flex-nowrap"
+      >
+        <button
+          v-for="(program, index) in store.patientProgressPrograms"
+          :key="program.id"
+          type="button"
+          role="tab"
+          class="tab min-w-max gap-2"
+          :class="{
+            'tab-active':
+              selectedProgramIndex === index,
+          }"
+          @click="selectedProgramIndex = index"
+        >
+          <Icon
+            name="lucide:route"
+            class="size-4"
+          />
+          {{ program.title }}
+        </button>
+      </div>
+    </div>
+
+    <template v-if="selectedProgram">
+      <header
+        class="bg-base-100 border-base-300 rounded-2xl border p-5"
+      >
+        <div
+          class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <div>
+            <h2 class="text-xl font-bold">
+              {{ selectedProgram.title }}
+            </h2>
+
+            <p class="text-base-content/60 text-sm">
+              {{ statusName(selectedProgram) }}
+            </p>
+          </div>
+
+          <span
+            class="badge"
+            :class="{
+              'badge-warning':
+                selectedProgram.purchase_requested,
+              'badge-success':
+                selectedProgram.enrollment?.status
+                  === 'completed',
+              'badge-primary':
+                selectedProgram.enrollment?.status
+                  === 'active',
+            }"
+          >
+            {{ selectedProgram.progress_percent }}%
+          </span>
+        </div>
+
+        <progress
+          class="progress progress-primary mt-4 w-full"
+          :value="selectedProgram.progress_percent"
+          max="100"
+        />
+      </header>
+
+      <div class="overflow-x-auto pb-1">
+        <div class="join">
+          <button
+            v-for="(stage, index) in selectedProgram.stages"
+            :key="stage.id"
+            type="button"
+            class="btn join-item btn-sm"
+            :class="{
+              'btn-primary':
+                (selectedStageIndexes[
+                  selectedProgram.id
+                ] || 0) === index,
+            }"
+            @click="
+              selectedStageIndexes[
+                selectedProgram.id
+              ] = index
+            "
+          >
+            <Icon
+              :name="
+                stage.status === 'completed'
+                  ? 'lucide:circle-check'
+                  : stage.status === 'overdue'
+                    ? 'lucide:triangle-alert'
+                    : 'lucide:circle'
+              "
+              class="size-4"
+            />
+
+            Этап {{ index + 1 }}
+          </button>
+        </div>
+      </div>
+
+      <ProgramsViewerStage
+        v-if="getSelectedStage(selectedProgram)"
+        :stage="getSelectedStage(selectedProgram)"
+        :program-id="selectedProgram.id"
+        :patient-id="patientId"
+        :is-patient="false"
+        />
+    </template>
+  </div>
+
+  <div
+    v-else
+    class="bg-base-100 border-base-300 rounded-2xl border border-dashed p-10 text-center"
+  >
+    <Icon
+      name="lucide:route-off"
+      class="text-base-content/30 mx-auto size-12"
+    />
+
+    <p class="mt-4 font-medium">
+      Пациент пока не начал и не приобретал программы
+    </p>
+  </div>
+</template>
+
+<!-- ./frontend/app/components/programs/PatientOverview.vue -->
+<script setup>
+const store = useProgramsStore()
+
+const loading = ref(true)
+const errorMessage = ref('')
+
+const activePrograms = computed(() =>
+  store.programs.filter(
+    (program) =>
+      program.has_program_access
+      || program.enrollment,
+  ),
+)
+
+function statusText(program) {
+  if (
+    program.enrollment?.status === 'completed'
+  ) {
+    return 'Завершена'
+  }
+
+  if (program.enrollment) {
+    return 'В процессе'
+  }
+
+  if (program.has_program_access) {
+    return 'Доступна'
+  }
+
+  return ''
+}
+
+onMounted(async () => {
+  try {
+    await store.fetchProgramsForPatient()
+  } catch (error) {
+    errorMessage.value =
+      error?.data?.detail
+      || 'Не удалось загрузить программы'
+  } finally {
+    loading.value = false
+  }
+})
+</script>
+
+<template>
+  <section
+    v-if="
+      loading
+      || errorMessage
+      || activePrograms.length
+    "
+    class="space-y-4"
+  >
+    <div class="flex items-center justify-between gap-4">
+      <div>
+        <h2 class="text-xl font-bold sm:text-2xl">
+          Мои программы
+        </h2>
+
+        <p class="text-base-content/60 text-sm">
+          Приобретённые и начатые программы.
+        </p>
+      </div>
+
+      <NuxtLink
+        to="/programs"
+        class="btn btn-ghost btn-sm"
+      >
+        Все программы
+      </NuxtLink>
+    </div>
+
+    <UiContentSkeleton
+      v-if="loading"
+      variant="card"
+      :count="2"
+    />
+
+    <div
+      v-else-if="errorMessage"
+      class="alert alert-error"
+    >
+      {{ errorMessage }}
+    </div>
+
+    <div
+      v-else
+      class="grid gap-4 md:grid-cols-2 xl:grid-cols-3"
+    >
+      <NuxtLink
+        v-for="program in activePrograms"
+        :key="program.id"
+        :to="`/programs/${program.id}`"
+        class="card bg-base-100 border-primary/30 hover:border-primary border transition"
+      >
+        <div class="card-body">
+          <div class="flex flex-wrap gap-2">
+            <span
+              class="badge"
+              :class="
+                program.enrollment?.status
+                  === 'completed'
+                  ? 'badge-success'
+                  : 'badge-primary'
+              "
+            >
+              {{ statusText(program) }}
+            </span>
+
+            <span
+              v-if="program.has_program_access"
+              class="badge badge-secondary"
+            >
+              Полный доступ
+            </span>
+          </div>
+
+          <h3 class="card-title">
+            {{ program.title }}
+          </h3>
+
+          <div v-if="program.enrollment">
+            <div
+              class="mb-1 flex justify-between text-xs"
+            >
+              <span>Прогресс</span>
+              <strong>
+                {{ program.progress_percent }}%
+              </strong>
+            </div>
+
+            <progress
+              class="progress progress-primary w-full"
+              :value="program.progress_percent"
+              max="100"
+            />
+          </div>
+
+          <div class="card-actions mt-auto">
+            <span class="btn btn-primary btn-sm">
+              {{
+                program.enrollment
+                  ? 'Продолжить'
+                  : 'Начать'
+              }}
+            </span>
+          </div>
+        </div>
+      </NuxtLink>
+    </div>
+  </section>
+</template>
+
+<!-- ./frontend/app/components/programs/PatientAccess.vue -->
+<script setup>
+const props = defineProps({
+  patientId: {
+    type: String,
+    required: true,
+  },
+})
+
+const store = useProgramsStore()
+
+const {
+  formatFinalPrice,
+  formatOriginalPrice,
+  hasDiscount,
+} = useProgramPrice()
+
+const loading = ref(true)
+const confirmOpen = ref(false)
+const selectedProgram = ref(null)
+
+const errorMessage = ref('')
+
+function requestToggle(program) {
+  selectedProgram.value = program
+  confirmOpen.value = true
+}
+
+async function confirmToggle() {
+  if (!selectedProgram.value) return
+
+  try {
+    await store.setPatientProgramAccess(
+      props.patientId,
+      selectedProgram.value.program_id,
+      !selectedProgram.value.is_active,
+    )
+
+    confirmOpen.value = false
+    selectedProgram.value = null
+  } catch (error) {
+    errorMessage.value =
+      error?.data?.detail
+      || 'Не удалось изменить доступ'
+  }
+}
+
+const sortedPrograms = computed(() =>
+  [...store.patientAccessPrograms].sort(
+    (first, second) => {
+      if (
+        first.purchase_requested
+        !== second.purchase_requested
+      ) {
+        return first.purchase_requested
+          ? -1
+          : 1
+      }
+
+      return first.title.localeCompare(
+        second.title,
+        'ru',
+      )
+    },
+  ),
+)
+
+onMounted(async () => {
+  try {
+    await store.fetchPatientProgramAccess(
+      props.patientId,
+    )
+  } catch (error) {
+    errorMessage.value =
+      error?.data?.detail
+      || 'Не удалось загрузить программы'
+  } finally {
+    loading.value = false
+  }
+})
+</script>
+
+<template>
+  <section
+    class="bg-base-100 border-base-300 rounded-2xl border p-5 sm:p-6"
+  >
+    <div>
+      <h2 class="text-xl font-bold">
+        Доступ к программам
+      </h2>
+
+      <p class="text-base-content/60 mt-1 text-sm">
+        Включение открывает Pro-контент только внутри
+        выбранной программы.
       </p>
-    </header>
+    </div>
 
-    <div class="alert alert-warning">
-      <Icon
-        name="lucide:triangle-alert"
-        class="size-5"
-      />
+    <div
+      v-if="errorMessage"
+      class="alert alert-error mt-4"
+    >
+      {{ errorMessage }}
+    </div>
 
-      <span>
-        Изменение ваших тегов повлияет на фильтрацию
-        контента у всех прикреплённых пациентов.
+    <UiContentSkeleton
+      v-if="loading"
+      variant="list"
+      :count="3"
+    />
+
+    <div
+      v-else
+      class="mt-5 space-y-3"
+    >
+      <div
+        v-for="program in sortedPrograms"
+        :key="program.program_id"
+        class="border-base-300 flex flex-col gap-4 rounded-2xl border p-4 sm:flex-row sm:items-center"
+        :class="{
+          'border-warning bg-warning/5 ring-warning/10 ring-4':
+            program.purchase_requested,
+        }"
+      >
+        <div class="min-w-0 flex-1">
+          <div class="flex flex-wrap items-center gap-2">
+            <p class="font-medium">
+              {{ program.title }}
+            </p>
+
+            <span
+              v-if="program.purchase_requested"
+              class="badge badge-warning badge-sm gap-1"
+            >
+              <Icon
+                name="lucide:shopping-cart"
+                class="size-3"
+              />
+              Пациент запросил доступ
+            </span>
+
+            <span
+              v-if="program.is_hidden"
+              class="badge badge-ghost badge-sm"
+            >
+              Скрыта
+            </span>
+          </div>
+
+          <div
+            class="text-base-content/60 mt-2 flex flex-wrap items-center gap-2 text-sm"
+          >
+            <span
+              v-if="program.service?.code"
+              class="font-mono"
+            >
+              {{ program.service.code }}
+            </span>
+
+            <strong>
+              {{ formatFinalPrice(program) }}
+            </strong>
+
+            <span
+              v-if="hasDiscount(program)"
+              class="text-base-content/40 line-through"
+            >
+              {{ formatOriginalPrice(program) }}
+            </span>
+          </div>
+        </div>
+
+        <label
+          class="flex cursor-pointer items-center gap-3"
+        >
+          <span class="text-sm">
+            {{
+              program.is_active
+                ? 'Доступ открыт'
+                : 'Нет доступа'
+            }}
+          </span>
+
+          <input
+            type="checkbox"
+            class="toggle toggle-success"
+            :checked="program.is_active"
+            @change.prevent="requestToggle(program)"
+          >
+        </label>
+      </div>
+    </div>
+  </section>
+
+  <UiResponsiveDialog
+    v-model="confirmOpen"
+    :title="
+      selectedProgram?.is_active
+        ? 'Отключить доступ'
+        : 'Открыть доступ'
+    "
+    max-width-class="max-w-md"
+  >
+    <p>
+      {{
+        selectedProgram?.is_active
+          ? 'Пациент потеряет доступ к Pro-контенту внутри программы.'
+          : 'Пациент получит доступ ко всему Pro-контенту внутри программы.'
+      }}
+    </p>
+
+    <p class="mt-3 font-semibold">
+      {{ selectedProgram?.title }}
+    </p>
+
+    <template #footer>
+      <div class="flex justify-end gap-2">
+        <button
+          type="button"
+          class="btn"
+          @click="confirmOpen = false"
+        >
+          Отмена
+        </button>
+
+        <button
+          type="button"
+          class="btn"
+          :class="
+            selectedProgram?.is_active
+              ? 'btn-error'
+              : 'btn-success'
+          "
+          @click="confirmToggle"
+        >
+          Подтвердить
+        </button>
+      </div>
+    </template>
+  </UiResponsiveDialog>
+</template>
+<!-- ./frontend/app/components/programs/VisibilityDialog.vue -->
+<script setup>
+const model = defineModel({
+  type: Boolean,
+  default: false,
+})
+
+const props = defineProps({
+  program: {
+    type: Object,
+    default: null,
+  },
+})
+
+const emit = defineEmits([
+  'hidden',
+])
+
+const store = useProgramsStore()
+
+const hiding = ref(false)
+const errorMessage = ref('')
+
+async function hideProgram() {
+  if (!props.program) return
+
+  hiding.value = true
+  errorMessage.value = ''
+
+  try {
+    const response = await store.setVisibility(
+      props.program.id,
+      true,
+    )
+
+    emit('hidden', response)
+    model.value = false
+  } catch (error) {
+    errorMessage.value =
+      error?.data?.detail
+      || 'Не удалось скрыть программу'
+  } finally {
+    hiding.value = false
+  }
+}
+</script>
+
+<template>
+  <UiResponsiveDialog
+    v-model="model"
+    title="Скрыть программу"
+    max-width-class="max-w-md"
+  >
+    <div class="space-y-4">
+      <div
+        class="bg-warning/10 border-warning/30 rounded-2xl border p-4"
+      >
+        <div class="flex gap-3">
+          <Icon
+            name="lucide:eye-off"
+            class="text-warning mt-0.5 size-5 shrink-0"
+          />
+
+          <div>
+            <p class="font-semibold">
+              Программа исчезнет из каталога пациентов
+            </p>
+
+            <p class="text-base-content/70 mt-1 text-sm">
+              Существующие данные прохождения сохранятся.
+              Программу можно будет снова показать.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <p>
+        Вы действительно хотите скрыть программу:
+      </p>
+
+      <p class="font-semibold">
+        {{ program?.title }}
+      </p>
+
+      <div
+        v-if="errorMessage"
+        class="alert alert-error"
+      >
+        {{ errorMessage }}
+      </div>
+    </div>
+
+    <template #footer>
+      <div
+        class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"
+      >
+        <button
+          type="button"
+          class="btn"
+          :disabled="hiding"
+          @click="model = false"
+        >
+          Отмена
+        </button>
+
+        <button
+          type="button"
+          class="btn btn-warning"
+          :disabled="hiding"
+          @click="hideProgram"
+        >
+          <span
+            v-if="hiding"
+            class="loading loading-spinner loading-sm"
+          />
+
+          <Icon
+            v-else
+            name="lucide:eye-off"
+            class="size-4"
+          />
+
+          Скрыть
+        </button>
+      </div>
+    </template>
+  </UiResponsiveDialog>
+</template>
+<!-- ./frontend/app/components/programs/viewer/Stage.vue -->
+<script setup>
+const props = defineProps({
+  stage: {
+    type: Object,
+    required: true,
+  },
+  programId: {
+    type: String,
+    required: true,
+  },
+  patientId: {
+    type: String,
+    default: null,
+  },
+  isPatient: {
+    type: Boolean,
+    default: false,
+  },
+  purchaseLabel: {
+    type: String,
+    default: 'Купить программу',
+  },
+  purchaseRequested: {
+    type: Boolean,
+    default: false,
+  },
+})
+
+const emit = defineEmits([
+  'purchase',
+])
+
+const statusMeta = {
+  upcoming: {
+    title: 'Ещё не открыт',
+    class: 'badge-neutral',
+    icon: 'lucide:clock',
+  },
+  available: {
+    title: 'Доступен',
+    class: 'badge-info',
+    icon: 'lucide:play',
+  },
+  in_progress: {
+    title: 'В процессе',
+    class: 'badge-warning',
+    icon: 'lucide:loader-circle',
+  },
+  completed: {
+    title: 'Выполнен',
+    class: 'badge-success',
+    icon: 'lucide:circle-check',
+  },
+  overdue: {
+    title: 'Есть невыполненные задания',
+    class: 'badge-error',
+    icon: 'lucide:triangle-alert',
+  },
+}
+
+function getItemLink(item) {
+  if (item.item_type === 'article') {
+    return {
+      path: `/content/articles/${item.content_id}`,
+      query: {
+        source: 'program',
+        program_id: props.programId,
+        program_stage_id: props.stage.id,
+
+        // Пока сохраняем прежние параметры для
+        // совместимости с существующим возвратом.
+        program: props.programId,
+        stage: props.stage.id,
+      },
+    }
+  }
+
+  if (
+    item.item_type === 'questionnaire'
+    && props.isPatient
+  ) {
+    return {
+      path: `/questionnaires/${item.content_id}`,
+      query: {
+        program: props.programId,
+        stage: props.stage.id,
+      },
+    }
+  }
+
+  if (
+    item.item_type === 'questionnaire'
+    && props.patientId
+    && item.submission_id
+  ) {
+    return (
+      `/patients/${props.patientId}`
+      + `/questionnaires/${item.submission_id}`
+    )
+  }
+
+  return null
+}
+function canOpenItem(item) {
+  if (item.item_type === 'consultation') {
+    return false
+  }
+
+  if (props.isPatient) {
+    return item.can_access
+  }
+
+  if (item.item_type === 'article') {
+    return true
+  }
+
+  return Boolean(
+    props.patientId
+    && item.submission_id
+  )
+}
+
+function getActionText(item) {
+  if (props.isPatient) {
+    return item.is_completed
+      ? 'Открыть снова'
+      : 'Выполнить'
+  }
+
+  if (item.item_type === 'article') {
+    return 'Открыть статью'
+  }
+
+  if (item.submission_id) {
+    return item.is_completed
+      ? 'Посмотреть результат'
+      : 'Посмотреть ответы'
+  }
+
+  return ''
+}
+</script>
+
+<template>
+  <section
+    class="bg-base-100 border-base-300 rounded-3xl border p-5 sm:p-7"
+  >
+    <div
+      class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"
+    >
+      <div>
+        <p class="text-primary text-sm font-medium">
+          День {{ stage.day_from }}–{{ stage.day_to }}
+        </p>
+
+        <h2 class="mt-1 text-2xl font-bold">
+          {{ stage.title }}
+        </h2>
+
+        <p
+          v-if="stage.description"
+          class="text-base-content/70 mt-3"
+        >
+          {{ stage.description }}
+        </p>
+      </div>
+
+      <span
+        class="badge gap-1"
+        :class="
+          statusMeta[stage.status]?.class
+        "
+      >
+        <Icon
+          :name="
+            statusMeta[stage.status]?.icon
+            || 'lucide:circle'
+          "
+          class="size-3"
+        />
+
+        {{
+          statusMeta[stage.status]?.title
+          || stage.status
+        }}
       </span>
     </div>
+
+    <div
+      v-if="isPatient"
+      class="mt-5"
+    >
+      <div class="mb-2 flex justify-between text-sm">
+        <span>Выполнение этапа</span>
+        <strong>{{ stage.progress_percent }}%</strong>
+      </div>
+
+      <progress
+        class="progress progress-primary w-full"
+        :value="stage.progress_percent"
+        max="100"
+      />
+    </div>
+
+    <div
+      v-if="!isPatient && stage.doctor_description"
+      class="border-info/30 bg-info/10 mt-5 rounded-2xl border p-4"
+    >
+      <div class="flex gap-3">
+        <Icon
+          name="lucide:stethoscope"
+          class="text-info size-5 shrink-0"
+        />
+
+        <div>
+          <p class="font-semibold">
+            Инструкция для врача
+          </p>
+
+          <p class="mt-1 text-sm">
+            {{ stage.doctor_description }}
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="relative mt-8 space-y-4">
+      <div
+        class="bg-base-300 absolute bottom-5 left-5 top-5 w-0.5"
+      />
+
+      <article
+        v-for="(item, index) in stage.items"
+        :key="item.id"
+        class="relative flex gap-4"
+      >
+        <div
+          class="z-10 flex size-10 shrink-0 items-center justify-center rounded-full border-4 border-base-100"
+          :class="{
+            'bg-success text-success-content':
+              item.is_completed,
+            'bg-primary text-primary-content':
+              !item.is_completed
+              && item.can_access
+              && item.item_type !== 'consultation',
+            'bg-base-300':
+              !item.can_access,
+            'bg-accent text-accent-content':
+              item.item_type === 'consultation',
+          }"
+        >
+          <Icon
+            v-if="item.is_completed"
+            name="lucide:check"
+            class="size-4"
+          />
+
+          <Icon
+            v-else-if="item.item_type === 'article'"
+            name="lucide:file-text"
+            class="size-4"
+          />
+
+          <Icon
+            v-else-if="
+              item.item_type === 'questionnaire'
+            "
+            name="lucide:clipboard-list"
+            class="size-4"
+          />
+
+          <Icon
+            v-else
+            name="lucide:stethoscope"
+            class="size-4"
+          />
+        </div>
+
+        <div
+          class="border-base-300 min-w-0 flex-1 rounded-2xl border p-4"
+          :class="{
+            'border-success/40 bg-success/5':
+              item.is_completed,
+            'border-accent/40 bg-accent/5':
+              item.item_type === 'consultation',
+          }"
+        >
+          <div
+            class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"
+          >
+            <div>
+              <p class="text-base-content/50 text-xs">
+                Шаг {{ index + 1 }}
+              </p>
+
+              <h3 class="mt-1 font-semibold">
+                {{ item.title }}
+              </h3>
+
+              <p
+                v-if="item.description"
+                class="text-base-content/60 mt-2 text-sm"
+              >
+                {{ item.description }}
+              </p>
+            </div>
+
+            <span
+              v-if="item.pro_content"
+              class="badge badge-secondary shrink-0"
+            >
+              Pro
+            </span>
+          </div>
+
+          <div
+                v-if="
+                    item.item_type !== 'consultation'
+                "
+                class="mt-4"
+                >
+                <!-- Пациент -->
+                <template v-if="isPatient">
+                  <NuxtLink
+                    v-if="item.can_access"
+                    :to="getItemLink(item)"
+                    class="btn btn-primary btn-sm"
+                  >
+                    {{ getActionText(item) }}
+                  </NuxtLink>
+
+                  <template v-else-if="item.pro_content">
+                    <p class="text-base-content/60 mb-2 text-xs">
+                      Этот материал доступен в программе сопровождения.
+                    </p>
+
+                    <button
+                      type="button"
+                      class="btn btn-warning btn-sm"
+                      :disabled="purchaseRequested"
+                      @click="emit('purchase')"
+                    >
+                      <Icon
+                        :name="
+                          purchaseRequested
+                            ? 'lucide:check'
+                            : 'lucide:shopping-cart'
+                        "
+                        class="size-4"
+                      />
+
+                      {{
+                        purchaseRequested
+                          ? 'Запрос отправлен'
+                          : purchaseLabel
+                      }}
+                    </button>
+                  </template>
+
+                  <p v-else class="text-base-content/60 text-sm">
+                    Материал пока недоступен.
+                  </p>
+                </template>
+
+                <!-- Врач, ассистент или суперпользователь -->
+                <template v-else>
+                    <NuxtLink
+                    v-if="canOpenItem(item)"
+                    :to="getItemLink(item)"
+                    class="btn btn-outline btn-sm"
+                    >
+                    <Icon
+                        :name="
+                        item.item_type === 'article'
+                            ? 'lucide:external-link'
+                            : 'lucide:clipboard-check'
+                        "
+                        class="size-4"
+                    />
+
+                    {{ getActionText(item) }}
+                    </NuxtLink>
+
+                    <span
+                    v-else-if="
+                        item.item_type === 'questionnaire'
+                    "
+                    class="badge badge-ghost"
+                    >
+                    Пациент не начинал
+                    </span>
+                </template>
+                </div>
+
+          <div
+            v-else
+            class="mt-4 flex items-center gap-2 text-sm"
+          >
+            <Icon
+              name="lucide:calendar-clock"
+              class="text-accent size-4"
+            />
+
+            Консультация входит в план программы. Дату и время согласует ассистент клиники.
+          </div>
+        </div>
+      </article>
+    </div>
+  </section>
+</template>
+// ./frontend/app/stores/programs.js
+export const useProgramsStore = defineStore(
+  'programs',
+  () => {
+    const programs = ref([])
+    const currentProgram = ref(null)
+
+    const patientAccessPrograms = ref([])
+
+    const loading = ref(false)
+    const saving = ref(false)
+
+    const patientProgressPrograms = ref([])
+
+    async function fetchProgramsForStaff() {
+      const { $api } = useNuxtApp()
+
+      loading.value = true
+
+      try {
+        programs.value = await $api(
+          '/api/v1/programs/manage',
+        )
+
+        return programs.value
+      } finally {
+        loading.value = false
+      }
+    }
+
+    async function fetchProgramsForPatient() {
+      const { $api } = useNuxtApp()
+
+      loading.value = true
+
+      try {
+        programs.value = await $api(
+          '/api/v1/programs/patient',
+        )
+
+        return programs.value
+      } finally {
+        loading.value = false
+      }
+    }
+
+    async function fetchProgramForStaff(programId) {
+      const { $api } = useNuxtApp()
+
+      loading.value = true
+
+      try {
+        currentProgram.value = await $api(
+          `/api/v1/programs/manage/${programId}`,
+        )
+
+        return currentProgram.value
+      } finally {
+        loading.value = false
+      }
+    }
+
+    async function fetchProgramForPatient(programId) {
+      const { $api } = useNuxtApp()
+
+      loading.value = true
+
+      try {
+        currentProgram.value = await $api(
+          `/api/v1/programs/patient/${programId}`,
+        )
+
+        return currentProgram.value
+      } finally {
+        loading.value = false
+      }
+    }
+
+    async function createProgram(payload) {
+      const { $api } = useNuxtApp()
+
+      saving.value = true
+
+      try {
+        return await $api(
+          '/api/v1/programs/manage',
+          {
+            method: 'POST',
+            body: payload,
+          },
+        )
+      } finally {
+        saving.value = false
+      }
+    }
+
+    async function updateProgram(
+      programId,
+      payload,
+    ) {
+      const { $api } = useNuxtApp()
+
+      saving.value = true
+
+      try {
+        return await $api(
+          `/api/v1/programs/manage/${programId}`,
+          {
+            method: 'PUT',
+            body: payload,
+          },
+        )
+      } finally {
+        saving.value = false
+      }
+    }
+
+    async function setVisibility(
+      programId,
+      isHidden,
+    ) {
+      const { $api } = useNuxtApp()
+
+      return await $api(
+        `/api/v1/programs/manage/${programId}/visibility`,
+        {
+          method: 'PATCH',
+          body: {
+            is_hidden: isHidden,
+          },
+        },
+      )
+    }
+
+    async function startProgram(programId) {
+      const { $api } = useNuxtApp()
+
+      return await $api(
+        `/api/v1/programs/patient/${programId}/start`,
+        {
+          method: 'POST',
+        },
+      )
+    }
+
+    async function requestPurchase(programId) {
+      const { $api } = useNuxtApp()
+
+      return await $api(
+        `/api/v1/programs/patient/${programId}/request-purchase`,
+        {
+          method: 'POST',
+        },
+      )
+    }
+
+    async function fetchPatientProgramAccess(
+      patientId,
+    ) {
+      const { $api } = useNuxtApp()
+
+      patientAccessPrograms.value = await $api(
+        `/api/v1/programs/manage/patient/${patientId}/access`,
+      )
+
+      return patientAccessPrograms.value
+    }
+
+    async function setPatientProgramAccess(
+      patientId,
+      programId,
+      isActive,
+    ) {
+      const { $api } = useNuxtApp()
+
+      const response = await $api(
+        `/api/v1/programs/manage/patient/${patientId}/access/${programId}`,
+        {
+          method: 'PATCH',
+          body: {
+            is_active: isActive,
+          },
+        },
+      )
+
+      const item = patientAccessPrograms.value.find(
+        (program) =>
+          program.program_id === programId,
+      )
+
+      if (item) {
+        Object.assign(item, response)
+      }
+
+      return response
+    }
+
+    async function fetchPatientProgramProgress(
+        patientId,
+        ) {
+        const { $api } = useNuxtApp()
+
+        patientProgressPrograms.value = await $api(
+            `/api/v1/programs/manage/patient/${patientId}/progress`,
+        )
+
+        return patientProgressPrograms.value
+        }
+
+    return {
+      programs,
+      currentProgram,
+      patientAccessPrograms,
+
+      loading,
+      saving,
+
+      fetchProgramsForStaff,
+      fetchProgramsForPatient,
+      fetchProgramForStaff,
+      fetchProgramForPatient,
+
+      createProgram,
+      updateProgram,
+      setVisibility,
+
+      startProgram,
+      requestPurchase,
+
+      fetchPatientProgramAccess,
+      setPatientProgramAccess,
+
+      patientProgressPrograms,
+      fetchPatientProgramProgress,
+    }
+  },
+)
+<!-- ./frontend/app/layouts/default.vue -->
+<script setup>
+</script>
+
+<template>
+  <LayoutSidebar>
+    <div
+      class="bg-base-200 flex min-h-dvh min-w-0 flex-col"
+    >
+      <LayoutEmailVerificationBanner />
+      <LayoutNavbar />
+
+      <main
+        class="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:py-8"
+      >
+        <slot />
+      </main>
+
+      <LayoutFooter />
+    </div>
+  </LayoutSidebar>
+</template>
+<!-- ./frontend/app/pages/programs/index.vue -->
+<script setup>
+const auth = useAuthStore()
+const store = useProgramsStore()
+
+const {
+  formatOriginalPrice,
+  formatFinalPrice,
+  hasDiscount,
+} = useProgramPrice()
+
+const loading = ref(true)
+const errorMessage = ref('')
+
+const visibilityDialogOpen = ref(false)
+const selectedProgram = ref(null)
+
+const canManage = computed(() =>
+  [
+    'superuser',
+    'med_assistant',
+  ].includes(auth.activeRole),
+)
+
+function openHideDialog(program) {
+  selectedProgram.value = program
+  visibilityDialogOpen.value = true
+}
+
+async function showProgram(program) {
+  errorMessage.value = ''
+
+  try {
+    const response = await store.setVisibility(
+      program.id,
+      false,
+    )
+
+    Object.assign(program, response)
+  } catch (error) {
+    errorMessage.value =
+      error?.data?.detail
+      || 'Не удалось показать программу'
+  }
+}
+
+function handleHidden(response) {
+  const item = store.programs.find(
+    (program) => program.id === response.id,
+  )
+
+  if (item) {
+    Object.assign(item, response)
+  }
+}
+
+onMounted(async () => {
+  try {
+    if (auth.activeRole === 'patient') {
+      await store.fetchProgramsForPatient()
+    } else {
+      await store.fetchProgramsForStaff()
+    }
+  } catch (error) {
+    errorMessage.value =
+      error?.data?.detail
+      || 'Не удалось загрузить программы'
+  } finally {
+    loading.value = false
+  }
+})
+</script>
+
+<template>
+  <div class="space-y-6">
+    <header
+      class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
+    >
+      <div>
+        <h1 class="text-2xl font-bold sm:text-3xl">
+          Программы
+        </h1>
+
+        <p class="text-base-content/60 mt-1">
+          Пошаговые программы работы с материалами.
+        </p>
+      </div>
+
+      <NuxtLink
+        v-if="canManage"
+        to="/programs/new"
+        class="btn btn-primary"
+      >
+        <Icon
+          name="lucide:plus"
+          class="size-4"
+        />
+        Новая программа
+      </NuxtLink>
+    </header>
+
+    <div
+      v-if="errorMessage"
+      class="alert alert-error"
+    >
+      {{ errorMessage }}
+    </div>
+
+    <UiContentSkeleton
+      v-if="loading"
+      variant="card"
+      :count="3"
+    />
+
+    <div
+      v-else-if="store.programs.length"
+      class="grid gap-5 md:grid-cols-2 xl:grid-cols-3"
+    >
+      <div
+        v-for="program in store.programs"
+        :key="program.id"
+        :class="[
+          program.is_popular
+            ? 'aura aura-rainbow'
+            : '',
+          'h-full',
+        ]"
+      >
+        <article
+          class="card bg-base-100 border-base-300 relative h-full overflow-hidden border"
+          :class="{
+            'opacity-60': program.is_hidden,
+          }"
+        >
+          <div
+            v-if="program.is_popular"
+            class="bg-warning text-warning-content absolute right-0 top-0 rounded-bl-2xl px-4 py-2 text-xs font-bold shadow"
+          >
+            <Icon
+              name="lucide:flame"
+              class="mr-1 inline size-4"
+            />
+            Популярное
+          </div>
+
+          <div class="card-body">
+            <div class="flex flex-wrap gap-2 pr-24">
+              <span
+                v-if="hasDiscount(program)"
+                class="badge badge-error gap-1 font-bold"
+              >
+                <Icon
+                  name="lucide:badge-percent"
+                  class="size-3"
+                />
+                −{{ program.service?.discount_percent }}%
+              </span>
+
+              <span
+                v-if="program.has_program_access"
+                class="badge badge-success"
+              >
+                Полный доступ
+              </span>
+
+              <span
+                v-if="program.purchase_requested"
+                class="badge badge-warning"
+              >
+                Запрос отправлен
+              </span>
+
+              <span
+                v-if="program.is_hidden"
+                class="badge badge-ghost"
+              >
+                Скрыта
+              </span>
+            </div>
+
+            <h2 class="card-title mt-2">
+              {{ program.title }}
+            </h2>
+
+            <p
+              class="text-base-content/60 line-clamp-3 text-sm"
+            >
+              {{ program.description }}
+            </p>
+
+            <div class="mt-2 flex items-end gap-2">
+              <span class="text-primary text-xl font-bold">
+                {{ formatFinalPrice(program) }}
+              </span>
+
+              <span
+                v-if="hasDiscount(program)"
+                class="text-base-content/40 text-sm line-through"
+              >
+                {{ formatOriginalPrice(program) }}
+              </span>
+            </div>
+
+            <div class="mt-2 flex flex-wrap gap-1">
+              <span
+                v-for="tag in program.tags"
+                :key="tag.id"
+                class="badge badge-outline badge-sm"
+              >
+                {{ tag.name }}
+              </span>
+            </div>
+
+            <div class="card-actions mt-auto pt-5">
+              <NuxtLink
+                :to="`/programs/${program.id}`"
+                class="btn btn-primary btn-sm"
+              >
+                Открыть
+              </NuxtLink>
+
+              <NuxtLink
+                v-if="canManage"
+                :to="`/programs/${program.id}/edit`"
+                class="btn btn-outline btn-sm"
+              >
+                <Icon
+                  name="lucide:pencil"
+                  class="size-4"
+                />
+                Изменить
+              </NuxtLink>
+
+              <button
+                v-if="canManage && !program.is_hidden"
+                type="button"
+                class="btn btn-ghost btn-sm"
+                @click="openHideDialog(program)"
+              >
+                <Icon
+                  name="lucide:eye-off"
+                  class="size-4"
+                />
+                Скрыть
+              </button>
+
+              <button
+                v-if="canManage && program.is_hidden"
+                type="button"
+                class="btn btn-ghost btn-sm"
+                @click="showProgram(program)"
+              >
+                <Icon
+                  name="lucide:eye"
+                  class="size-4"
+                />
+                Показать
+              </button>
+            </div>
+          </div>
+        </article>
+      </div>
+    </div>
+
+    <div
+      v-else
+      class="bg-base-100 border-base-300 rounded-2xl border border-dashed p-10 text-center"
+    >
+      <Icon
+        name="lucide:route"
+        class="text-base-content/30 mx-auto size-12"
+      />
+
+      <p class="mt-4 font-medium">
+        Программ пока нет
+      </p>
+    </div>
+  </div>
+
+  <ProgramsVisibilityDialog
+    v-model="visibilityDialogOpen"
+    :program="selectedProgram"
+    @hidden="handleHidden"
+  />
+</template>
+<!-- ./frontend/app/pages/programs/[id]/index.vue -->
+<script setup>
+const route = useRoute()
+const auth = useAuthStore()
+const store = useProgramsStore()
+
+const selectedStageIndex = ref(0)
+
+const {
+  formatOriginalPrice,
+  formatFinalPrice,
+  hasDiscount,
+  getPurchaseActionLabel,
+} = useProgramPrice()
+
+const purchaseActionLabel = computed(() =>
+  getPurchaseActionLabel(program.value),
+)
+
+const loading = ref(true)
+const starting = ref(false)
+const purchaseDialogOpen = ref(false)
+
+const message = ref('')
+const errorMessage = ref('')
+
+const program = computed(
+  () => store.currentProgram,
+)
+
+const isPatient = computed(
+  () => auth.activeRole === 'patient',
+)
+
+const canManage = computed(() =>
+  [
+    'superuser',
+    'med_assistant',
+  ].includes(auth.activeRole),
+)
+
+const selectedStage = computed(
+  () => program.value?.stages[
+    selectedStageIndex.value
+  ],
+)
+
+async function loadProgram() {
+  loading.value = true
+  errorMessage.value = ''
+
+  try {
+    if (isPatient.value) {
+      await store.fetchProgramForPatient(
+        route.params.id,
+      )
+
+      // Если вернулись из опросника программы,
+      // открываем тот же этап.
+      const requestedStageId =
+        typeof route.query.stage === 'string'
+          ? route.query.stage
+          : null
+
+      if (requestedStageId) {
+        const requestedIndex =
+          program.value.stages.findIndex(
+            (stage) =>
+              stage.id === requestedStageId,
+          )
+
+        if (requestedIndex >= 0) {
+          selectedStageIndex.value =
+            requestedIndex
+
+          return
+        }
+      }
+
+      // Если конкретный этап не был передан,
+      // выбираем текущий активный этап.
+      const preferredIndex =
+        program.value.stages.findIndex(
+          (stage) =>
+            [
+              'available',
+              'in_progress',
+              'overdue',
+            ].includes(stage.status),
+        )
+
+      selectedStageIndex.value =
+        preferredIndex >= 0
+          ? preferredIndex
+          : 0
+    } else {
+      await store.fetchProgramForStaff(
+        route.params.id,
+      )
+    }
+  } catch (error) {
+    errorMessage.value =
+      error?.data?.detail
+      || 'Не удалось загрузить программу'
+  } finally {
+    loading.value = false
+  }
+}
+
+async function startProgram() {
+  starting.value = true
+  errorMessage.value = ''
+  if (starting.value || !program.value) return
+
+  try {
+    await store.startProgram(program.value.id)
+    message.value = 'Программа начата'
+
+    await loadProgram()
+  } catch (error) {
+    errorMessage.value =
+      error?.data?.detail
+      || 'Не удалось начать программу'
+  } finally {
+    starting.value = false
+  }
+}
+
+async function requestPurchase() {
+  if (!program.value) return
+
+  errorMessage.value = ''
+
+  if (program.value.purchase_requested) {
+    message.value =
+      'Запрос уже отправлен медицинскому ассистенту.'
+    return
+  }
+
+  purchaseDialogOpen.value = true
+}
+
+function handlePurchaseRequested({ programId, response }) {
+  if (program.value?.id !== programId) return
+
+  program.value.purchase_requested = true
+  message.value = response.message
+}
+
+onMounted(loadProgram)
+</script>
+
+<template>
+  <UiContentSkeleton
+    v-if="loading"
+    variant="card"
+    :count="3"
+  />
+
+  <div
+    v-else-if="errorMessage && !program"
+    class="alert alert-error"
+  >
+    {{ errorMessage }}
+  </div>
+
+  <div
+    v-else-if="program"
+    class="space-y-6"
+  >
+    <header
+      class="bg-base-100 border-base-300 rounded-3xl border p-5 sm:p-7"
+    >
+      <div
+        class="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between"
+      >
+        <div class="min-w-0 flex-1">
+          <div
+                class="flex flex-wrap items-center gap-2"
+                >
+                <span class="text-primary text-2xl font-bold">
+                    {{ formatFinalPrice(program) }}
+                </span>
+
+                <span
+                    v-if="hasDiscount(program)"
+                    class="text-base-content/40 line-through"
+                >
+                    {{ formatOriginalPrice(program) }}
+                </span>
+
+                <span
+                    v-if="hasDiscount(program)"
+                    class="badge badge-error font-bold"
+                >
+                    −{{ program.service?.discount_percent }}%
+                </span>
+
+                <span
+                    v-if="program.is_popular"
+                    class="badge badge-warning gap-1"
+                >
+                    <Icon
+                    name="lucide:flame"
+                    class="size-3"
+                    />
+
+                    Популярное
+                </span>
+
+                <span
+                    v-if="program.has_program_access"
+                    class="badge badge-success"
+                >
+                    Полный доступ
+                </span>
+                </div>
+
+          <h1
+            class="mt-3 text-3xl font-bold sm:text-4xl"
+          >
+            {{ program.title }}
+          </h1>
+
+          <p
+            v-if="program.description"
+            class="text-base-content/70 mt-3 max-w-3xl"
+          >
+            {{ program.description }}
+          </p>
+
+          <p
+            v-if="isPatient && program.service"
+            class="border-primary/20 bg-primary/5 mt-4 rounded-2xl border p-4 text-sm"
+          >
+            Начать можно бесплатно. Материалы без отметки Pro доступны
+            без покупки. Консультации и Pro-материалы относятся
+            к программе сопровождения со специалистами.
+          </p>
+
+          <div
+            v-if="program.service"
+            class="border-base-300 mt-5 rounded-2xl border p-4"
+          >
+            <div class="flex flex-wrap items-center gap-2">
+              <span
+                v-if="program.service.code"
+                class="badge badge-neutral font-mono"
+              >
+                {{ program.service.code }}
+              </span>
+
+              <span class="font-medium">
+                {{ program.service.title }}
+              </span>
+            </div>
+
+            <p
+              v-if="program.service.description"
+              class="text-base-content/60 mt-2 text-sm"
+            >
+              {{ program.service.description }}
+            </p>
+          </div>
+
+          <div class="mt-4 flex flex-wrap gap-1">
+            <span
+              v-for="tag in program.tags"
+              :key="tag.id"
+              class="badge badge-outline"
+            >
+              {{ tag.name }}
+            </span>
+          </div>
+        </div>
+
+        <div class="flex flex-col gap-2 sm:flex-row">
+          <NuxtLink
+            v-if="canManage"
+            :to="`/programs/${program.id}/edit`"
+            class="btn btn-outline"
+          >
+            <Icon
+              name="lucide:pencil"
+              class="size-4"
+            />
+            Редактировать
+          </NuxtLink>
+
+          <button
+            v-if="
+              isPatient
+              && !program.enrollment
+            "
+            type="button"
+            class="btn btn-primary"
+            :disabled="starting"
+            @click="startProgram"
+          >
+            <span
+              v-if="starting"
+              class="loading loading-spinner loading-sm"
+            />
+
+            Начать программу
+          </button>
+        </div>
+      </div>
+
+      <div
+        v-if="isPatient && program.enrollment"
+        class="mt-6"
+      >
+        <div class="mb-2 flex justify-between text-sm">
+          <span>
+            Общий прогресс
+          </span>
+
+          <strong>
+            {{ program.progress_percent }}%
+          </strong>
+        </div>
+
+        <progress
+          class="progress progress-primary w-full"
+          :value="program.progress_percent"
+          max="100"
+        />
+
+        <p class="text-base-content/50 mt-2 text-xs">
+          День программы:
+          {{ program.enrollment.elapsed_days }}
+        </p>
+      </div>
+    </header>
 
     <div
       v-if="message"
@@ -1729,185 +2378,54 @@ onMounted(load)
       {{ errorMessage }}
     </div>
 
-    <section
-      class="bg-base-100 border-base-300 rounded-2xl border p-5 sm:p-6"
-    >
-      <TagsOverrideEditor
-        :tags="store.tags"
-        :effective-tags="
-          store.doctorEffectiveTags
-        "
-        :overrides="store.doctorOverrides"
-        :loading="store.loadingDoctor"
-        :saving="store.saving"
-        default-label="Настройка специальности"
-        @set="setOverride"
-        @reset="resetOverride"
-      />
-    </section>
-  </div>
-</template>
-<!-- frontend\app\pages\index.vue -->
-<template>
-  <div>Home</div>
-</template>
-<!-- ./frontend/app/pages/dashboard.vue -->
-<script setup>
-const auth = useAuthStore()
-const userStore = useUserStore()
-
-const { isClientReady } = useClientReady()
-
-const roleNames = {
-  superuser: 'Суперпользователь',
-  med_assistant: 'Медицинский ассистент',
-  doctor: 'Врач',
-  patient: 'Пациент',
-  relative: 'Родственник',
-}
-
-const staffRoles = [
-  'doctor',
-  'med_assistant',
-  'superuser',
-]
-
-const activeRoleName = computed(() => {
-  if (!isClientReady.value) {
-    return ''
-  }
-
-  return (
-    roleNames[auth.activeRole]
-    || auth.activeRole
-    || ''
-  )
-})
-
-const isPatient = computed(() =>
-  isClientReady.value
-  && auth.activeRole === 'patient'
-)
-
-const isStaff = computed(() =>
-  isClientReady.value
-  && staffRoles.includes(auth.activeRole)
-)
-
-onMounted(async () => {
-  if (!userStore.user) {
-    await userStore.fetchMe()
-  }
-})
-</script>
-
-<template>
-  <div class="space-y-6">
-    <PatientHome v-if="isPatient" />
-
-    <!-- Приветствие -->
-    <section
-      v-if="!isPatient"
-      class="bg-base-100 border-base-300 rounded-3xl border p-5 sm:p-8"
-    >
-      <p
-        class="text-base-content/60 min-h-5 text-sm"
-      >
-        <span v-if="isClientReady">
-          {{ activeRoleName }}
-        </span>
-      </p>
-
-      <h1
-        class="mt-1 text-xl font-bold sm:text-2xl"
-      >
-        Здравствуйте,
-        {{ userStore.user?.first_name || 'пользователь' }}
-      </h1>
-    </section>
-
-    <!-- Dashboard сотрудников -->
-    <section
-      v-if="isStaff"
-      class="space-y-4"
-    >
+    <div class="overflow-x-auto pb-2">
       <div
-        class="flex items-center justify-between gap-4"
+        role="tablist"
+        class="tabs tabs-box flex-nowrap"
       >
-        <h2 class="text-xl font-bold sm:text-2xl">
-          Пациенты
-        </h2>
-
-        <NuxtLink
-          to="/patients"
-          class="btn btn-ghost btn-sm"
+        <button
+          v-for="(stage, index) in program.stages"
+          :key="stage.id"
+          type="button"
+          role="tab"
+          class="tab min-w-max gap-2"
+          :class="{
+            'tab-active':
+              selectedStageIndex === index,
+          }"
+          @click="selectedStageIndex = index"
         >
-          Открыть весь список
-        </NuxtLink>
-      </div>
+          <Icon
+            :name="
+              stage.status === 'completed'
+                ? 'lucide:circle-check'
+                : stage.status === 'overdue'
+                  ? 'lucide:triangle-alert'
+                  : 'lucide:circle'
+            "
+            class="size-4"
+          />
 
-      <PatientsList
-        compact
-        :page-size="10"
+          Этап {{ index + 1 }}
+        </button>
+      </div>
+    </div>
+
+    <ProgramsViewerStage
+        v-if="selectedStage"
+        :stage="selectedStage"
+        :program-id="program.id"
+        :is-patient="isPatient"
+        :purchase-label="purchaseActionLabel"
+        :purchase-requested="Boolean(program.purchase_requested)"
+        @purchase="requestPurchase"
       />
-    </section>
-
-    <!-- Общие настройки -->
-    <section
-      v-if="!isPatient"
-      class="grid gap-4 md:grid-cols-2 xl:grid-cols-3"
-    >
-      <NuxtLink
-        to="/settings/security"
-        class="card bg-base-100 border-base-300 hover:border-primary border transition"
-      >
-        <div class="card-body">
-          <div
-            class="bg-primary/10 text-primary flex size-12 items-center justify-center rounded-2xl"
-          >
-            <Icon
-              name="lucide:shield-check"
-              class="size-6"
-            />
-          </div>
-
-          <h2 class="card-title mt-2">
-            Безопасность
-          </h2>
-
-          <p class="text-base-content/60 text-sm">
-            Добавьте passkey или измените пароль.
-          </p>
-        </div>
-      </NuxtLink>
-
-      <div
-        class="card bg-base-100 border-base-300 border"
-      >
-        <div class="card-body">
-          <div
-            class="bg-secondary/10 text-secondary flex size-12 items-center justify-center rounded-2xl"
-          >
-            <Icon
-              name="lucide:tags"
-              class="size-6"
-            />
-          </div>
-
-          <h2 class="card-title mt-2">
-            Активная роль
-          </h2>
-
-          <p
-            class="text-base-content/60 min-h-5 text-sm"
-          >
-            <span v-if="isClientReady">
-              {{ activeRoleName }}
-            </span>
-          </p>
-        </div>
-      </div>
-    </section>
+      <PatientPurchaseDialog
+        v-if="isPatient"
+        v-model="purchaseDialogOpen"
+        :program="program"
+        @requested="handlePurchaseRequested"
+      />
   </div>
 </template>
 <!-- ./frontend/app/components/layout/Navbar.vue -->
@@ -1915,6 +2433,7 @@ onMounted(async () => {
 const auth = useAuthStore()
 const userStore = useUserStore()
 const ui = useUiStore()
+const notifications = useNotificationsStore()
 
 const {
   isStaff,
@@ -1990,6 +2509,23 @@ async function handlePatientAttached(response) {
     `/patients/${response.patient_id}`,
   )
 }
+
+const isPatient = computed(() =>
+  isClientReady.value
+  && auth.activeRole === 'patient',
+)
+
+onMounted(() => {
+  notifications.connect()
+
+  void notifications.fetchUnreadCount().catch(() => {
+    // Ошибка фоновой загрузки не блокирует навигацию.
+  })
+})
+
+onBeforeUnmount(() => {
+  notifications.disconnect()
+})
 </script>
 
 <template>
@@ -1997,52 +2533,72 @@ async function handlePatientAttached(response) {
     class="bg-base-100 border-base-300 sticky top-0 z-30 border-b"
   >
     <div
-        class="mx-auto grid min-h-16 w-full max-w-7xl grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 px-3 py-1 sm:min-h-20 sm:px-4"
-      >
-      <div class="flex min-w-0 items-center">
-        <button
-          v-if="isStaff"
-          type="button"
-          class="btn btn-circle btn-ghost"
-          :aria-label="
-            ui.sidebarOpen
-              ? 'Свернуть боковое меню'
-              : 'Открыть боковое меню'
-          "
-          @click="ui.toggleSidebar"
-        >
-          <Icon
-            :name="
+      class="mx-auto grid min-h-16 w-full max-w-7xl items-center gap-2 px-3 py-1 sm:min-h-20 sm:px-4"
+      :class="
+        isPatient
+          ? 'grid-cols-[minmax(0,1fr)_auto]'
+          : 'grid-cols-[auto_minmax(0,1fr)_auto]'
+      "
+    >
+      <div class="flex min-w-0 items-center gap-1">
+        <template v-if="isPatient">
+          <div class="patient-navbar-brand">
+            <LayoutLogo
+              to="/dashboard"
+              variant="navbar"
+            />
+          </div>
+
+          <LayoutPatientActions
+            @menu="mobileMenuOpen = true"
+          />
+        </template>
+
+        <template v-else>
+          <button
+            v-if="isStaff"
+            type="button"
+            class="btn btn-circle btn-ghost"
+            :aria-label="
               ui.sidebarOpen
-                ? 'lucide:panel-left-close'
-                : 'lucide:menu'
+                ? 'Свернуть боковое меню'
+                : 'Открыть боковое меню'
             "
-            class="size-5"
-          />
-        </button>
+            @click="ui.toggleSidebar"
+          >
+            <Icon
+              :name="
+                ui.sidebarOpen
+                  ? 'lucide:panel-left-close'
+                  : 'lucide:menu'
+              "
+              class="size-5"
+            />
+          </button>
 
-        <button
-          v-else
-          type="button"
-          class="btn btn-circle btn-ghost lg:hidden"
-          aria-label="Открыть меню"
-          @click="mobileMenuOpen = true"
-        >
-          <Icon
-            name="lucide:menu"
-            class="size-5"
-          />
-        </button>
+          <button
+            v-else
+            type="button"
+            class="btn btn-circle btn-ghost lg:hidden"
+            aria-label="Открыть меню"
+            @click="mobileMenuOpen = true"
+          >
+            <Icon
+              name="lucide:menu"
+              class="size-5"
+            />
+          </button>
 
-        <LayoutLogo
-          v-if="!isStaff"
-          to="/dashboard"
-          variant="navbar"
-        />
+          <LayoutLogo
+            v-if="!isStaff"
+            to="/dashboard"
+            variant="navbar"
+          />
+        </template>
       </div>
 
       <div
-        v-if="!isStaff"
+        v-if="!isStaff && !isPatient"
         class="hidden min-w-0 items-center justify-center px-2 lg:flex"
       >
         <UiMegaMenu
@@ -2052,7 +2608,7 @@ async function handlePatientAttached(response) {
       </div>
 
       <div
-        v-else
+        v-else-if="isStaff"
         class="flex min-w-0 items-center px-2"
       >
         <button
@@ -2152,6 +2708,10 @@ async function handlePatientAttached(response) {
               </NuxtLink>
             </li>
 
+            <li v-if="isStaff">
+              <NotificationsBrowserPermission />
+            </li>
+
             <li>
               <button
                 type="button"
@@ -2248,444 +2808,240 @@ async function handlePatientAttached(response) {
     @send-email="sendPatientInvitationEmail"
   />
 </template>
-// ./frontend/app/composables/useAppNavigation.js
-export function useAppNavigation() {
-  const auth = useAuthStore()
-  const { isClientReady } = useClientReady()
+<style scoped>
+.patient-navbar-brand {
+  width: clamp(3rem, 16vw, 5rem);
+  min-width: 0;
+  flex-shrink: 1;
+}
 
-  const roleNames = {
-    superuser: 'Суперпользователь',
-    med_assistant: 'Медицинский ассистент',
-    doctor: 'Врач',
-    patient: 'Пациент',
-    relative: 'Родственник',
-  }
+.patient-navbar-brand :deep(a) {
+  max-width: 100%;
+  min-width: 0;
+}
 
-  const isStaff = computed(() =>
-    isClientReady.value
-    && [
-      'doctor',
-      'med_assistant',
-      'superuser',
-    ].includes(auth.activeRole),
-  )
+.patient-navbar-brand :deep(svg),
+.patient-navbar-brand :deep(img) {
+  max-width: 100%;
+  height: auto;
+}
 
-  const canManage = computed(() =>
-    isClientReady.value
-    && [
-      'superuser',
-      'med_assistant',
-    ].includes(auth.activeRole),
-  )
-
-  const activeRoleName = computed(() => {
-    if (!isClientReady.value) {
-      return ''
-    }
-
-    return (
-      roleNames[auth.activeRole]
-      || auth.activeRole
-      || ''
-    )
-  })
-
-  const navigationGroups = computed(() => {
-    if (!isClientReady.value) {
-      return []
-    }
-
-    const mainLinks = [
-      {
-        to: '/dashboard',
-        label: 'Главная',
-        icon: 'lucide:layout-dashboard',
-        description: 'Обзор и последние действия',
-      },
-    ]
-
-    if (isStaff.value) {
-      mainLinks.push({
-        to: '/patients',
-        label: 'Пациенты',
-        icon: 'lucide:users',
-        description: 'Список и карточки пациентов',
-      })
-    }
-
-    if (canManage.value) {
-      mainLinks.push({
-        to: '/users',
-        label: 'Пользователи',
-        icon: 'lucide:user-cog',
-        description: 'Аккаунты и приглашения',
-      })
-    }
-
-    const contentLinks = [
-      {
-        to: '/content/articles',
-        label: 'Статьи',
-        icon: 'lucide:file-text',
-        description: 'Материалы для пользователей',
-      },
-      {
-        to: '/programs',
-        label: 'Программы',
-        icon: 'lucide:route',
-        description: 'Программы сопровождения',
-      },
-    ]
-
-    if (auth.activeRole === 'patient') {
-      contentLinks.push({
-        to: '/questionnaires',
-        label: 'Опросники',
-        icon: 'lucide:clipboard-list',
-        description: 'Назначенные опросники',
-      })
-    }
-
-    if (canManage.value) {
-      contentLinks.push({
-        to: '/content/questionnaires',
-        label: 'Опросники',
-        icon: 'lucide:clipboard-list',
-        description: 'Редактор опросников',
-      })
-    }
-
-    const groups = [
-      {
-        key: 'main',
-        label: 'Работа',
-        icon: 'lucide:briefcase',
-        links: mainLinks,
-      },
-      {
-        key: 'content',
-        label: 'Контент',
-        icon: 'lucide:files',
-        links: contentLinks,
-      },
-    ]
-
-    if (canManage.value) {
-      groups.push({
-        key: 'management',
-        label: 'Управление',
-        icon: 'lucide:settings-2',
-        links: [
-          {
-            to: '/programs/new',
-            label: 'Конфигуратор',
-            icon: 'lucide:workflow',
-            description: 'Создание программ',
-            exact: true,
-          },
-          {
-            to: '/services',
-            label: 'Услуги',
-            icon: 'lucide:badge-russian-ruble',
-            description: 'Цены, скидки и коды услуг',
-          },
-          {
-            to: '/settings/directories',
-            label: 'Справочники',
-            icon: 'lucide:library',
-            description: 'Специальности и теги',
-          },
-        ],
-      })
-    }
-
-    const settingsLinks = [
-      {
-        to: '/settings/profile',
-        label: 'Личные данные',
-        icon: 'lucide:user-round',
-        description: 'ФИО и данные аккаунта',
-      },
-    ]
-
-    if (auth.activeRole === 'doctor') {
-      settingsLinks.push({
-        to: '/settings/tags',
-        label: 'Мои теги',
-        icon: 'lucide:tags',
-        description: 'Индивидуальные настройки тегов',
-      })
-    }
-
-    settingsLinks.push({
-      to: '/settings/security',
-      label: 'Безопасность',
-      icon: 'lucide:shield-check',
-      description: 'Пароль и passkey',
-    })
-
-    groups.push({
-      key: 'settings',
-      label: 'Настройки',
-      icon: 'lucide:settings',
-      links: settingsLinks,
-    })
-
-    return groups
-  })
-
-  return {
-    isStaff,
-    canManage,
-    activeRoleName,
-    navigationGroups,
+@media (min-width: 640px) {
+  .patient-navbar-brand {
+    width: auto;
+    max-width: 10rem;
   }
 }
-Разумеется, тебе будут нажны еще файлы. Напиши, что надо прислать, потому что проект большой, как видишь
-
-------
-Смотри, сейчас главная страница пациента пустая (там написано home). надо сделать главную страницу. На ней я хочу в самом серху расположить главный посыл сервиса: 
-Помогаем улучшить Вашу жизнь (думаю, пока сделаем так)
-а под ним пусть будет меняться текст при помощи такого daisyui элемента:
-<span class="text-rotate text-7xl leading-[2]">
-  <span class="justify-items-center">
-    <span>📐 DESIGN</span>
-    <span>⌨️ DEVELOP</span>
-    <span>🌎 DEPLOY</span>
-    <span>🌱 SCALE</span>
-    <span>🔧 MAINTAIN</span>
-    <span>♻️ REPEAT</span>
-  </span>
-</span>
-Пусть там будут типа:
-Нормализуем питание
-Улучшаем сон
-Снижаем стресс
-... придумай еще 2-3
-И сделай это в виде отдельных компонентов: один компонент - перевертыш текстов, а другой - для главной фразы, в который импортируется перевертыш
-я думаю, тут надо сделать Hero
-<div
-  class="hero min-h-screen"
-  style="background-image: url(https://img.daisyui.com/images/stock/photo-1507358522600-9f71e620c44e.webp);"
->
-  <div class="hero-overlay"></div>
-  <div class="hero-content text-neutral-content text-center">
-    <div class="max-w-md">
-      <h1 class="mb-5 text-5xl font-bold">Hello there</h1>
-      <p class="mb-5">
-        Provident cupiditate voluptatem et in. Quaerat fugiat ut assumenda excepturi exercitationem
-        quasi. In deleniti eaque aut repudiandae et a id nisi.
-      </p>
-      <button class="btn btn-primary">Get Started</button>
-    </div>
-  </div>
-</div>
-учитывай, что нужно делать mobile friendly. и этот компонент не должен занимать весь видимый экран, чтобы пациент мог видеть, что ниже есть карточуки программ (это я напишу ниже)
-
-Посыл такой: у нас холодный старт: врач непсихиатр регистрирует пациента в приложении, где будут комплексные программы с консультациями и без. Без консультаций - программы бесплатные. Платные программы содержат консультации врачей - по сути, пациент покупает комплекс консультаций (оплата только стоимости набора консультаций специалистов), но плюс там будут инструмекнты для самомтоятельной работы: статьи и опросники, которые пациент проходит.
-
-Статьи могут быть и отдельные, и те, которые только входят в программы. Опросники аналогично.
-
----
-Также, сейчас мне не очень нравится, что пациенту вообще непонятно, что за программа и что она улучшает. Надо сделать немного по-другому. Давай сделаем еще одну сущность: life aspect (или придумай, как лучше надзвать). Пусть он будет в модуле tags. Пусть будет так: я смогу делать еще и то, что мы улучшаем: Сон, питание, вредные привычки, снижаем боль, стрессоустойчивость... придумай еще. 
-Суперпользователь или медицинский ассистент заходят в отдельный конструктор, там будет список тегов и поля того, что улучшаем. Пользователь сожет drag and drop теги в какой-то аспект. Один тег можно закидывать в разные аспекты. НапримеР, сон можно закинуть и в улучшаем сон и стрессоустойчивость, потому что работа со стрессоустойчивостью также предполагает улучшение сна.
-
-И после этого весь контент ,который содержит теги, может быть разделен на несколько областей, где этот контент полезен.
-
-И после мы на главной странице под Hero, мы разместим так:
-если программа отфильтровалась тегами пациента (которые он унаследовал у врача, либо врач пациенту теги задал), то эти программы будут обображаться в самом верху отдельно - Рекомендуемые программы. Для компактности, давай сделаем карусель, где рекомендуемые программы будут слайдиться:
-<div class="carousel carousel-center bg-neutral rounded-box max-w-md space-x-4 p-4">
-  <div class="carousel-item">
-    <img
-      alt="Tailwind CSS component"
-      src="https://img.daisyui.com/images/stock/photo-1559703248-dcaaec9fab78.webp"
-      class="rounded-box" />
-  </div>
-  <div class="carousel-item">
-    <img
-      alt="Tailwind CSS component"
-      src="https://img.daisyui.com/images/stock/photo-1565098772267-60af42b81ef2.webp"
-      class="rounded-box" />
-  </div>
-  <div class="carousel-item">
-    <img
-      alt="Tailwind CSS component"
-      src="https://img.daisyui.com/images/stock/photo-1572635148818-ef6fd45eb394.webp"
-      class="rounded-box" />
-  </div>
-  <div class="carousel-item">
-    <img
-      alt="Tailwind CSS component"
-      src="https://img.daisyui.com/images/stock/photo-1494253109108-2e30c049369b.webp"
-      class="rounded-box" />
-  </div>
-  <div class="carousel-item">
-    <img
-      alt="Tailwind CSS component"
-      src="https://img.daisyui.com/images/stock/photo-1550258987-190a2d41a8ba.webp"
-      class="rounded-box" />
-  </div>
-  <div class="carousel-item">
-    <img
-      alt="Tailwind CSS component"
-      src="https://img.daisyui.com/images/stock/photo-1559181567-c3190ca9959b.webp"
-      class="rounded-box" />
-  </div>
-  <div class="carousel-item">
-    <img
-      alt="Tailwind CSS component"
-      src="https://img.daisyui.com/images/stock/photo-1601004890684-d8cbf643f5f2.webp"
-      class="rounded-box" />
-  </div>
-</div>
-плюс, добавим кнопки:
-<div class="carousel w-full">
-  <div id="slide1" class="carousel-item relative w-full">
-    <img
-      alt="Tailwind CSS slide example"
-      src="https://img.daisyui.com/images/stock/photo-1625726411847-8cbb60cc71e6.webp"
-      class="w-full" />
-    <div class="absolute left-5 right-5 top-1/2 flex -translate-y-1/2 transform justify-between">
-      <a href="#slide4" class="btn btn-circle">❮</a>
-      <a href="#slide2" class="btn btn-circle">❯</a>
-    </div>
-  </div>
-  <div id="slide2" class="carousel-item relative w-full">
-    <img
-      alt="Tailwind CSS slide example"
-      src="https://img.daisyui.com/images/stock/photo-1609621838510-5ad474b7d25d.webp"
-      class="w-full" />
-    <div class="absolute left-5 right-5 top-1/2 flex -translate-y-1/2 transform justify-between">
-      <a href="#slide1" class="btn btn-circle">❮</a>
-      <a href="#slide3" class="btn btn-circle">❯</a>
-    </div>
-  </div>
-  <div id="slide3" class="carousel-item relative w-full">
-    <img
-      alt="Tailwind CSS slide example"
-      src="https://img.daisyui.com/images/stock/photo-1414694762283-acccc27bca85.webp"
-      class="w-full" />
-    <div class="absolute left-5 right-5 top-1/2 flex -translate-y-1/2 transform justify-between">
-      <a href="#slide2" class="btn btn-circle">❮</a>
-      <a href="#slide4" class="btn btn-circle">❯</a>
-    </div>
-  </div>
-  <div id="slide4" class="carousel-item relative w-full">
-    <img
-      alt="Tailwind CSS slide example"
-      src="https://img.daisyui.com/images/stock/photo-1665553365602-b2fb8e5d1707.webp"
-      class="w-full" />
-    <div class="absolute left-5 right-5 top-1/2 flex -translate-y-1/2 transform justify-between">
-      <a href="#slide3" class="btn btn-circle">❮</a>
-      <a href="#slide1" class="btn btn-circle">❯</a>
-    </div>
-  </div>
-</div>
-
-это на телефонах. На широких экранах давай сделаем пагинацию по 2-3 программы. Думаю, так будет удобно
-<!-- ./frontend/app/components/ui/Pagination.vue -->
+</style>
+<!-- ./frontend/app/components/articles/ReaderAction.vue -->
 <script setup>
-const model = defineModel({
-  type: Number,
-  default: 1,
-})
-
 const props = defineProps({
-  totalItems: {
-    type: Number,
-    default: 0,
+  target: {
+    type: Object,
+    default: null,
   },
-  pageSize: {
-    type: Number,
-    default: 10,
+  disabled: {
+    type: Boolean,
+    default: false,
   },
 })
 
-const totalPages = computed(() =>
-  Math.max(
-    1,
-    Math.ceil(props.totalItems / props.pageSize),
-  ),
+const emit = defineEmits(['close'])
+
+const atBoundary = ref(true)
+const scrolling = ref(false)
+
+const showClose = computed(() =>
+  atBoundary.value && !scrolling.value,
 )
 
-watch(totalPages, (value) => {
-  if (model.value > value) {
-    model.value = value
+let frame = null
+let scrollTimer = null
+let resizeObserver = null
+let mounted = false
+
+const EDGE_DISTANCE = 48
+
+function getBounds() {
+  const element = props.target
+
+  if (!element) return null
+
+  const rect = element.getBoundingClientRect()
+  const scrollY = window.scrollY
+  const viewportHeight = window.innerHeight
+
+  const maxScroll = Math.max(
+    document.documentElement.scrollHeight - viewportHeight,
+    0,
+  )
+
+  const articleTop = rect.top + scrollY
+  const articleBottom = rect.bottom + scrollY
+
+  const start = Math.min(
+    maxScroll,
+    Math.max(0, articleTop - 16),
+  )
+
+  const end = Math.min(
+    maxScroll,
+    Math.max(start, articleBottom - viewportHeight),
+  )
+
+  return {
+    start,
+    end,
+    shortArticle: rect.height <= viewportHeight,
+  }
+}
+
+function updateBoundary() {
+  const bounds = getBounds()
+
+  if (!bounds) {
+    atBoundary.value = true
+    return
+  }
+
+  atBoundary.value =
+    bounds.shortArticle
+    || window.scrollY <= bounds.start + EDGE_DISTANCE
+    || window.scrollY >= bounds.end - EDGE_DISTANCE
+}
+
+function scheduleUpdate() {
+  if (frame !== null) return
+
+  frame = window.requestAnimationFrame(() => {
+    frame = null
+    updateBoundary()
+  })
+}
+
+function handleScroll() {
+  scrolling.value = true
+
+  window.clearTimeout(scrollTimer)
+  scheduleUpdate()
+
+  scrollTimer = window.setTimeout(() => {
+    scrolling.value = false
+    updateBoundary()
+  }, 180)
+}
+
+function scrollToStart() {
+  const bounds = getBounds()
+
+  if (!bounds) return
+
+  const reduceMotion = window.matchMedia(
+    '(prefers-reduced-motion: reduce)',
+  ).matches
+
+  window.scrollTo({
+    top: bounds.start,
+    behavior: reduceMotion ? 'instant' : 'smooth',
+  })
+}
+
+function handleClick() {
+  if (props.disabled) return
+
+  if (showClose.value) {
+    emit('close')
+  } else {
+    scrollToStart()
+  }
+}
+
+function observeTarget() {
+  resizeObserver?.disconnect()
+
+  if (!mounted || !props.target) return
+
+  resizeObserver = new ResizeObserver(scheduleUpdate)
+  resizeObserver.observe(props.target)
+  resizeObserver.observe(document.documentElement)
+
+  scheduleUpdate()
+}
+
+watch(
+  () => props.target,
+  observeTarget,
+  { flush: 'post' },
+)
+
+onMounted(() => {
+  mounted = true
+  observeTarget()
+  updateBoundary()
+
+  window.addEventListener('scroll', handleScroll, {
+    passive: true,
+  })
+  window.addEventListener('resize', scheduleUpdate)
+})
+
+onBeforeUnmount(() => {
+  mounted = false
+
+  window.removeEventListener('scroll', handleScroll)
+  window.removeEventListener('resize', scheduleUpdate)
+
+  window.clearTimeout(scrollTimer)
+  resizeObserver?.disconnect()
+
+  if (frame !== null) {
+    window.cancelAnimationFrame(frame)
   }
 })
 </script>
 
 <template>
-  <nav
-    v-if="totalPages > 1"
-    class="flex items-center justify-center gap-2"
-    aria-label="Пагинация"
+  <div
+    class="fixed z-[60]"
+    style="
+      right: calc(1rem + env(safe-area-inset-right, 0px));
+      bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+    "
   >
     <button
       type="button"
-      class="btn btn-square btn-sm"
-      :disabled="model <= 1"
-      aria-label="Предыдущая страница"
-      @click="model -= 1"
+      class="btn btn-circle btn-lg border-base-300 bg-base-200 text-base-content hover:bg-base-300 shadow-lg"
+      :disabled="disabled"
+      :aria-label="showClose ? 'Закрыть статью' : 'В начало статьи'"
+      :title="showClose ? 'Закрыть статью' : 'В начало статьи'"
+      @click="handleClick"
     >
+      <span
+        v-if="disabled"
+        class="loading loading-spinner loading-sm"
+      />
+
       <Icon
-        name="lucide:chevron-left"
-        class="size-4"
+        v-else
+        :name="showClose ? 'lucide:x' : 'lucide:arrow-up'"
+        class="size-6"
       />
     </button>
-
-    <span class="px-3 text-sm">
-      {{ model }} из {{ totalPages }}
-    </span>
-
-    <button
-      type="button"
-      class="btn btn-square btn-sm"
-      :disabled="model >= totalPages"
-      aria-label="Следующая страница"
-      @click="model += 1"
-    >
-      <Icon
-        name="lucide:chevron-right"
-        class="size-4"
-      />
-    </button>
-  </nav>
+  </div>
 </template>
+----
 
-Кроме того, если пациент проходит какую-то программу, пусть hero уже не будет и эта программа располагается в виде узкой карточки и там будет написано, насколько процентов выполнена и кнопка Продолжить программу. Посчему узкая, потому что пациент может выполнять сразу несколько программ и они не должны сильно сдвигать на главной странице интерфейс вниз
+Сейчас не очень мне нравится интерфейс программы:
+В карточке программы, которую выполняет пациент, при открытии программы в телефоне бОльшую чать занимает описание рпограммы, например:
+Цена по запросу
+Полный доступ
+SMART Recovery
+SMART Recovery — это программа, в которой мы будем шаг за шагом разбираться, какие изменения важны именно для вас и что может помочь сделать их устойчивыми. Начнём с ваших целей и мотивации, затем научимся лучше понимать тягу и её триггеры, замечать связь между мыслями, эмоциями и поведением, справляться со сложными моментами и постепенно возвращать в жизнь сон, отдых, отношения, интересы и другие важные опоры. На каждом этапе вы будете знакомиться с небольшими материалами и пробовать новые инструменты, а на консультациях с психиатром сможете обсуждать, что изменилось, что получилось и какие сложности возникли. Здесь не нужно стремиться пройти всё идеально: если что-то не сработало, появилась сильная тяга, случился срыв или изменились ваши цели, это можно вместе разобрать и скорректировать дальнейший план.
 
-Далее, под рекомендованными программами надо уже добавить карточки со сферами жизни. Карточки давай сделаем подряд вниз (не в карусели). Пусть карточки будут в виде аккордеона
-<div class="collapse collapse-plus bg-base-100 border border-base-300">
-  <input type="radio" name="my-accordion-3" checked="checked" />
-  <div class="collapse-title font-semibold">How do I create an account?</div>
-  <div class="collapse-content text-sm">Click the "Sign Up" button in the top right corner and follow the registration process.</div>
-</div>
-<div class="collapse collapse-plus bg-base-100 border border-base-300">
-  <input type="radio" name="my-accordion-3" />
-  <div class="collapse-title font-semibold">I forgot my password. What should I do?</div>
-  <div class="collapse-content text-sm">Click on "Forgot Password" on the login page and follow the instructions sent to your email.</div>
-</div>
-<div class="collapse collapse-plus bg-base-100 border border-base-300">
-  <input type="radio" name="my-accordion-3" />
-  <div class="collapse-title font-semibold">How do I update my profile information?</div>
-  <div class="collapse-content text-sm">Go to "My Account" settings and select "Edit Profile" to make changes.</div>
-</div>
-и при раскрытии карточки сферы жизни, там будет список всех входящих в нее программ
+Начать можно бесплатно. Материалы без отметки Pro доступны без покупки. Консультации и Pro-материалы относятся к программе сопровождения со специалистами.
 
-На этих программах на главном экране, статьи и опросники в аккордеон сфер жизни не включай, чтобы не захламлять интерфейс.
+Комплекс Comfort+
+аддикции
+Общий прогресс
 
-теперь Navbar пациента:
-
-
-сейчас там три точки
-<span
-          v-else
-          class="text-base-content/60 truncate text-sm"
-        >
-          ...
-        </span>
-
-а надо сделать так:
-На главной странице вместо одного бургера должны быть 3 кнопки. располагаю, как хочу, чтоы было:
-ЛОГО, иконка типа greed icon, 
+Давай сделаем отдельный layout для работы с программой, чтобы там в NavBar 

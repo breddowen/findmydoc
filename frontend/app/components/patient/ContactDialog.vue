@@ -54,7 +54,7 @@ async function loadDocument() {
 
 watch(
   () => model.value,
-  (open) => {
+  open => {
     if (open) {
       result.value = null
       void loadDocument()
@@ -62,6 +62,7 @@ watch(
       loadVersion += 1
     }
   },
+  { immediate: true },
 )
 
 async function requestContact() {

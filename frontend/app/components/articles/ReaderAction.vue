@@ -20,6 +20,10 @@ const showClose = computed(() =>
   atBoundary.value && !scrolling.value,
 )
 
+const {
+  floatingStyle,
+} = useFooterAwarePosition()
+
 let frame = null
 let scrollTimer = null
 let resizeObserver = null
@@ -167,18 +171,23 @@ onBeforeUnmount(() => {
 
 <template>
   <div
-    class="fixed z-[60]"
-    style="
-      right: calc(1rem + env(safe-area-inset-right, 0px));
-      bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
-    "
+    class="fixed z-40"
+    :style="floatingStyle"
   >
     <button
       type="button"
-      class="btn btn-circle btn-lg border-base-300 bg-base-200 text-base-content hover:bg-base-300 shadow-lg"
+      class="btn btn-primary btn-circle btn-lg shadow-xl ring-4 ring-primary/20"
       :disabled="disabled"
-      :aria-label="showClose ? 'Закрыть статью' : 'В начало статьи'"
-      :title="showClose ? 'Закрыть статью' : 'В начало статьи'"
+      :aria-label="
+        showClose
+          ? 'Закрыть статью'
+          : 'В начало статьи'
+      "
+      :title="
+        showClose
+          ? 'Закрыть статью'
+          : 'В начало статьи'
+      "
       @click="handleClick"
     >
       <span
@@ -188,7 +197,11 @@ onBeforeUnmount(() => {
 
       <Icon
         v-else
-        :name="showClose ? 'lucide:x' : 'lucide:arrow-up'"
+        :name="
+          showClose
+            ? 'lucide:x'
+            : 'lucide:arrow-up'
+        "
         class="size-6"
       />
     </button>
