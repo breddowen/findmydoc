@@ -1,6 +1,6 @@
 ﻿# Project Structure
 
-> Generated: 2026-09-10 01:38
+> Generated: 2026-09-10 19:35
 
 ---
 
@@ -147,7 +147,7 @@ backend/seed/repair_program_submission_stage.py (193 lines)
 backend/seed/upload_tags.py (123 lines)
 backend/seed/upload_users.py (381 lines)
 backend/test_database — копия.db (1254 lines)
-backend/test_database.db (1393 lines)
+backend/test_database.db (?)
 ```
 
 *Files: 141*
@@ -256,7 +256,7 @@ frontend/app/pages/content/questionnaires/new.vue (9 lines)
 frontend/app/pages/dashboard.vue (159 lines)
 frontend/app/pages/forgot-password.vue (102 lines)
 frontend/app/pages/index.vue (25 lines)
-frontend/app/pages/login.vue (238 lines)
+frontend/app/pages/login.vue (241 lines)
 frontend/app/pages/patients/[id]/index.vue (469 lines)
 frontend/app/pages/patients/[id]/questionnaires/[submissionId].vue (184 lines)
 frontend/app/pages/patients/index.vue (37 lines)

@@ -5,6 +5,7 @@ const currentYear = new Date().getFullYear()
 
 <template>
   <footer
+    data-floating-footer
     class="bg-neutral text-neutral-content mt-auto px-4 py-4"
   >
     <div

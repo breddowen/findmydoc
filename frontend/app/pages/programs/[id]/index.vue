@@ -1,139 +1,76 @@
 <!-- ./frontend/app/pages/programs/[id]/index.vue -->
 <script setup>
-const route = useRoute()
-const auth = useAuthStore()
-const store = useProgramsStore()
+definePageMeta({
+  key: route => String(route.params.id),
+})
 
-const selectedStageIndex = ref(0)
+const auth = useAuthStore()
+const context = useProgramContext()
+const store = useProgramJourneyStore()
 
 const {
-  formatOriginalPrice,
-  formatFinalPrice,
-  hasDiscount,
+  program,
+  stages,
+  started,
+  selectedStage,
+  nextStage,
+  completedStageCount,
+  isStageCompleted,
+  selectStage,
+} = useProgramJourney()
+
+const {
   getPurchaseActionLabel,
 } = useProgramPrice()
+
+const descriptionExpanded = ref(false)
+const purchaseDialogOpen = ref(false)
+const message = ref('')
+
+const isPatient = computed(() =>
+  auth.activeRole === 'patient',
+)
+
+const selectedStageCompleted = computed(() =>
+  isStageCompleted(selectedStage.value),
+)
 
 const purchaseActionLabel = computed(() =>
   getPurchaseActionLabel(program.value),
 )
 
-const loading = ref(true)
-const starting = ref(false)
-const purchaseDialogOpen = ref(false)
-
-const message = ref('')
-const errorMessage = ref('')
-
-const program = computed(
-  () => store.currentProgram,
+const taskItems = computed(() =>
+  (selectedStage.value?.items || []).filter(
+    item => ['article', 'questionnaire'].includes(item.item_type),
+  ),
 )
 
-const isPatient = computed(
-  () => auth.activeRole === 'patient',
-)
-
-const canManage = computed(() =>
-  [
-    'superuser',
-    'med_assistant',
-  ].includes(auth.activeRole),
-)
-
-const selectedStage = computed(
-  () => program.value?.stages[
-    selectedStageIndex.value
-  ],
-)
-
-async function loadProgram() {
-  loading.value = true
-  errorMessage.value = ''
-
-  try {
-    if (isPatient.value) {
-      await store.fetchProgramForPatient(
-        route.params.id,
-      )
-
-      // Если вернулись из опросника программы,
-      // открываем тот же этап.
-      const requestedStageId =
-        typeof route.query.stage === 'string'
-          ? route.query.stage
-          : null
-
-      if (requestedStageId) {
-        const requestedIndex =
-          program.value.stages.findIndex(
-            (stage) =>
-              stage.id === requestedStageId,
-          )
-
-        if (requestedIndex >= 0) {
-          selectedStageIndex.value =
-            requestedIndex
-
-          return
-        }
-      }
-
-      // Если конкретный этап не был передан,
-      // выбираем текущий активный этап.
-      const preferredIndex =
-        program.value.stages.findIndex(
-          (stage) =>
-            [
-              'available',
-              'in_progress',
-              'overdue',
-            ].includes(stage.status),
-        )
-
-      selectedStageIndex.value =
-        preferredIndex >= 0
-          ? preferredIndex
-          : 0
-    } else {
-      await store.fetchProgramForStaff(
-        route.params.id,
-      )
-    }
-  } catch (error) {
-    errorMessage.value =
-      error?.data?.detail
-      || 'Не удалось загрузить программу'
-  } finally {
-    loading.value = false
+const freePartCompleted = computed(() => {
+  if (!started.value || selectedStageCompleted.value) {
+    return false
   }
-}
 
-async function startProgram() {
-  starting.value = true
-  errorMessage.value = ''
-  if (starting.value || !program.value) return
+  const freeItems = taskItems.value.filter(
+    item => !item.pro_content,
+  )
 
-  try {
-    await store.startProgram(program.value.id)
-    message.value = 'Программа начата'
+  const lockedUnfinishedItems = taskItems.value.filter(
+    item =>
+      item.pro_content
+      && !item.can_access
+      && !item.is_completed,
+  )
 
-    await loadProgram()
-  } catch (error) {
-    errorMessage.value =
-      error?.data?.detail
-      || 'Не удалось начать программу'
-  } finally {
-    starting.value = false
-  }
-}
+  return freeItems.length > 0
+    && freeItems.every(item => item.is_completed)
+    && lockedUnfinishedItems.length > 0
+})
 
-async function requestPurchase() {
+function requestPurchase() {
   if (!program.value) return
 
-  errorMessage.value = ''
-
   if (program.value.purchase_requested) {
-    message.value =
-      'Запрос уже отправлен медицинскому ассистенту.'
+    message.value = 'Запрос уже отправлен медицинскому ассистенту.'
     return
   }
 
@@ -141,264 +78,210 @@ async function requestPurchase() {
 }
 
 function handlePurchaseRequested({ programId, response }) {
-  if (program.value?.id !== programId) return
+  store.markPurchaseRequested(programId)
 
-  program.value.purchase_requested = true
-  message.value = response.message
+  if (program.value?.id === programId) {
+    message.value = response.message
+  }
 }
 
-onMounted(loadProgram)
+function reload() {
+  if (context.programId.value) {
+    void store.load(context.programId.value).catch(() => {})
+  }
+}
 </script>
 
 <template>
-  <UiContentSkeleton
-    v-if="loading"
-    variant="card"
-    :count="3"
-  />
+  <ProgramsStaffOverview v-if="!isPatient" />
 
-  <div
-    v-else-if="errorMessage && !program"
-    class="alert alert-error"
-  >
-    {{ errorMessage }}
-  </div>
+  <div v-else class="space-y-6">
+    <UiContentSkeleton
+      v-if="store.loading"
+      variant="card"
+      :count="2"
+    />
 
-  <div
-    v-else-if="program"
-    class="space-y-6"
-  >
-    <header
-      class="bg-base-100 border-base-300 rounded-3xl border p-5 sm:p-7"
+    <div
+      v-if="store.errorMessage"
+      class="alert alert-error"
+      role="alert"
     >
-      <div
-        class="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between"
+      <span>{{ store.errorMessage }}</span>
+
+      <button
+        type="button"
+        class="btn btn-sm"
+        @click="reload"
       >
-        <div class="min-w-0 flex-1">
-          <div
-                class="flex flex-wrap items-center gap-2"
-                >
-                <span class="text-primary text-2xl font-bold">
-                    {{ formatFinalPrice(program) }}
-                </span>
+        Повторить
+      </button>
+    </div>
 
-                <span
-                    v-if="hasDiscount(program)"
-                    class="text-base-content/40 line-through"
-                >
-                    {{ formatOriginalPrice(program) }}
-                </span>
+    <template v-if="program">
+      <header>
+        <p class="text-base-content/50 text-xs font-medium uppercase tracking-wide">
+          Программа
+        </p>
 
-                <span
-                    v-if="hasDiscount(program)"
-                    class="badge badge-error font-bold"
-                >
-                    −{{ program.service?.discount_percent }}%
-                </span>
+        <h1 class="mt-1 text-xl font-bold sm:text-3xl">
+          {{ program.title }}
+        </h1>
 
-                <span
-                    v-if="program.is_popular"
-                    class="badge badge-warning gap-1"
-                >
-                    <Icon
-                    name="lucide:flame"
-                    class="size-3"
-                    />
-
-                    Популярное
-                </span>
-
-                <span
-                    v-if="program.has_program_access"
-                    class="badge badge-success"
-                >
-                    Полный доступ
-                </span>
-                </div>
-
-          <h1
-            class="mt-3 text-3xl font-bold sm:text-4xl"
-          >
-            {{ program.title }}
-          </h1>
-
+        <div
+          v-if="program.description"
+          class="mt-2 flex items-start gap-2"
+        >
           <p
-            v-if="program.description"
-            class="text-base-content/70 mt-3 max-w-3xl"
+            id="program-description"
+            class="text-base-content/65 min-w-0 flex-1 text-sm leading-relaxed sm:text-base"
+            :class="{
+              'line-clamp-1 sm:line-clamp-none': !descriptionExpanded,
+            }"
           >
             {{ program.description }}
           </p>
 
-          <p
-            v-if="isPatient && program.service"
-            class="border-primary/20 bg-primary/5 mt-4 rounded-2xl border p-4 text-sm"
-          >
-            Начать можно бесплатно. Материалы без отметки Pro доступны
-            без покупки. Консультации и Pro-материалы относятся
-            к программе сопровождения со специалистами.
-          </p>
-
-          <div
-            v-if="program.service"
-            class="border-base-300 mt-5 rounded-2xl border p-4"
-          >
-            <div class="flex flex-wrap items-center gap-2">
-              <span
-                v-if="program.service.code"
-                class="badge badge-neutral font-mono"
-              >
-                {{ program.service.code }}
-              </span>
-
-              <span class="font-medium">
-                {{ program.service.title }}
-              </span>
-            </div>
-
-            <p
-              v-if="program.service.description"
-              class="text-base-content/60 mt-2 text-sm"
-            >
-              {{ program.service.description }}
-            </p>
-          </div>
-
-          <div class="mt-4 flex flex-wrap gap-1">
-            <span
-              v-for="tag in program.tags"
-              :key="tag.id"
-              class="badge badge-outline"
-            >
-              {{ tag.name }}
-            </span>
-          </div>
-        </div>
-
-        <div class="flex flex-col gap-2 sm:flex-row">
-          <NuxtLink
-            v-if="canManage"
-            :to="`/programs/${program.id}/edit`"
-            class="btn btn-outline"
-          >
-            <Icon
-              name="lucide:pencil"
-              class="size-4"
-            />
-            Редактировать
-          </NuxtLink>
-
           <button
-            v-if="
-              isPatient
-              && !program.enrollment
-            "
             type="button"
-            class="btn btn-primary"
-            :disabled="starting"
-            @click="startProgram"
+            class="text-primary shrink-0 py-0.5 text-xs font-medium sm:hidden"
+            aria-controls="program-description"
+            :aria-expanded="descriptionExpanded"
+            @click="descriptionExpanded = !descriptionExpanded"
           >
-            <span
-              v-if="starting"
-              class="loading loading-spinner loading-sm"
-            />
-
-            Начать программу
+            {{ descriptionExpanded ? 'Свернуть' : 'Подробнее' }}
           </button>
         </div>
-      </div>
+
+        <template v-if="started">
+          <div class="text-base-content/60 mt-5 flex flex-wrap justify-between gap-2 text-xs">
+            <span>
+              Выполнено этапов:
+              {{ completedStageCount }} из {{ stages.length }}
+            </span>
+
+            <span>
+              Общий прогресс: {{ program.progress_percent }}%
+            </span>
+          </div>
+
+          <ProgramsJourneySteps
+            class="mt-2"
+            :stages="stages"
+            :selected-id="selectedStage?.id"
+            :started="started"
+            @select="selectStage"
+          />
+        </template>
+      </header>
 
       <div
-        v-if="isPatient && program.enrollment"
-        class="mt-6"
+        v-if="message"
+        class="alert alert-success"
+        role="status"
       >
-        <div class="mb-2 flex justify-between text-sm">
-          <span>
-            Общий прогресс
-          </span>
+        <Icon name="lucide:circle-check" class="size-5" />
+        <span>{{ message }}</span>
+      </div>
 
-          <strong>
-            {{ program.progress_percent }}%
-          </strong>
-        </div>
+      <section
+        v-if="!started"
+        class="border-base-300 rounded-2xl border border-dashed p-5 sm:p-7"
+      >
+        <Icon name="lucide:route" class="text-primary size-8" />
 
-        <progress
-          class="progress progress-primary w-full"
-          :value="program.progress_percent"
-          max="100"
+        <h2 class="mt-3 text-lg font-semibold">
+          Двигайтесь по программе шаг за шагом
+        </h2>
+
+        <p class="text-base-content/65 mt-2 max-w-2xl text-sm">
+          Нажмите «Начать программу» в верхней панели.
+          Затем читайте статьи и заполняйте опросники:
+          выполненные этапы будут отмечаться галочкой.
+        </p>
+
+        <p
+          v-if="program.service"
+          class="text-base-content/60 mt-3 text-sm"
+        >
+          Бесплатные материалы можно проходить без покупки.
+          Для материалов Pro нужен индивидуальный доступ.
+        </p>
+      </section>
+
+      <template v-else-if="selectedStage">
+        <ProgramsViewerStage
+          :stage="selectedStage"
+          :program-id="program.id"
+          :is-patient="true"
+          guided
+          :purchase-label="purchaseActionLabel"
+          :purchase-requested="Boolean(program.purchase_requested)"
+          @purchase="requestPurchase"
         />
 
-        <p class="text-base-content/50 mt-2 text-xs">
-          День программы:
-          {{ program.enrollment.elapsed_days }}
-        </p>
-      </div>
-    </header>
-
-    <div
-      v-if="message"
-      class="alert alert-success"
-    >
-      <Icon
-        name="lucide:circle-check"
-        class="size-5"
-      />
-      <span>{{ message }}</span>
-    </div>
-
-    <div
-      v-if="errorMessage"
-      class="alert alert-error"
-    >
-      {{ errorMessage }}
-    </div>
-
-    <div class="overflow-x-auto pb-2">
-      <div
-        role="tablist"
-        class="tabs tabs-box flex-nowrap"
-      >
-        <button
-          v-for="(stage, index) in program.stages"
-          :key="stage.id"
-          type="button"
-          role="tab"
-          class="tab min-w-max gap-2"
+        <section
+          class="border-base-300 flex flex-col gap-4 rounded-2xl border p-4 sm:flex-row sm:items-center sm:justify-between"
           :class="{
-            'tab-active':
-              selectedStageIndex === index,
+            'border-success/30 bg-success/5': selectedStageCompleted,
           }"
-          @click="selectedStageIndex = index"
         >
-          <Icon
-            :name="
-              stage.status === 'completed'
-                ? 'lucide:circle-check'
-                : stage.status === 'overdue'
-                  ? 'lucide:triangle-alert'
-                  : 'lucide:circle'
-            "
-            class="size-4"
-          />
+          <div class="flex items-start gap-3">
+            <Icon
+              :name="
+                selectedStageCompleted
+                  ? 'lucide:circle-check'
+                  : freePartCompleted
+                    ? 'lucide:lock-keyhole'
+                    : 'lucide:route'
+              "
+              class="mt-0.5 size-5 shrink-0"
+              :class="selectedStageCompleted ? 'text-success' : 'text-primary'"
+            />
 
-          Этап {{ index + 1 }}
-        </button>
-      </div>
-    </div>
+            <div>
+              <p class="font-semibold">
+                {{
+                  selectedStageCompleted
+                    ? 'Все задания этапа выполнены'
+                    : freePartCompleted
+                      ? 'Бесплатные материалы этапа выполнены'
+                      : 'Проходите программу в своём темпе'
+                }}
+              </p>
 
-    <ProgramsViewerStage
-        v-if="selectedStage"
-        :stage="selectedStage"
-        :program-id="program.id"
-        :is-patient="isPatient"
-        :purchase-label="purchaseActionLabel"
-        :purchase-requested="Boolean(program.purchase_requested)"
-        @purchase="requestPurchase"
-      />
+              <p class="text-base-content/65 mt-1 text-sm">
+                {{
+                  selectedStageCompleted
+                    ? nextStage
+                      ? 'Можно переходить к следующему этапу.'
+                      : 'Это последний этап. Свой путь по программе можно посмотреть выше.'
+                    : freePartCompleted
+                      ? 'В этапе остаются Pro-материалы. При этом другие этапы можно просматривать.'
+                      : 'Вы можете открыть другой этап и вернуться к невыполненным заданиям позже.'
+                }}
+              </p>
+            </div>
+          </div>
+
+          <button
+            v-if="nextStage"
+            type="button"
+            class="btn shrink-0"
+            :class="selectedStageCompleted ? 'btn-primary' : 'btn-outline'"
+            @click="selectStage(nextStage.id)"
+          >
+            Следующий этап
+            <Icon name="lucide:arrow-right" class="size-4" />
+          </button>
+        </section>
+      </template>
+
       <PatientPurchaseDialog
-        v-if="isPatient"
         v-model="purchaseDialogOpen"
         :program="program"
         @requested="handlePurchaseRequested"
       />
+    </template>
   </div>
 </template>

@@ -155,14 +155,22 @@ async function drainSaveQueue() {
         lastSentProgress = body.progress_percent
 
         if (!disposed) {
-          savedProgress.value =
-            body.progress_percent
+          const wasCompleted = completed.value
 
-          completed.value = Boolean(
-            response.completed_at,
-          )
-
+          savedProgress.value = body.progress_percent
+          completed.value = Boolean(response.completed_at)
           saveError.value = ''
+
+          // Обновляем этап именно после подтверждённого
+          // backend завершения статьи, а не по позиции скролла.
+          if (
+            !wasCompleted
+            && completed.value
+            && props.programId
+            && journeyStore.program?.id === props.programId
+          ) {
+            void journeyStore.load(props.programId).catch(() => {})
+          }
         }
       } catch {
         successful = false
@@ -331,9 +339,32 @@ onMounted(() => {
   )
 })
 
-onBeforeRouteLeave(() => {
-  saveWithKeepalive()
-})
+async function persistBeforeNavigation() {
+  window.clearTimeout(saveTimer)
+
+  if (
+    !isPatient.value
+    || !progressReady.value
+    || disposed
+  ) {
+    return true
+  }
+
+  if (
+    progress.value === lastSentProgress
+    && !savePromise
+    && !pendingBody
+  ) {
+    return true
+  }
+
+  // При ошибке пользователь остаётся в статье
+  // и видит существующее сообщение сохранения.
+  return await saveProgress()
+}
+
+onBeforeRouteLeave(persistBeforeNavigation)
+onBeforeRouteUpdate(persistBeforeNavigation)
 
 onBeforeUnmount(() => {
   disposed = true
@@ -356,11 +387,17 @@ onBeforeUnmount(() => {
     handleVisibilityChange,
   )
 })
+const journeyStore = useProgramJourneyStore()
+
+const inProgramLayout = computed(() =>
+  isPatient.value && Boolean(props.programId),
+)
 </script>
 
 <template>
   <div class="pb-24">
     <progress
+      v-if="!inProgramLayout"
       class="progress progress-secondary fixed inset-x-0 top-0 z-[70] h-1 w-full rounded-none"
       :value="progress"
       max="100"
