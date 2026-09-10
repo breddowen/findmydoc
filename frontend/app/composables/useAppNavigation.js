@@ -155,6 +155,44 @@ export function useAppNavigation() {
       })
     }
 
+    if (auth.activeRole === 'doctor') {
+      groups.push({
+        key: 'information',
+        label: 'Информация',
+        icon: 'lucide:info',
+        links: [
+          {
+            to: '/info/doctor/conversation',
+            label: 'Как рассказать пациенту',
+            icon: 'lucide:message-circle',
+            description: 'Пример объяснения на приёме',
+          },
+          {
+            to: '/info/doctor/about',
+            label: 'О приложении для врача',
+            icon: 'lucide:book-open',
+            description: 'Поддержка пациента между визитами',
+          },
+        ],
+      })
+    }
+
+    if (auth.activeRole === 'patient') {
+      groups.push({
+        key: 'information',
+        label: 'Информация',
+        icon: 'lucide:info',
+        links: [
+          {
+            to: '/info/patient',
+            label: 'Как помогает приложение',
+            icon: 'lucide:book-open',
+            description: 'Возможности приложения',
+          },
+        ],
+      })
+    }
+
     const settingsLinks = [
       {
         to: '/settings/profile',
