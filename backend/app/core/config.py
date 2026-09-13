@@ -41,6 +41,21 @@ class Settings(BaseSettings):
     EMAIL_FROM_ADDRESS: str = "noreply@findmydoc.ru"
     EMAIL_FROM_NAME: str = "FindMyDoc"
 
+    # Локально: backend/media.
+    # В Docker переопределяем абсолютным путём.
+    MEDIA_ROOT: Path = APP_DIR.parent / "media"
+
+    MEDIA_IMAGE_MAX_BYTES: int = 10 * 1024 * 1024
+
+    # Ограничение исходника до декодирования пикселей.
+    MEDIA_IMAGE_MAX_PIXELS: int = 24_000_000
+
+    MEDIA_WEBP_QUALITY: int = 85
+
+    # Несохранённая загрузка доступна для привязки
+    # и предпросмотра в течение суток.
+    MEDIA_UPLOAD_TTL_HOURS: int = 24
+
     model_config = SettingsConfigDict(
         env_file=ENV_FILE,
         env_file_encoding="utf-8",

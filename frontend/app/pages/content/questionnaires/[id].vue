@@ -1,4 +1,5 @@
-<!-- ./frontend/app/pages/questionnaires/[id].vue -->
+<!-- ./frontend/app/pages/content/questionnaires/[id].vue -->
+ 
 <script setup>
 const route = useRoute()
 const store = useQuestionnairesStore()

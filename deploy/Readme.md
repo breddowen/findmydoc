@@ -2974,3 +2974,42 @@ git restore .
 
 Для опубликованных изменений использовать git revert.
 ```
+
+
+
+
+
+
+
+
+
+
+
+
+ДЛЯ ИЗОБРАЖЕНИЙ:
+Каталоги на VDS
+Однократно выполните от root или пользователя с sudo:
+
+
+sudo install -d \
+  -o 10001 \
+  -g 10001 \
+  -m 0750 \
+  /opt/findmydoc/data/production/media
+
+sudo install -d \
+  -o 10001 \
+  -g 10001 \
+  -m 0750 \
+  /opt/findmydoc/data/staging/media
+
+
+Переменная окружения Compose
+В /opt/findmydoc/production/compose.env:
+
+
+MEDIA_HOST_PATH=/opt/findmydoc/data/production/media
+В /opt/findmydoc/staging/compose.env:
+
+
+MEDIA_HOST_PATH=/opt/findmydoc/data/staging/media

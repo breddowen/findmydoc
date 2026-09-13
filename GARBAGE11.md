@@ -4683,6 +4683,770 @@ export const useQuestionnairesStore = defineStore(
 )
 
 Надо добавить медиа. Я не знаю, в какую папку лучше добавить: в ./backend/app/media или в ./backend/media 
-Картинки пока делаем для статей, опросников, программ и life aspects
+Картинки пока делаем для фото врача (пока только врача), статей, опросников, программ и life aspects
 
-Надо сделать отдельный компаненнт загрузки картинки для кажлого элемента. 
+Надо сделать отдельный компонент загрузки картинки для кажлого элемента. При загрузке надо сделать, чтобы автоматически конвертировалось в webp и был кроппер. Если есть нормальные js библиотеки для интерфейса кроппера, давай готовую библиотеку, чтобы не раздувать код. Плюс, после импорта компонента кроппера пусть в виде параметров можно указывать разное соотношение, чтобы, например, фото врача было в виде квадрата, фото для статей, опросников в виде 16:9, а для life aspects еще поуже...
+Плюс, желательно в кроппер добавить функционал для уменьшения цвета/замены цвета (если, конечно, это не сильно разует код если сильно разует, буду делать в фотошопе) смысл в том, чтобы можно было выравнивать цвета разных картинок для того, чтобы сделать их в одном стиле. ПОСТОРЯЮ... если это сильно разует код, мне легче делать в фотошопе...
+
+для начала, задай вопросы и напиши, какие файлы тебе еще прислать
+
+
+
+
+
+
+
+
+
+
+--------------
+
+
+Путь к хранилищу задаём через настройки. При запуске в Docker это должен быть постоянный volume, а не файловая система одноразового контейнера. - ну да, пусть это будет физический каталог на vds
+
+1. Количество изображений и места отображения:
+Правильно ли я понимаю, что пока нужно по одному изображению:
+
+врачу — фотография профиля - да (опционно)
+статье — обложка, не изображения внутри текста - да
+опроснику — обложка - да
+программе — обложка - да
+сфере жизни — обложка - да
+
+Изображения необязательные? Нужны ли кнопки «Заменить» и «Удалить»? - да, опционные. кнопки изменить/удалить нужны
+Где их показывать на первом этапе: только в редакторах или сразу в карточках, списках и на страницах подробного просмотра? Особенно важно уточнить фото врача: в его профиле, карточке у пациента, списке сотрудников?
+
+в карточках статей, поросников, сфер жизни. Пусть будет, наверное, перекрывание типо такого:
+<div class="card bg-base-100 image-full w-96 shadow-sm">
+  <figure>
+    <img
+      src="https://img.daisyui.com/images/stock/photo-1606107557195-0e29a4b5b4aa.webp"
+      alt="Shoes" />
+  </figure>
+  <div class="card-body">
+    <h2 class="card-title">Card Title</h2>
+    <p>A card component has a figure, a body part, and inside body there are title and actions parts</p>
+    <div class="card-actions justify-end">
+      <button class="btn btn-primary">Buy Now</button>
+    </div>
+  </div>
+</div>
+
+ну, или предложи где уместно другое
+
+2. Пропорции и качество - ок, давй попросбуем
+
+Пропорции будут фиксироваться параметром компонента. - да, их нельзя менять, только двигать область
+
+Какие исходники нужно принимать: JPEG, PNG, WebP — достаточно? Нужен ли HEIC с iPhone? Он потребует дополнительной поддержки на сервере. - нет, не нужен
+
+Если нет иных пожеланий, предложу лимит исходника 10 МБ, ограничение количества пикселей и уменьшение больших изображений без увеличения маленьких. - ок
+
+3. Права и доступность:
+Врач может менять своё фото самостоятельно? - ну, давай сделаем
+Суперпользователь и медассистент могут менять фото любого врача? - да, разумеется
+Для обложек сохраняем текущие права редактирования соответствующих сущностей? - да
+Можно ли отдавать картинки по публичным ссылкам без авторизации? Хороший вопрос... я бы сразу делал, чтобы пусти были закрыты, то есть, если скопировать ссылку на любое изобразение, прямо мо ссылке не было доступа. Потому что потом я плнаирую делать еще и видео, а там чтоно надоб дует закрывать. Если не сделать этот функционал сразу, потом надо будет все переделывать... Поэтому, давай сделаем закрытые ссылки
+
+4. Создание, замена и копирование:
+Предлагаю разрешить выбрать картинку ещё до первого сохранения формы, а привязать её при создании сущности. Подходит? не понял, что это... ну, как решишь
+При замене рекомендую удалять старое изображение только после успешного сохранения новой привязки; несохранённые загрузки — очищать отдельно. - ок
+При копировании опросника его обложка тоже должна копироваться? - да
+Нужно ли при повторном редактировании обрезать исходное изображение заново, или достаточно загрузить файл повторно? - нет, сохраняем обрезанные
+
+5. Цветокоррекция - не, давай не будем раздувать функционал.
+
+6. Развёртывание: развертывание осуществляется через docker-compose:
+## Deploy
+
+```
+deploy/backend.Dockerfile
+deploy/docker-compose.yml
+deploy/env/backend.env.example
+deploy/env/compose.env.example
+deploy/env/frontend.env.example
+deploy/frontend.Dockerfile
+deploy/nginx/default.conf
+deploy/postgres/init/01-enable-pgcrypto.sql
+deploy/scripts/backup.sh
+deploy/scripts/deploy.sh
+deploy/scripts/init-letsencrypt.sh
+```
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    '' close;
+}
+
+server_tokens off;
+
+client_max_body_size 10m;
+
+server {
+    listen 80;
+    listen [::]:80;
+
+    server_name
+        findmydoc.ru
+        www.findmydoc.ru
+        staging.findmydoc.ru;
+
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+        default_type text/plain;
+        try_files $uri =404;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+
+    server_name findmydoc.ru;
+
+    ssl_certificate
+        /etc/letsencrypt/live/findmydoc.ru/fullchain.pem;
+    ssl_certificate_key
+        /etc/letsencrypt/live/findmydoc.ru/privkey.pem;
+
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 1d;
+    ssl_session_tickets off;
+
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
+
+    resolver 127.0.0.11 valid=30s ipv6=off;
+
+    location ^~ /api/_nuxt_icon/ {
+        set $frontend_upstream frontend-prod;
+
+        proxy_pass http://$frontend_upstream:3000;
+
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location /api/ {
+        set $backend_upstream backend-prod;
+
+        proxy_pass http://$backend_upstream:8000;
+
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For
+            $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+    }
+
+    location = /docs {
+        set $backend_upstream backend-prod;
+        proxy_pass http://$backend_upstream:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location = /openapi.json {
+        set $backend_upstream backend-prod;
+        proxy_pass http://$backend_upstream:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location /health/ {
+        set $backend_upstream backend-prod;
+        proxy_pass http://$backend_upstream:8000;
+        proxy_set_header Host $host;
+    }
+    location / {
+        set $frontend_upstream frontend-prod;
+
+        proxy_pass http://$frontend_upstream:3000;
+
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For
+            $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+    }
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+
+    server_name www.findmydoc.ru;
+
+    ssl_certificate
+        /etc/letsencrypt/live/findmydoc.ru/fullchain.pem;
+    ssl_certificate_key
+        /etc/letsencrypt/live/findmydoc.ru/privkey.pem;
+
+    return 301 https://findmydoc.ru$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+
+    server_name staging.findmydoc.ru;
+
+    ssl_certificate
+        /etc/letsencrypt/live/staging.findmydoc.ru/fullchain.pem;
+    ssl_certificate_key
+        /etc/letsencrypt/live/staging.findmydoc.ru/privkey.pem;
+
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 1d;
+    ssl_session_tickets off;
+
+    add_header X-Robots-Tag "noindex, nofollow, noarchive" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    resolver 127.0.0.11 valid=30s ipv6=off;
+
+    location ^~ /api/_nuxt_icon/ {
+        set $frontend_upstream frontend-staging;
+
+        proxy_pass http://$frontend_upstream:3000;
+
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location /api/ {
+        set $backend_upstream backend-staging;
+
+        proxy_pass http://$backend_upstream:8000;
+
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For
+            $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+    }
+
+    location = /docs {
+        set $backend_upstream backend-staging;
+        proxy_pass http://$backend_upstream:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location = /openapi.json {
+        set $backend_upstream backend-staging;
+        proxy_pass http://$backend_upstream:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location /health/ {
+        set $backend_upstream backend-staging;
+        proxy_pass http://$backend_upstream:8000;
+        proxy_set_header Host $host;
+    }
+
+    location / {
+        set $frontend_upstream frontend-staging;
+
+        proxy_pass http://$frontend_upstream:3000;
+
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For
+            $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+    }
+}
+services:
+  postgres:
+    image: postgres:17-bookworm
+    restart: unless-stopped
+    shm_size: 256mb
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      TZ: UTC
+      PGTZ: UTC
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - type: bind
+        source: ./postgres/init/01-enable-pgcrypto.sql
+        target: /docker-entrypoint-initdb.d/01-enable-pgcrypto.sql
+        read_only: true
+        bind:
+          create_host_path: false
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - internal
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"
+
+  migrate:
+    image: ${BACKEND_IMAGE}
+    profiles:
+      - tools
+    restart: "no"
+    env_file:
+      - ${BACKEND_ENV_FILE}
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    command:
+      - alembic
+      - upgrade
+      - head
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - internal
+
+  backend:
+    image: ${BACKEND_IMAGE}
+    restart: unless-stopped
+    env_file:
+      - ${BACKEND_ENV_FILE}
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=5)"
+        ]
+      interval: 15s
+      timeout: 7s
+      retries: 10
+      start_period: 30s
+    networks:
+      internal:
+      proxy:
+        aliases:
+          - ${BACKEND_NETWORK_ALIAS}
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"
+
+  frontend:
+    image: ${FRONTEND_IMAGE}
+    restart: unless-stopped
+    env_file:
+      - ${FRONTEND_ENV_FILE}
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))"
+        ]
+      interval: 15s
+      timeout: 7s
+      retries: 10
+      start_period: 30s
+    networks:
+      proxy:
+        aliases:
+          - ${FRONTEND_NETWORK_ALIAS}
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"
+
+  nginx:
+    image: nginx:1.28-alpine
+    profiles:
+      - edge
+    restart: unless-stopped
+    command:
+      - /bin/sh
+      - -c
+      - |
+        while true; do
+          sleep 6h
+          nginx -s reload || true
+        done &
+        exec nginx -g 'daemon off;'
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - letsencrypt:/etc/letsencrypt:ro
+      - certbot_www:/var/www/certbot:ro
+    networks:
+      - proxy
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"
+
+  certbot:
+    image: certbot/certbot:latest
+    profiles:
+      - edge
+    restart: unless-stopped
+    entrypoint:
+      - /bin/sh
+    command:
+      - -c
+      - |
+        trap exit TERM
+        while true; do
+          certbot renew \
+            --webroot \
+            --webroot-path=/var/www/certbot \
+            --quiet
+          sleep 12h &
+          wait $${!}
+        done
+    volumes:
+      - letsencrypt:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+    networks:
+      - proxy
+
+volumes:
+  postgres_data:
+
+  letsencrypt:
+    name: findmydoc_letsencrypt
+    external: true
+
+  certbot_www:
+    name: findmydoc_certbot_www
+    external: true
+
+networks:
+  internal:
+    internal: true
+
+  proxy:
+    name: findmydoc_proxy
+    external: true
+
+локально у меня база sqlite, а на сервере - postgres
+
+Backend работает в одном экземпляре или планируется несколько? - есть staging
+
+name: Build and deploy
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: findmydoc-vds-deployment
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build and publish images
+    runs-on: ubuntu-24.04
+
+    outputs:
+      image_prefix: ${{ steps.names.outputs.image_prefix }}
+      image_tag: ${{ steps.names.outputs.image_tag }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Prepare image names
+        id: names
+        shell: bash
+        run: |
+          REPOSITORY="$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
+
+          echo "image_prefix=ghcr.io/${REPOSITORY}" >> "$GITHUB_OUTPUT"
+          echo "image_tag=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push backend
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/backend.Dockerfile
+          push: true
+          tags: |
+            ${{ steps.names.outputs.image_prefix }}-backend:${{ steps.names.outputs.image_tag }}
+            ${{ steps.names.outputs.image_prefix }}-backend:${{ github.ref_name }}
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+
+      - name: Build and push frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/frontend.Dockerfile
+          push: true
+          tags: |
+            ${{ steps.names.outputs.image_prefix }}-frontend:${{ steps.names.outputs.image_tag }}
+            ${{ steps.names.outputs.image_prefix }}-frontend:${{ github.ref_name }}
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
+
+  deploy:
+    name: Deploy
+    needs:
+      - build
+
+    runs-on: ubuntu-24.04
+
+    environment:
+      name: ${{ github.ref_name == 'main' && 'production' || 'staging' }}
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v5
+
+    - name: Determine target environment
+      id: target
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        if [[ "${GITHUB_REF_NAME}" == "main" ]]; then
+          echo "name=production" >> "$GITHUB_OUTPUT"
+        elif [[ "${GITHUB_REF_NAME}" == "develop" ]]; then
+          echo "name=staging" >> "$GITHUB_OUTPUT"
+        else
+          echo "Unsupported deployment branch: ${GITHUB_REF_NAME}" >&2
+          exit 1
+        fi
+
+    - name: Validate deployment target
+      shell: bash
+      env:
+        VPS_HOST: ${{ secrets.VPS_HOST }}
+        VPS_PORT: ${{ secrets.VPS_PORT || '22' }}
+        VPS_USER: ${{ secrets.VPS_USER }}
+      run: |
+        set -euo pipefail
+
+        if [[ -z "${VPS_HOST}" ]]; then
+          echo "VPS_HOST is empty"
+          exit 1
+        fi
+
+        if [[ "${VPS_HOST}" == *"@"* ]]; then
+          echo "VPS_HOST must contain only an IP address or hostname"
+          echo "Do not include deploy@ or root@"
+          exit 1
+        fi
+
+        if [[ ! "${VPS_PORT}" =~ ^[0-9]+$ ]]; then
+          echo "VPS_PORT must be numeric"
+          exit 1
+        fi
+
+        if [[ "${VPS_USER}" != "deploy" ]]; then
+          echo "VPS_USER must be deploy"
+          exit 1
+        fi
+
+        echo "Deployment target is correct"
+
+    - name: Configure SSH
+      shell: bash
+      env:
+        SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+        VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+      run: |
+        set -euo pipefail
+
+        mkdir -p ~/.ssh
+        chmod 700 ~/.ssh
+
+        printf '%s\n' "$SSH_PRIVATE_KEY" \
+          | sed 's/\r$//' \
+          > ~/.ssh/id_ed25519
+        chmod 600 ~/.ssh/id_ed25519
+
+        printf '%s\n' "$VPS_KNOWN_HOSTS" \
+          | sed 's/\r$//' \
+          > ~/.ssh/known_hosts
+        chmod 600 ~/.ssh/known_hosts
+
+        ssh-keygen -y -f ~/.ssh/id_ed25519 > /tmp/deploy-key.pub
+
+        echo "Private key fingerprint:"
+        ssh-keygen -lf /tmp/deploy-key.pub
+
+    - name: Test SSH connection
+      shell: bash
+      env:
+        VPS_HOST: ${{ secrets.VPS_HOST }}
+        VPS_PORT: ${{ secrets.VPS_PORT || '22' }}
+        VPS_USER: ${{ secrets.VPS_USER }}
+      run: |
+        set -euo pipefail
+
+        ssh \
+          -i ~/.ssh/id_ed25519 \
+          -o IdentitiesOnly=yes \
+          -o BatchMode=yes \
+          -o PasswordAuthentication=no \
+          -o StrictHostKeyChecking=yes \
+          -p "${VPS_PORT}" \
+          "${VPS_USER}@${VPS_HOST}" \
+          'echo "SSH connection successful"; id'
+
+    - name: Upload deployment configuration
+      shell: bash
+      env:
+        VPS_HOST: ${{ secrets.VPS_HOST }}
+        VPS_PORT: ${{ secrets.VPS_PORT || '22' }}
+        VPS_USER: ${{ secrets.VPS_USER }}
+      run: |
+        set -euo pipefail
+
+        rsync \
+          --archive \
+          --compress \
+          --delete \
+          -e "ssh \
+            -i ~/.ssh/id_ed25519 \
+            -o IdentitiesOnly=yes \
+            -o BatchMode=yes \
+            -o PasswordAuthentication=no \
+            -o StrictHostKeyChecking=yes \
+            -p ${VPS_PORT}" \
+          deploy/ \
+          "${VPS_USER}@${VPS_HOST}:/opt/findmydoc/deploy/"
+
+    - name: Run deployment
+      shell: bash
+      env:
+        VPS_HOST: ${{ secrets.VPS_HOST }}
+        VPS_PORT: ${{ secrets.VPS_PORT || '22' }}
+        VPS_USER: ${{ secrets.VPS_USER }}
+        TARGET: ${{ steps.target.outputs.name }}
+        IMAGE_PREFIX: ${{ needs.build.outputs.image_prefix }}
+        IMAGE_TAG: ${{ needs.build.outputs.image_tag }}
+      run: |
+        set -euo pipefail
+
+        ssh \
+          -i ~/.ssh/id_ed25519 \
+          -o IdentitiesOnly=yes \
+          -o BatchMode=yes \
+          -o PasswordAuthentication=no \
+          -o StrictHostKeyChecking=yes \
+          -p "${VPS_PORT}" \
+          "${VPS_USER}@${VPS_HOST}" \
+          "chmod +x /opt/findmydoc/deploy/scripts/*.sh && \
+          /opt/findmydoc/deploy/scripts/deploy.sh \
+          '${TARGET}' \
+          '${IMAGE_PREFIX}' \
+          '${IMAGE_TAG}'"
+
+но nginx,вроде, один для всего
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+----------------------------
+
+
+
+Обложка — это оформление карточки, а не платный материал. Предлагаю разрешать её просмотр тому, кто имеет право видеть карточку, даже если Pro-контент внутри пока закрыт. - да, разумеется

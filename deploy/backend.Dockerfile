@@ -7,11 +7,12 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-RUN groupadd --system app \
+RUN groupadd --gid 10001 app \
     && useradd \
-        --system \
+        --uid 10001 \
         --gid app \
         --create-home \
+        --shell /usr/sbin/nologin \
         app
 
 COPY backend/requirements.txt /app/requirements.txt
