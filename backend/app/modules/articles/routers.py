@@ -63,6 +63,8 @@ from app.modules.articles.tracking import (
     record_article_interaction_event,
 )
 
+from app.modules.media.service import set_entity_image
+
 router = APIRouter(
     prefix="/api/v1/articles",
     tags=["Articles"],
@@ -398,61 +400,6 @@ async def get_article(
         article=article,
     )
 
-# @router.get(
-#     "/{article_id}",
-#     response_model=ArticleResponse,
-# )
-# async def get_article(
-#     article_id: uuid.UUID,
-#     auth: AuthContext = Depends(get_current_auth),
-#     session: Session = Depends(get_session),
-# ) -> ArticleResponse:
-#     article = session.get(Article, article_id)
-
-#     if not article:
-#         raise HTTPException(
-#             status_code=status.HTTP_404_NOT_FOUND,
-#             detail="Статья не найдена",
-#         )
-
-#     if auth.active_role == UserRole.PATIENT:
-#         patient = get_patient_profile_by_user_id(
-#             session=session,
-#             user_id=auth.user.id,
-#         )
-
-#         is_assigned = patient_has_active_assignment(
-#             session=session,
-#             patient_id=patient.id,
-#             assignment_type=AssignmentType.ARTICLE,
-#             content_id=article.id,
-#         )
-
-#         # Скрытие имеет приоритет над назначением.
-#         if article.is_hidden:
-#             raise HTTPException(
-#                 status_code=status.HTTP_403_FORBIDDEN,
-#                 detail="Статья скрыта",
-#             )
-
-#         if not is_assigned:
-#             ensure_patient_content_access(
-#                 session=session,
-#                 patient=patient,
-#                 content_tag_ids=get_article_tag_ids(
-#                     session=session,
-#                     article_id=article.id,
-#                 ),
-#                 pro_content=article.pro_content,
-#                 is_hidden=article.is_hidden,
-#             )
-
-#     return serialize_article(
-#         session=session,
-#         article=article,
-#     )
-
-
 @router.post(
     "",
     response_model=ArticleResponse,
@@ -484,6 +431,14 @@ async def create_article(
         session=session,
         article=article,
         tag_ids=payload.tag_ids,
+    )
+
+    set_entity_image(
+        session=session,
+        entity=article,
+        purpose="article",
+        image_id=payload.image_id,
+        uploaded_by_user_id=auth.user.id,
     )
 
     session.commit()
@@ -534,6 +489,10 @@ async def update_article(
     update_data = payload.model_dump(
         exclude_unset=True
     )
+
+    image_was_provided = "image_id" in update_data
+    next_image_id = update_data.pop("image_id", None)
+
     tag_ids = update_data.pop("tag_ids", None)
 
     if "title" in update_data:
@@ -549,6 +508,15 @@ async def update_article(
             session=session,
             article=article,
             tag_ids=tag_ids,
+        )
+
+    if image_was_provided:
+        set_entity_image(
+            session=session,
+            entity=article,
+            purpose="article",
+            image_id=next_image_id,
+            uploaded_by_user_id=auth.user.id,
         )
 
     article.updated_at = utc_now()

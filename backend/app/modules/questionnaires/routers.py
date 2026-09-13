@@ -82,7 +82,9 @@ from app.modules.users.models import (
 from app.modules.programs.utils import (
     sync_patient_program_enrollments,
 )
-
+from app.modules.media.service import (
+    set_questionnaire_creation_image,
+)
 
 router = APIRouter(
     prefix="/api/v1/questionnaires",
@@ -130,6 +132,7 @@ def serialize_questionnaire(
                 id=question.id,
                 question_type=question.question_type,
                 text=question.text,
+                image_id=questionnaire.image_id,
                 is_required=question.is_required,
                 order_index=question.order_index,
                 scale_min=question.scale_min,
@@ -223,6 +226,17 @@ def create_questionnaire_from_payload(
                     order_index=option_data.order_index,
                 )
             )
+
+    set_questionnaire_creation_image(
+        session=session,
+        questionnaire=questionnaire,
+        requested_image_id=payload.image_id,
+        image_was_provided=(
+            "image_id" in payload.model_fields_set
+        ),
+        copied_from_id=copied_from_id,
+        uploaded_by_user_id=created_by_user_id,
+    )
 
     return questionnaire
 
@@ -440,6 +454,7 @@ async def copy_questionnaire(
             if payload.title
             else f"{source.title} — копия"
         ),
+        image_id=source.image_id,
         description=source.description,
         tag_ids=[
             tag.id

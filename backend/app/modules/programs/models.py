@@ -108,6 +108,12 @@ class Program(SQLModel, table=True):
             "cascade": "all, delete-orphan",
         },
     )
+    image_id: uuid.UUID | None = Field(
+        default=None,
+        foreign_key="media_images.id",
+        ondelete="RESTRICT",
+        index=True,
+    )
 
 
 class ProgramStage(SQLModel, table=True):

@@ -100,6 +100,7 @@ from app.modules.notifications.transactional import (
 from app.modules.consents.contact_service import (
     ensure_assistant_contact_allowed,
 )
+from app.modules.media.service import set_entity_image
 
 router = APIRouter(
     prefix="/api/v1/programs",
@@ -693,7 +694,7 @@ def serialize_patient_program(
         is_popular=program.is_popular,
         is_start=program.is_start,
         home_priority=program.home_priority,
-
+        image_id=program.image_id,
         tags=[
             ProgramTagResponse(
                 id=tag.id,
@@ -776,6 +777,7 @@ def serialize_clinical_program(
         is_popular=program.is_popular,
         is_start=program.is_start,
         home_priority=program.home_priority,
+        image_id=program.image_id,
 
         is_hidden=program.is_hidden,
 
@@ -846,6 +848,14 @@ async def create_program(
             session=session,
             program=program,
             payload=payload,
+        )
+
+        set_entity_image(
+            session=session,
+            entity=program,
+            purpose="program",
+            image_id=payload.image_id,
+            uploaded_by_user_id=auth.user.id,
         )
 
         session.commit()
@@ -1084,7 +1094,7 @@ async def change_program_visibility(
 async def update_program(
     program_id: uuid.UUID,
     payload: ProgramUpdateRequest,
-    _: AuthContext = Depends(
+    auth: AuthContext = Depends(
         require_roles(
             UserRole.SUPERUSER,
             UserRole.MED_ASSISTANT,
@@ -1198,6 +1208,15 @@ async def update_program(
         program=program,
         payload=payload,
     )
+
+    if "image_id" in payload.model_fields_set:
+        set_entity_image(
+            session=session,
+            entity=program,
+            purpose="program",
+            image_id=payload.image_id,
+            uploaded_by_user_id=auth.user.id,
+        )
 
     session.commit()
     session.refresh(program)
@@ -1743,6 +1762,7 @@ def serialize_patient_clinical_program(
         is_popular=patient_response.is_popular,
         is_start=patient_response.is_start,
         home_priority=patient_response.home_priority,
+        image_id=patient_response.image_id,
 
         tags=patient_response.tags,
 

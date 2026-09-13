@@ -77,6 +77,7 @@ class QuestionnaireCreateRequest(BaseModel):
     questions: list[QuestionCreateRequest] = Field(
         min_length=1
     )
+    image_id: uuid.UUID | None = None
 
 
 class QuestionnaireCopyRequest(BaseModel):
@@ -136,6 +137,8 @@ class QuestionnaireResponse(BaseModel):
     created_at: datetime
     hidden_at: datetime | None
 
+    image_id: uuid.UUID | None = None
+
 
 class QuestionnaireListItem(BaseModel):
     id: uuid.UUID
@@ -150,6 +153,8 @@ class QuestionnaireListItem(BaseModel):
 
     questions_count: int
     created_at: datetime
+
+    image_id: uuid.UUID | None = None
 
 
 class SubmissionStartResponse(BaseModel):

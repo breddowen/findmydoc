@@ -29,6 +29,7 @@ class SpecialityResponse(BaseModel):
 class DoctorProfileResponse(BaseModel):
     id: uuid.UUID
     speciality: SpecialityResponse
+    image_id: uuid.UUID | None = None
 
 
 class PatientProfileResponse(BaseModel):

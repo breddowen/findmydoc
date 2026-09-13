@@ -155,6 +155,12 @@ class DoctorProfile(SQLModel, table=True):
             "foreign_keys": "[DoctorPatientLink.doctor_id]",
         },
     )
+    image_id: uuid.UUID | None = Field(
+        default=None,
+        foreign_key="media_images.id",
+        ondelete="RESTRICT",
+        index=True,
+    )
 
 
 class PatientProfile(SQLModel, table=True):

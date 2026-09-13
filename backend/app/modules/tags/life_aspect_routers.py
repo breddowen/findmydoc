@@ -14,7 +14,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from app.core.db import get_session
-from app.core.security import require_roles
+from app.core.security import (
+    AuthContext,
+    get_current_auth,
+    require_roles,
+)
 from app.modules.tags.life_aspect_schemas import (
     LifeAspectCreateRequest,
     LifeAspectResponse,
@@ -27,7 +31,7 @@ from app.modules.tags.models import (
 )
 from app.modules.tags.schemas import TagResponse
 from app.modules.users.enums import UserRole
-
+from app.modules.media.service import set_entity_image
 
 router = APIRouter(
     prefix="/api/v1/life-aspects/manage",
@@ -113,6 +117,7 @@ def serialize_aspects(
             created_at=aspect.created_at,
             updated_at=aspect.updated_at,
             tags=tags_by_aspect[aspect.id],
+            image_id=aspect.image_id,
         )
         for aspect in aspects
     ]
@@ -189,11 +194,20 @@ async def list_life_aspects(
 async def create_life_aspect(
     payload: LifeAspectCreateRequest,
     session: Session = Depends(get_session),
+    auth: AuthContext = Depends(get_current_auth),
 ) -> LifeAspectResponse:
     aspect = LifeAspect(
         name=payload.name,
         description=payload.description,
         order_index=payload.order_index,
+    )
+
+    set_entity_image(
+        session=session,
+        entity=aspect,
+        purpose="life_aspect",
+        image_id=payload.image_id,
+        uploaded_by_user_id=auth.user.id,
     )
 
     save_aspect(
@@ -215,6 +229,7 @@ async def update_life_aspect(
     aspect_id: uuid.UUID,
     payload: LifeAspectUpdateRequest,
     session: Session = Depends(get_session),
+    auth: AuthContext = Depends(get_current_auth),
 ) -> LifeAspectResponse:
     aspect = get_aspect(
         session=session,
@@ -227,6 +242,15 @@ async def update_life_aspect(
         return serialize_aspect(
             session=session,
             aspect=aspect,
+        )
+
+    if "image_id" in changes:
+        set_entity_image(
+            session=session,
+            entity=aspect,
+            purpose="life_aspect",
+            image_id=changes.pop("image_id"),
+            uploaded_by_user_id=auth.user.id,
         )
 
     now = utc_now()

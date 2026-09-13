@@ -82,6 +82,7 @@ def build_user_response(
     if user.doctor_profile and user.doctor_profile.speciality:
         doctor_profile = DoctorProfileResponse(
             id=user.doctor_profile.id,
+            image_id=user.doctor_profile.image_id,
             speciality=SpecialityResponse.model_validate(
                 user.doctor_profile.speciality
             ),

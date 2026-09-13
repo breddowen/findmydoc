@@ -152,6 +152,7 @@ def serialize_article(
         created_at=article.created_at,
         updated_at=article.updated_at,
         hidden_at=article.hidden_at,
+        image_id=article.image_id,
     )
 
 
@@ -183,4 +184,5 @@ def serialize_article_list_item(
         ],
         created_at=article.created_at,
         updated_at=article.updated_at,
+        image_id=article.image_id,
     )
