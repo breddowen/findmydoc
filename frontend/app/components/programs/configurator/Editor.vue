@@ -42,6 +42,22 @@ const form = reactive({
   stages: [],
 })
 
+function handleProgramImageSaved(response) {
+  form.image_id = response.image_id
+
+  if (store.currentProgram?.id === props.programId) {
+    store.currentProgram.image_id = response.image_id
+  }
+
+  const item = store.programs.find(
+    program => program.id === props.programId,
+  )
+
+  if (item) {
+    item.image_id = response.image_id
+  }
+}
+
 function createStage() {
   const previous =
     form.stages[form.stages.length - 1]
@@ -126,7 +142,7 @@ function mapProgramToForm(program) {
   form.home_priority = Number(program.home_priority) || 0
 
   form.tag_ids = (program.tags || []).map(
-    (tag) => tag.id,
+    tag => tag.id,
   )
 
   form.is_popular = Boolean(
@@ -628,10 +644,11 @@ onMounted(async () => {
 
       <MediaEntityEditor
         v-if="programId"
+        :key="programId"
         purpose="program"
         :entity-id="programId"
-        @busy="imageBusy = $event"
-        @saved="form.image_id = $event.image_id"
+        label="Обложка программы"
+        @saved="handleProgramImageSaved"
       />
 
       <section
