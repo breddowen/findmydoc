@@ -1,5 +1,5 @@
-<!-- frontend\app\components\articles\Card.vue -->
- <script setup>
+<!-- frontend/app/components/articles/Card.vue -->
+<script setup>
 const props = defineProps({
   article: {
     type: Object,
@@ -60,12 +60,28 @@ function toggleVisibility() {
 
 <template>
   <article
-    class="card bg-base-100 border-base-300 overflow-hidden border"
+    class="card bg-base-100 border-base-300 relative isolate overflow-hidden border"
     :class="{
       'opacity-60': article.is_hidden,
+      'text-white': Boolean(article.image_id),
     }"
   >
-    <div class="card-body">
+    <template v-if="article.image_id">
+      <MediaImage
+        purpose="article"
+        :entity-id="article.id"
+        :image-id="article.image_id"
+        class="absolute inset-0 h-full w-full"
+        alt=""
+      />
+
+      <div
+        class="pointer-events-none absolute inset-0 bg-black/65"
+        aria-hidden="true"
+      />
+    </template>
+
+    <div class="card-body relative z-10">
       <div class="flex flex-wrap gap-2">
         <span
           v-if="article.pro_content"
@@ -80,12 +96,13 @@ function toggleVisibility() {
         >
           Скрыта
         </span>
+
         <span
-            v-if="article.is_library_hidden"
-            class="badge badge-outline"
-          >
-            Вне каталога
-          </span>
+          v-if="article.is_library_hidden"
+          class="badge badge-outline"
+        >
+          Вне каталога
+        </span>
       </div>
 
       <h2 class="card-title">
@@ -100,6 +117,11 @@ function toggleVisibility() {
           v-for="tag in article.tags"
           :key="tag.id"
           class="badge badge-outline badge-sm"
+          :class="
+            article.image_id
+              ? 'border-white/40 text-white'
+              : ''
+          "
         >
           {{ tag.name }}
         </span>
@@ -107,53 +129,58 @@ function toggleVisibility() {
 
       <div
         v-if="showAnalytics"
-        class="text-base-content/60 flex items-center gap-3 text-xs"
-        >
+        class="flex items-center gap-3 text-xs"
+        :class="
+          article.image_id
+            ? 'text-white/75'
+            : 'text-base-content/60'
+        "
+      >
         <div
-            class="tooltip tooltip-bottom"
-            data-tip="Открытия"
+          class="tooltip tooltip-bottom"
+          data-tip="Открытия"
         >
-            <span class="flex cursor-help items-center gap-1">
+          <span class="flex cursor-help items-center gap-1">
             <Icon
-                name="lucide:mouse-pointer-click"
-                class="text-primary size-3.5"
+              name="lucide:mouse-pointer-click"
+              class="text-primary size-3.5"
             />
             <span class="font-medium">
-                {{ openedCount }}
+              {{ openedCount }}
             </span>
-            </span>
+          </span>
         </div>
 
         <div
-            class="tooltip tooltip-bottom"
-            data-tip="Прочтения"
+          class="tooltip tooltip-bottom"
+          data-tip="Прочтения"
         >
-            <span class="flex cursor-help items-center gap-1">
+          <span class="flex cursor-help items-center gap-1">
             <Icon
-                name="lucide:book-open-check"
-                class="text-success size-3.5"
+              name="lucide:book-open-check"
+              class="text-success size-3.5"
             />
             <span class="font-medium">
-                {{ readCount }}
+              {{ readCount }}
             </span>
-            </span>
+          </span>
         </div>
 
         <div
-            class="tooltip tooltip-bottom"
-            data-tip="Дочитали"
+          class="tooltip tooltip-bottom"
+          data-tip="Дочитали"
         >
-            <span class="flex cursor-help items-center gap-1">
+          <span class="flex cursor-help items-center gap-1">
             <Icon
-                name="lucide:percent"
-                class="text-secondary size-3.5"
+              name="lucide:percent"
+              class="text-secondary size-3.5"
             />
             <span class="font-medium">
-                {{ readRate }}%
+              {{ readRate }}%
             </span>
-            </span>
+          </span>
         </div>
-        </div>
+      </div>
 
       <div class="card-actions mt-auto pt-4">
         <NuxtLink
@@ -167,19 +194,20 @@ function toggleVisibility() {
 
           Открыть
         </NuxtLink>
-        <ClientOnly>
-             <NuxtLink
-                v-if="canManage"
-                :to="`/content/articles/${article.id}/edit`"
-                class="btn btn-sm btn-outline"
-                >
-                <Icon
-                    name="lucide:pencil"
-                    class="size-4"
-                />
 
-                Редактировать
-                </NuxtLink>
+        <ClientOnly>
+          <NuxtLink
+            v-if="canManage"
+            :to="`/content/articles/${article.id}/edit`"
+            class="btn btn-sm btn-outline"
+          >
+            <Icon
+              name="lucide:pencil"
+              class="size-4"
+            />
+
+            Редактировать
+          </NuxtLink>
         </ClientOnly>
 
         <button

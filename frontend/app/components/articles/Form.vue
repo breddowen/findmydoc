@@ -27,6 +27,7 @@ const loadingTags = ref(false)
 
 const previewOpen = ref(false)
 const errorMessage = ref('')
+const imageBusy = ref(false)
 
 const form = reactive({
   title: '',
@@ -34,6 +35,7 @@ const form = reactive({
   tag_ids: [],
   pro_content: true,
   is_library_hidden: false,
+  image_id: null,
 })
 
 function applyInitialValue(value) {
@@ -46,6 +48,7 @@ function applyInitialValue(value) {
   )
   form.pro_content = Boolean(value.pro_content)
   form.is_library_hidden = Boolean(value.is_library_hidden)
+  form.image_id = value.image_id || null
 }
 
 async function loadTags() {
@@ -59,6 +62,8 @@ async function loadTags() {
 }
 
 function submit() {
+  if (props.saving || imageBusy.value) return
+
   errorMessage.value = ''
 
   if (!form.title.trim()) {
@@ -77,6 +82,7 @@ function submit() {
     tag_ids: form.tag_ids,
     pro_content: form.pro_content,
     is_library_hidden: form.is_library_hidden,
+    image_id: form.image_id,
   })
 }
 
@@ -128,6 +134,15 @@ onMounted(loadTags)
           >
         </label>
 
+        <MediaField
+          v-model="form.image_id"
+          purpose="article"
+          :entity-id="initialValue?.id || null"
+          :saved-image-id="initialValue?.image_id || null"
+          :disabled="saving"
+          @busy="imageBusy = $event"
+        />
+
         <div>
           <div class="mb-2 flex items-center justify-between">
             <span class="font-medium">
@@ -174,7 +189,6 @@ onMounted(loadTags)
               Профессиональный контент
             </span>
 
-
             <span
               class="text-base-content/60 mt-1 block text-sm"
             >
@@ -190,6 +204,7 @@ onMounted(loadTags)
           >
         </label>
       </div>
+
       <ContentLibraryVisibility
         v-model="form.is_library_hidden"
         :disabled="saving"
@@ -202,7 +217,7 @@ onMounted(loadTags)
       <button
         type="button"
         class="btn"
-        :disabled="saving"
+        :disabled="saving || imageBusy"
         @click="emit('cancel')"
       >
         Отмена
@@ -211,7 +226,7 @@ onMounted(loadTags)
       <button
         type="submit"
         class="btn btn-primary"
-        :disabled="saving"
+        :disabled="saving || imageBusy"
       >
         <span
           v-if="saving"

@@ -7,6 +7,9 @@ const store = useQuestionnairesStore()
 const saving = ref(false)
 const loading = ref(false)
 const loadingTags = ref(false)
+const imageBusy = ref(false)
+const sourceImageId = ref(null)
+const sourceEntityId = ref(null)
 
 const tags = ref([])
 
@@ -40,6 +43,7 @@ function createEmptyForm() {
     tag_ids: [],
     copied_from_id: null,
     is_library_hidden: false,
+    image_id: null,
     questions: [
       createEmptyQuestion(),
     ],
@@ -54,6 +58,7 @@ function applyForm(data) {
   form.is_library_hidden = Boolean(data.is_library_hidden)
   form.copied_from_id =
     data.copied_from_id || null
+  form.image_id = data.image_id || null
 
   form.questions = (data.questions || []).map(
     (question, questionIndex) => ({
@@ -114,6 +119,9 @@ async function loadCopySource() {
     const source =
       await store.fetchQuestionnaire(sourceId)
 
+    sourceImageId.value = source.image_id || null
+    sourceEntityId.value = source.id
+
     applyForm({
       title: `${source.title} — копия`,
       description: source.description,
@@ -122,6 +130,7 @@ async function loadCopySource() {
       copied_from_id: source.id,
       questions: source.questions,
       is_library_hidden: source.is_library_hidden,
+      image_id: source.image_id,
     })
   } catch (error) {
     errorMessage.value =
@@ -246,6 +255,8 @@ function buildPayload() {
     pro_content: form.pro_content,
     tag_ids: form.tag_ids,
     copied_from_id: form.copied_from_id,
+    image_id: form.image_id,
+    is_library_hidden: form.is_library_hidden,
 
     questions: form.questions.map(
       (question, questionIndex) => ({
@@ -253,7 +264,6 @@ function buildPayload() {
         text: question.text.trim(),
         is_required: question.is_required,
         order_index: questionIndex,
-        is_library_hidden: form.is_library_hidden,
 
         scale_min:
           question.question_type === 'scale'
@@ -292,6 +302,8 @@ function buildPayload() {
 }
 
 async function save() {
+  if (saving.value || imageBusy.value || loading.value) return
+
   errorMessage.value = validateForm() || ''
 
   if (errorMessage.value) return
@@ -315,12 +327,23 @@ async function save() {
 }
 
 function handleImport(data) {
-  applyForm(data)
+  sourceImageId.value = null
+  sourceEntityId.value = null
+
+  applyForm({
+    ...data,
+    image_id: null,
+    copied_from_id: null,
+  })
+
   errorMessage.value = ''
 }
 
 function downloadJson() {
   const payload = buildPayload()
+
+  delete payload.image_id
+  delete payload.copied_from_id
 
   const blob = new Blob(
     [
@@ -428,6 +451,15 @@ onMounted(async () => {
           >
         </label>
 
+        <MediaField
+          v-model="form.image_id"
+          purpose="questionnaire"
+          :entity-id="sourceEntityId"
+          :saved-image-id="sourceImageId"
+          :disabled="saving"
+          @busy="imageBusy = $event"
+        />
+
         <label class="form-control block">
           <span class="label-text mb-2 font-medium">
             Описание
@@ -473,6 +505,7 @@ onMounted(async () => {
           >
         </label>
       </section>
+
       <ContentLibraryVisibility
         v-model="form.is_library_hidden"
         :disabled="saving"
@@ -516,7 +549,7 @@ onMounted(async () => {
         <button
           type="button"
           class="btn btn-primary"
-          :disabled="saving"
+          :disabled="saving || imageBusy"
           @click="save"
         >
           <span

@@ -35,12 +35,39 @@ const emit = defineEmits(['request-purchase'])
       :key="aspect.id"
       class="collapse collapse-plus border-base-300 bg-base-100 border"
     >
-      <summary class="collapse-title pr-12">
-        <span class="block font-semibold wrap-anywhere">
+      <summary
+        class="collapse-title relative overflow-hidden pr-12"
+        :class="{
+          'min-h-32 text-white sm:min-h-40': aspect.image_id,
+        }"
+      >
+        <template v-if="aspect.image_id">
+          <MediaImage
+            purpose="life_aspect"
+            :entity-id="aspect.id"
+            :image-id="aspect.image_id"
+            class="absolute inset-0 h-full w-full"
+            alt=""
+          />
+
+          <div
+            class="pointer-events-none absolute inset-0 bg-black/60"
+            aria-hidden="true"
+          />
+        </template>
+
+        <span class="relative z-10 block font-semibold wrap-anywhere">
           {{ aspect.name }}
         </span>
 
-        <span class="text-base-content/60 mt-1 block text-xs">
+        <span
+          class="relative z-10 mt-1 block text-xs"
+          :class="
+            aspect.image_id
+              ? 'text-white/80'
+              : 'text-base-content/60'
+          "
+        >
           Программ: {{ aspect.programs.length }}
         </span>
       </summary>

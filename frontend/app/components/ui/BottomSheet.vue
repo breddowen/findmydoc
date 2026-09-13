@@ -44,6 +44,8 @@ const sheetStyle = computed(() => ({
 }))
 
 function close() {
+  if (props.persistent) return
+
   model.value = false
   translateY.value = 0
   dragging.value = false
@@ -57,6 +59,8 @@ function handleBackdrop() {
 }
 
 function handlePointerDown(event) {
+  if (props.persistent) return
+
   dragging.value = true
   pointerStartY = event.clientY
 
@@ -92,6 +96,16 @@ function handleKeydown(event) {
     close()
   }
 }
+
+watch(
+  () => props.persistent,
+  (value) => {
+    if (!value) return
+
+    dragging.value = false
+    translateY.value = 0
+  },
+)
 
 watch(model, (value) => {
   if (value) {
@@ -155,6 +169,7 @@ onBeforeUnmount(() => {
               type="button"
               class="btn btn-circle btn-ghost btn-sm shrink-0"
               aria-label="Закрыть"
+              :disabled="persistent"
               @click="close"
             >
               <Icon

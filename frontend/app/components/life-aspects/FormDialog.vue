@@ -1,4 +1,4 @@
-<!-- frontend\app\components\life-aspects\FormDialog.vue -->
+<!-- frontend/app/components/life-aspects/FormDialog.vue -->
 <script setup>
 const model = defineModel({
   type: Boolean,
@@ -26,10 +26,13 @@ const props = defineProps({
 
 const emit = defineEmits(['save'])
 
+const imageBusy = ref(false)
+
 const form = reactive({
   name: '',
   description: '',
   order_index: 10,
+  image_id: null,
 })
 
 const canSave = computed(() =>
@@ -48,17 +51,26 @@ watch(
     form.description = props.aspect?.description || ''
     form.order_index =
       props.aspect?.order_index ?? props.defaultOrder
+    form.image_id = props.aspect?.image_id || null
+    imageBusy.value = false
   },
   { immediate: true },
 )
 
 function submit() {
-  if (props.saving || !canSave.value) return
+  if (
+    props.saving
+    || imageBusy.value
+    || !canSave.value
+  ) {
+    return
+  }
 
   emit('save', {
     name: form.name.trim(),
     description: form.description.trim() || null,
     order_index: form.order_index,
+    image_id: form.image_id,
   })
 }
 </script>
@@ -68,8 +80,9 @@ function submit() {
     v-model="model"
     :title="aspect ? 'Изменить сферу жизни' : 'Новая сфера жизни'"
     max-width-class="max-w-3xl"
-    :close-on-backdrop="!saving"
-    :show-close-button="!saving"
+    :persistent="saving || imageBusy"
+    :close-on-backdrop="!saving && !imageBusy"
+    :show-close-button="!saving && !imageBusy"
   >
     <form
       id="life-aspect-form"
@@ -99,6 +112,15 @@ function submit() {
           :disabled="saving"
         >
       </label>
+
+      <MediaField
+        v-model="form.image_id"
+        purpose="life_aspect"
+        :entity-id="aspect?.id || null"
+        :saved-image-id="aspect?.image_id || null"
+        :disabled="saving"
+        @busy="imageBusy = $event"
+      />
 
       <label class="block">
         <span class="mb-2 block text-sm font-medium">
@@ -141,7 +163,7 @@ function submit() {
         <button
           type="button"
           class="btn"
-          :disabled="saving"
+          :disabled="saving || imageBusy"
           @click="model = false"
         >
           Отмена
@@ -151,7 +173,7 @@ function submit() {
           type="submit"
           form="life-aspect-form"
           class="btn btn-primary"
-          :disabled="saving || !canSave"
+          :disabled="saving || imageBusy || !canSave"
         >
           <span
             v-if="saving"
