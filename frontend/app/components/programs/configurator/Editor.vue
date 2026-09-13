@@ -25,10 +25,12 @@ const activeStageIndex = ref(0)
 const mobileLibraryOpen = ref(false)
 
 const errorMessage = ref('')
+const imageBusy = ref(false)
 
 const form = reactive({
   title: '',
   description: '',
+  image_id: null,
 
   service_id: null,
   is_popular: false,
@@ -117,6 +119,7 @@ function openLibrary(stageIndex) {
 function mapProgramToForm(program) {
   form.title = program.title || ''
   form.description = program.description || ''
+  form.image_id = program.image_id || null
 
   form.service_id = program.service?.id || null
   form.is_start = Boolean(program.is_start)
@@ -376,6 +379,10 @@ function buildPayload() {
     title: form.title.trim(),
     description: form.description.trim() || null,
 
+    ...(props.programId
+      ? {}
+      : { image_id: form.image_id }),
+
     service_id: form.service_id || null,
     is_popular: form.is_popular,
 
@@ -440,6 +447,7 @@ async function save() {
     store.saving
     || loadingProgram.value
     || loadingSources.value
+    || imageBusy.value
   ) {
     return
   }
@@ -515,6 +523,7 @@ onMounted(async () => {
             store.saving
             || loadingProgram
             || loadingSources
+            || imageBusy
           "
           @click="save"
         >
@@ -615,6 +624,26 @@ onMounted(async () => {
             :loading="loadingSources"
           />
         </div>
+      </section>
+
+      <MediaEntityEditor
+        v-if="programId"
+        purpose="program"
+        :entity-id="programId"
+        @busy="imageBusy = $event"
+        @saved="form.image_id = $event.image_id"
+      />
+
+      <section
+        v-else
+        class="bg-base-100 border-base-300 rounded-2xl border p-5"
+      >
+        <MediaField
+          v-model="form.image_id"
+          purpose="program"
+          :disabled="store.saving"
+          @busy="imageBusy = $event"
+        />
       </section>
 
       <ProgramsConfiguratorHomeSettings

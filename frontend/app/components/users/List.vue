@@ -14,6 +14,7 @@ defineProps({
 const emit = defineEmits([
   'toggle-block',
   'delete',
+  'edit-photo',
 ])
 
 const auth = useAuthStore()
@@ -133,6 +134,25 @@ function canBlock(user) {
             tabindex="0"
             class="menu dropdown-content bg-base-100 border-base-300 z-20 mt-2 w-56 rounded-box border p-2 shadow-xl"
           >
+            <li
+              v-if="
+                user.roles.includes('doctor')
+                && !user.deleted_at
+                && ['superuser', 'med_assistant'].includes(auth.activeRole)
+              "
+            >
+              <button
+                type="button"
+                @click="emit('edit-photo', user)"
+              >
+                <Icon
+                  name="lucide:image"
+                  class="size-4"
+                />
+                Фото врача
+              </button>
+            </li>
+
             <li v-if="canBlock(user)">
               <button
                 type="button"

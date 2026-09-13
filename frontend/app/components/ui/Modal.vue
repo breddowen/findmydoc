@@ -22,6 +22,10 @@ const props = defineProps({
     type: String,
     default: 'max-w-lg',
   },
+  persistent: {
+    type: Boolean,
+    default: false,
+  },
 })
 
 const emit = defineEmits([
@@ -34,6 +38,8 @@ const opened = computed(() => model.value)
 useBodyScrollLock(opened)
 
 function close() {
+  if (props.persistent) return
+
   model.value = false
   emit('close')
 }
@@ -99,6 +105,7 @@ onBeforeUnmount(() => {
               type="button"
               class="btn btn-circle btn-ghost btn-sm shrink-0"
               aria-label="Закрыть"
+              :disabled="persistent"
               @click="close"
             >
               <Icon

@@ -18,6 +18,9 @@ const processingInvitationId = ref('')
 const errorMessage = ref('')
 const message = ref('')
 
+const photoDialogOpen = ref(false)
+const photoUser = ref(null)
+
 const userRoleFilters = [
   {
     value: '',
@@ -276,6 +279,11 @@ async function deleteUser(user) {
   }
 }
 
+function openDoctorPhoto(user) {
+  photoUser.value = user
+  photoDialogOpen.value = true
+}
+
 onMounted(loadData)
 
 onBeforeUnmount(() => {
@@ -428,6 +436,7 @@ onBeforeUnmount(() => {
         :loading="usersStore.loadingUsers"
         @toggle-block="toggleBlock"
         @delete="deleteUser"
+        @edit-photo="openDoctorPhoto"
       />
 
       <UiPagination
@@ -525,5 +534,10 @@ onBeforeUnmount(() => {
     :sending-email="Boolean(processingInvitationId)"
     :email-sent="emailSent"
     @send-email="sendCreatedInvitation"
+  />
+
+  <UsersPhotoDialog
+    v-model="photoDialogOpen"
+    :user="photoUser"
   />
 </template>

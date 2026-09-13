@@ -102,9 +102,27 @@ async function toggleLibraryVisibility(questionnaire) {
       <article
         v-for="questionnaire in paginatedItems"
         :key="questionnaire.id"
-        class="card bg-base-100 border-base-300 border"
+        class="card bg-base-100 border-base-300 relative isolate overflow-hidden border"
+        :class="{
+          'text-white': questionnaire.image_id,
+        }"
       >
-        <div class="card-body">
+        <template v-if="questionnaire.image_id">
+          <MediaImage
+            purpose="questionnaire"
+            :entity-id="questionnaire.id"
+            :image-id="questionnaire.image_id"
+            class="absolute inset-0 h-full w-full"
+            alt=""
+          />
+
+          <div
+            class="pointer-events-none absolute inset-0 bg-black/65"
+            aria-hidden="true"
+          />
+        </template>
+
+        <div class="card-body relative z-10">
           <div class="flex flex-wrap gap-2">
             <span
               v-if="questionnaire.pro_content"
@@ -129,6 +147,7 @@ async function toggleLibraryVisibility(questionnaire) {
             >
               Не завершён
             </span>
+
             <span
               v-if="questionnaire.is_library_hidden"
               class="badge badge-outline"
@@ -141,7 +160,14 @@ async function toggleLibraryVisibility(questionnaire) {
             {{ questionnaire.title }}
           </h2>
 
-          <p class="text-base-content/60 line-clamp-3 text-sm">
+          <p
+            class="line-clamp-3 text-sm"
+            :class="
+              questionnaire.image_id
+                ? 'text-white/80'
+                : 'text-base-content/60'
+            "
+          >
             {{ questionnaire.description }}
           </p>
 

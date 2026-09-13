@@ -22,6 +22,10 @@ defineProps({
     type: String,
     default: 'max-w-lg',
   },
+  persistent: {
+    type: Boolean,
+    default: false,
+  },
 })
 
 const emit = defineEmits([
@@ -50,6 +54,7 @@ const { matches: isDesktop } = useBreakpoint(
       :close-on-backdrop="closeOnBackdrop"
       :show-close-button="showCloseButton"
       :max-width-class="maxWidthClass"
+      :persistent="persistent"
       @close="emit('close')"
       @opened="emit('opened')"
     >
@@ -76,6 +81,7 @@ const { matches: isDesktop } = useBreakpoint(
       :title="title"
       :close-on-backdrop="closeOnBackdrop"
       :show-close-button="showCloseButton"
+      :persistent="persistent"
       @close="emit('close')"
       @opened="emit('opened')"
     >

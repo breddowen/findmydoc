@@ -80,6 +80,18 @@ async function save() {
 }
 
 onMounted(load)
+
+const isDoctor = computed(() =>
+  isClientReady.value
+  && auth.activeRole === 'doctor',
+)
+
+function handleDoctorImageSaved(response) {
+  if (userStore.user?.doctor_profile) {
+    userStore.user.doctor_profile.image_id =
+      response.image_id
+  }
+}
 </script>
 
 <template>
@@ -261,5 +273,12 @@ onMounted(load)
         </div>
       </div>
     </form>
+
+    <MediaEntityEditor
+      v-if="isDoctor && userStore.user?.doctor_profile"
+      purpose="doctor"
+      :entity-id="userStore.user.id"
+      @saved="handleDoctorImageSaved"
+    />
   </div>
 </template>

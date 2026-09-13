@@ -103,6 +103,15 @@ async function openProgram() {
   <article
     class="border-base-300 bg-base-100 flex min-w-0 flex-col rounded-2xl border p-4 sm:p-5"
   >
+    <MediaImage
+      v-if="program.image_id"
+      purpose="program"
+      :entity-id="program.id"
+      :image-id="program.image_id"
+      class="mb-4 aspect-video w-full rounded-xl"
+      :alt="`Обложка программы «${program.title}»`"
+    />
+
     <div class="flex flex-wrap items-center gap-2 text-xs">
       <span
         v-if="program.is_recommended && !isCompleted"

@@ -1,8 +1,9 @@
 <!-- ./frontend/app/pages/content/questionnaires/[id].vue -->
- 
+
 <script setup>
 const route = useRoute()
 const store = useQuestionnairesStore()
+const auth = useAuthStore()
 
 const questionnaire = ref(null)
 const submissionId = ref(null)
@@ -17,6 +18,14 @@ const completed = ref(false)
 const errorMessage = ref('')
 
 const saveTimers = new Map()
+
+const isPatient = computed(
+  () => auth.activeRole === 'patient',
+)
+
+const canManageImage = computed(
+  () => ['superuser', 'med_assistant'].includes(auth.activeRole),
+)
 
 const answeredCount = computed(() =>
   questionnaire.value?.questions.filter(
@@ -44,6 +53,10 @@ async function initialize() {
       await store.fetchQuestionnaire(
         route.params.id,
       )
+
+    if (!isPatient.value) {
+      return
+    }
 
     const allProgress =
       await store.fetchMyProgress()
@@ -83,6 +96,8 @@ async function initialize() {
 }
 
 function scheduleAnswerSave(question) {
+  if (!isPatient.value || !submissionId.value) return
+
   const oldTimer = saveTimers.get(question.id)
 
   if (oldTimer) {
@@ -112,6 +127,8 @@ function scheduleAnswerSave(question) {
 }
 
 async function complete() {
+  if (!isPatient.value || !submissionId.value) return
+
   errorMessage.value = ''
 
   const missingRequired =
@@ -231,7 +248,10 @@ onBeforeUnmount(() => {
         {{ questionnaire.description }}
       </p>
 
-      <div class="mt-5">
+      <div
+        v-if="isPatient"
+        class="mt-5"
+      >
         <div class="mb-2 flex justify-between text-sm">
           <span>
             Заполнено {{ answeredCount }} из
@@ -248,6 +268,13 @@ onBeforeUnmount(() => {
         />
       </div>
     </header>
+
+    <MediaEntityEditor
+      v-if="canManageImage"
+      purpose="questionnaire"
+      :entity-id="questionnaire.id"
+      @saved="questionnaire.image_id = $event.image_id"
+    />
 
     <div
       v-if="errorMessage"
@@ -290,16 +317,44 @@ onBeforeUnmount(() => {
         </div>
 
         <QuestionnairesQuestionField
+          v-if="isPatient"
           v-model="answers[question.id]"
           :question="question"
-          @update:model-value="
-            scheduleAnswerSave(question)
-          "
+          @update:model-value="scheduleAnswerSave(question)"
         />
+
+        <div
+          v-else
+          class="text-base-content/60 text-sm"
+        >
+          <ul
+            v-if="question.options?.length"
+            class="list-inside list-disc space-y-1"
+          >
+            <li
+              v-for="option in question.options"
+              :key="option.id"
+            >
+              {{ option.text }}
+            </li>
+          </ul>
+
+          <p
+            v-else-if="question.question_type === 'scale'"
+          >
+            Шкала:
+            {{ question.scale_min }}–{{ question.scale_max }}
+          </p>
+
+          <p v-else>
+            Тип ответа: {{ question.question_type }}
+          </p>
+        </div>
       </article>
     </section>
 
     <div
+      v-if="isPatient"
       class="bg-base-100 border-base-300 sticky bottom-3 rounded-2xl border p-3 shadow-xl"
     >
       <button
