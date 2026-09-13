@@ -14,6 +14,7 @@ class ArticleCreateRequest(BaseModel):
 
     pro_content: bool = True
     is_library_hidden: bool = False
+    image_id: uuid.UUID | None = None
 
 
 class ArticleUpdateRequest(BaseModel):
@@ -27,6 +28,7 @@ class ArticleUpdateRequest(BaseModel):
     tag_ids: list[uuid.UUID] | None = None
     pro_content: bool | None = None
     is_library_hidden: bool = False
+    image_id: uuid.UUID | None = None
 
 class ArticleVisibilityRequest(BaseModel):
     is_hidden: bool
@@ -55,6 +57,8 @@ class ArticleResponse(BaseModel):
     updated_at: datetime
     hidden_at: datetime | None
 
+    image_id: uuid.UUID | None = None
+
 
 class ArticleListItem(BaseModel):
     id: uuid.UUID
@@ -74,6 +78,8 @@ class ArticleListItem(BaseModel):
     opened_count: int | None = None
     read_count: int | None = None
     read_rate: float | None = None
+
+    image_id: uuid.UUID | None = None
 
 class ArticleReadResponse(BaseModel):
     message: str

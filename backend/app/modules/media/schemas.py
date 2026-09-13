@@ -22,3 +22,26 @@ class MediaImageUploadResponse(BaseModel):
 
     # Только закрытый API, не путь на диске.
     preview_path: str
+
+class EntityImageUpdateRequest(BaseModel):
+    # Обязательное поле. null означает удалить обложку.
+    image_id: uuid.UUID | None
+
+    # Изображение, которое пользователь видел,
+    # когда открыл редактор.
+    #
+    # Защищает от незаметной перезаписи изменения,
+    # сделанного другим сотрудником.
+    expected_image_id: uuid.UUID | None
+
+
+class EntityImageResponse(BaseModel):
+    purpose: ImagePurpose
+    entity_id: uuid.UUID
+
+    image_id: uuid.UUID | None
+    width: int | None
+    height: int | None
+    size_bytes: int | None
+
+    file_path: str | None

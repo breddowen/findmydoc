@@ -184,6 +184,7 @@ def build_patient_life_aspects(
                 # ),
                 can_open_program=True,
                 has_program_access=has_access,
+                image_id=program.image_id,
             )
         )
 
@@ -221,6 +222,7 @@ def build_patient_life_aspects(
                 description=aspect.description,
                 order_index=aspect.order_index,
                 programs=cards,
+                image_id=aspect.image_id,
             )
         )
 

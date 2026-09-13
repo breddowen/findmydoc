@@ -29,6 +29,7 @@ class LifeAspectCreateRequest(BaseModel):
         ge=0,
         le=100_000,
     )
+    image_id: uuid.UUID | None = None
 
     @field_validator("name", mode="before")
     @classmethod
@@ -59,6 +60,8 @@ class LifeAspectUpdateRequest(BaseModel):
 
     is_hidden: bool | None = None
 
+    image_id: uuid.UUID | None = None
+
     @field_validator("name", mode="before")
     @classmethod
     def normalize_name(cls, value):
@@ -70,7 +73,7 @@ class LifeAspectUpdateRequest(BaseModel):
     @model_validator(mode="after")
     def reject_null_required_fields(self):
         # Отсутствие поля означает "не изменять".
-        # Явный null допустим только для description.
+        # Явный null допустим только для description и image_id.
         for field_name in (
             "name",
             "order_index",
@@ -102,6 +105,8 @@ class LifeAspectResponse(BaseModel):
 
     tags: list[TagResponse]
 
+    image_id: uuid.UUID | None = None
+
 class LifeAspectProgramResponse(BaseModel):
     id: uuid.UUID
     title: str
@@ -121,6 +126,8 @@ class LifeAspectProgramResponse(BaseModel):
 
     has_program_access: bool
 
+    image_id: uuid.UUID | None = None
+
 
 class LifeAspectPatientResponse(BaseModel):
     id: uuid.UUID
@@ -129,3 +136,5 @@ class LifeAspectPatientResponse(BaseModel):
     order_index: int
 
     programs: list[LifeAspectProgramResponse]
+
+    image_id: uuid.UUID | None = None

@@ -116,6 +116,7 @@ class ProgramCreateRequest(BaseModel):
     stages: list[ProgramStageCreateRequest] = Field(
         min_length=1
     )
+    image_id: uuid.UUID | None = None
 
 class ProgramUpdateRequest(ProgramCreateRequest):
     pass
@@ -216,6 +217,8 @@ class ProgramPatientResponse(BaseModel):
 
     stages: list[ProgramStagePatientResponse]
 
+    image_id: uuid.UUID | None = None
+
 
 class ProgramClinicalResponse(BaseModel):
     id: uuid.UUID
@@ -237,6 +240,8 @@ class ProgramClinicalResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     hidden_at: datetime | None
+
+    image_id: uuid.UUID | None = None
 
 
 class ProgramStartResponse(BaseModel):
