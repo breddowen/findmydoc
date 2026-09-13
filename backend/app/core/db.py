@@ -91,6 +91,8 @@ def import_all_models() -> None:
     from app.modules.notifications import models as notification_models  # noqa: F401
     from app.modules.assignments import models as assignment_models  # noqa: F401
 
+    from app.modules.media import models as media_models  # noqa: F401
+
 
 def init_sqlite_db() -> None:
     """

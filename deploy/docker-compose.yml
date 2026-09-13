@@ -61,6 +61,13 @@ services:
       - ${BACKEND_ENV_FILE}
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      MEDIA_ROOT: /var/lib/findmydoc/media
+    volumes:
+      - type: bind
+        source: ${MEDIA_HOST_PATH:?MEDIA_HOST_PATH must be set}
+        target: /var/lib/findmydoc/media
+        bind:
+          create_host_path: false
     depends_on:
       postgres:
         condition: service_healthy

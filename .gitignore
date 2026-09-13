@@ -68,3 +68,5 @@ derived-public-key.pub
 *_deploy_key.pub
 *_deploy_key_v2
 *_deploy_key_v2.pub
+
+backend/media/

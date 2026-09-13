@@ -29,3 +29,5 @@ deploy
 *.key
 *.crt
 *.sql.gz
+
+backend/media/
