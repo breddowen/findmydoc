@@ -580,6 +580,49 @@ docker volume inspect findmydoc_letsencrypt >/dev/null 2>&1 \
 docker volume inspect findmydoc_certbot_www >/dev/null 2>&1 \
   || docker volume create findmydoc_certbot_www
 ```
+### 7.1. Каталоги загруженных изображений
+
+Выполняется на VDS под `root` **до первого deployment**.
+
+Production и staging используют отдельные физические каталоги. Файлы сохраняются при пересоздании контейнеров.
+
+```bash
+mkdir -p \
+  /opt/findmydoc/data/staging/media \
+  /opt/findmydoc/data/production/media
+
+chown +10001:+10001 \
+  /opt/findmydoc/data/staging/media \
+  /opt/findmydoc/data/production/media
+
+chmod 0750 \
+  /opt/findmydoc/data/staging/media \
+  /opt/findmydoc/data/production/media
+```
+
+Числовые UID/GID `10001:10001` должны совпадать с идентификаторами пользователя `app` в `deploy/backend.Dockerfile`. Создавать такого пользователя на VDS не требуется.
+
+Проверить:
+
+```bash
+stat -c '%A %u:%g %n' \
+  /opt/findmydoc/data/staging/media \
+  /opt/findmydoc/data/production/media
+```
+
+Ожидается:
+
+```text
+drwxr-x--- 10001:10001 /opt/findmydoc/data/staging/media
+drwxr-x--- 10001:10001 /opt/findmydoc/data/production/media
+```
+
+Важно:
+
+- не размещать медиа в `/opt/findmydoc/deploy`: этот каталог синхронизируется через `rsync --delete`;
+- не менять владельца каталогов медиа на `deploy`: backend записывает файлы от UID `10001`;
+- не публиковать каталог через публичный Nginx `alias`: изображения выдаются через авторизованный API;
+- повторять создание каталогов при обычных обновлениях не нужно.
 
 ---
 
@@ -630,6 +673,8 @@ FRONTEND_NETWORK_ALIAS=frontend-prod
 POSTGRES_USER=findmydoc
 POSTGRES_PASSWORD=${PRODUCTION_POSTGRES_PASSWORD}
 POSTGRES_DB=findmydoc
+
+MEDIA_HOST_PATH=/opt/findmydoc/data/production/media
 EOF
 ```
 
@@ -737,6 +782,8 @@ FRONTEND_NETWORK_ALIAS=frontend-staging
 POSTGRES_USER=findmydoc_staging
 POSTGRES_PASSWORD=${STAGING_POSTGRES_PASSWORD}
 POSTGRES_DB=findmydoc_staging
+
+MEDIA_HOST_PATH=/opt/findmydoc/data/staging/media
 EOF
 ```
 
@@ -2974,42 +3021,3 @@ git restore .
 
 Для опубликованных изменений использовать git revert.
 ```
-
-
-
-
-
-
-
-
-
-
-
-
-ДЛЯ ИЗОБРАЖЕНИЙ:
-Каталоги на VDS
-Однократно выполните от root или пользователя с sudo:
-
-
-sudo install -d \
-  -o 10001 \
-  -g 10001 \
-  -m 0750 \
-  /opt/findmydoc/data/production/media
-
-sudo install -d \
-  -o 10001 \
-  -g 10001 \
-  -m 0750 \
-  /opt/findmydoc/data/staging/media
-
-
-Переменная окружения Compose
-В /opt/findmydoc/production/compose.env:
-
-
-MEDIA_HOST_PATH=/opt/findmydoc/data/production/media
-В /opt/findmydoc/staging/compose.env:
-
-
-MEDIA_HOST_PATH=/opt/findmydoc/data/staging/media
