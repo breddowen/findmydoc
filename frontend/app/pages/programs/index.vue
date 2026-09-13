@@ -46,7 +46,7 @@ async function showProgram(program) {
 
 function handleHidden(response) {
   const item = store.programs.find(
-    (program) => program.id === response.id,
+    program => program.id === response.id,
   )
 
   if (item) {
@@ -132,9 +132,18 @@ onMounted(async () => {
             'opacity-60': program.is_hidden,
           }"
         >
+          <MediaImage
+            v-if="program.image_id"
+            purpose="program"
+            :entity-id="program.id"
+            :image-id="program.image_id"
+            :alt="`Обложка программы «${program.title}»`"
+            class="aspect-video w-full shrink-0"
+          />
+
           <div
             v-if="program.is_popular"
-            class="bg-warning text-warning-content absolute right-0 top-0 rounded-bl-2xl px-4 py-2 text-xs font-bold shadow"
+            class="bg-warning text-warning-content absolute right-0 top-0 z-10 rounded-bl-2xl px-4 py-2 text-xs font-bold shadow"
           >
             <Icon
               name="lucide:flame"
