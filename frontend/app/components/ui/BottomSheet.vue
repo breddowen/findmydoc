@@ -18,6 +18,10 @@ const props = defineProps({
     type: Boolean,
     default: true,
   },
+  persistent: {
+    type: Boolean,
+    default: false,
+  },
 })
 
 const emit = defineEmits([

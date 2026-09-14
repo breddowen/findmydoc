@@ -102,6 +102,10 @@ from app.modules.consents.contact_service import (
 )
 from app.modules.media.service import set_entity_image
 
+from app.modules.programs.consultation_service import (
+    lock_program_for_structure_edit,
+)
+
 router = APIRouter(
     prefix="/api/v1/programs",
     tags=["Programs"],
@@ -1102,13 +1106,16 @@ async def update_program(
     ),
     session: Session = Depends(get_session),
 ) -> ProgramClinicalResponse:
-    program = session.get(Program, program_id)
+    program = lock_program_for_structure_edit(
+        session=session,
+        program_id=program_id,
+    )
 
-    if not program:
-        raise HTTPException(
-            status_code=404,
-            detail="Программа не найдена",
-        )
+    # if not program:
+    #     raise HTTPException(
+    #         status_code=404,
+    #         detail="Программа не найдена",
+    #     )
 
     # Временная защита.
     # Текущий редактор удаляет этапы и создаёт их заново.

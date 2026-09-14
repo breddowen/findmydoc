@@ -486,23 +486,10 @@ const inProgramLayout = computed(() =>
         </div>
       </div>
 
-      <div
-        class="border-base-300 mt-10 border-t pt-6"
-      >
+      <div class="border-base-300 mt-10 border-t pt-6">
         <div class="flex items-center justify-between gap-4">
           <span class="text-sm font-medium">
             Прочитано {{ progress }}%
-          </span>
-
-          <span
-            v-if="completed && isPatient"
-            class="badge badge-success gap-1"
-          >
-            <Icon
-              name="lucide:check"
-              class="size-3"
-            />
-            Завершено
           </span>
         </div>
 
@@ -510,7 +497,18 @@ const inProgramLayout = computed(() =>
           class="progress progress-secondary mt-3 w-full"
           :value="progress"
           max="100"
+          aria-label="Прогресс чтения статьи"
         />
+
+        <div
+          v-if="completed && isPatient"
+          class="mt-5 sm:flex sm:justify-end"
+        >
+          <ArticlesFinishButton
+            :disabled="closing"
+            @close="closeReader"
+          />
+        </div>
       </div>
 
       <ArticlesReaderAction

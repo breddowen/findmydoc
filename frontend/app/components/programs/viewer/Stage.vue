@@ -427,14 +427,23 @@ const displayedStatus = computed(() => {
 
           <div
             v-else
-            class="mt-4 flex items-center gap-2 text-sm"
+            class="mt-4 space-y-4"
           >
-            <Icon
-              name="lucide:calendar-clock"
-              class="text-accent size-4"
-            />
+            <div class="text-base-content/70 flex items-start gap-2 text-sm">
+              <Icon
+                name="lucide:calendar-clock"
+                class="text-accent mt-0.5 size-4 shrink-0"
+              />
 
-            Консультация входит в план программы. Дату и время согласует ассистент клиники.
+              <p>
+                Консультация входит в план программы.
+                Дату и время согласует ассистент клиники.
+              </p>
+            </div>
+
+            <PatientSupportConsultationButton
+              v-if="isPatient && !item.is_hidden"
+            />
           </div>
         </div>
       </article>

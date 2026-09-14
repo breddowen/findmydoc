@@ -3,6 +3,13 @@
 const auth = useAuthStore()
 const store = useProgramsStore()
 
+const { isClientReady } = useClientReady()
+
+const isPatient = computed(() =>
+  isClientReady.value
+  && auth.activeRole === 'patient',
+)
+
 const {
   formatOriginalPrice,
   formatFinalPrice,
@@ -55,24 +62,51 @@ function handleHidden(response) {
 }
 
 onMounted(async () => {
+  // Пациентский компонент загружает свой каталог сам.
+  if (auth.activeRole === 'patient') {
+    loading.value = false
+    return
+  }
+
   try {
-    if (auth.activeRole === 'patient') {
-      await store.fetchProgramsForPatient()
-    } else {
-      await store.fetchProgramsForStaff()
-    }
+    await store.fetchProgramsForStaff()
   } catch (error) {
     errorMessage.value =
-      error?.data?.detail
-      || 'Не удалось загрузить программы'
+      typeof error?.data?.detail === 'string'
+        ? error.data.detail
+        : 'Не удалось загрузить программы'
   } finally {
     loading.value = false
   }
 })
+
+const consultationsDialogOpen = ref(false)
+const consultationsProgramId = ref(null)
+
+function openConsultations(program) {
+  consultationsProgramId.value = program.id
+  consultationsDialogOpen.value = true
+}
+
+async function handleConsultationsSaved() {
+  try {
+    await store.fetchProgramsForStaff()
+  } catch {
+    errorMessage.value =
+      'Консультации сохранены, но список программ не удалось обновить. Обновите страницу.'
+  }
+}
 </script>
 
 <template>
-  <div class="space-y-6">
+  <UiContentSkeleton
+    v-if="!isClientReady"
+    variant="card"
+    :count="3"
+  />
+
+  <PatientPrograms v-else-if="isPatient" />
+  <div v-else class="space-y-6">
     <header
       class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
     >
@@ -241,6 +275,19 @@ onMounted(async () => {
               </NuxtLink>
 
               <button
+                v-if="canManage"
+                type="button"
+                class="btn btn-outline btn-sm"
+                @click="openConsultations(program)"
+              >
+                <Icon
+                  name="lucide:stethoscope"
+                  class="size-4"
+                />
+                Консультации
+              </button>
+
+              <button
                 v-if="canManage && !program.is_hidden"
                 type="button"
                 class="btn btn-ghost btn-sm"
@@ -287,8 +334,15 @@ onMounted(async () => {
   </div>
 
   <ProgramsVisibilityDialog
+    v-if="isClientReady && canManage"
     v-model="visibilityDialogOpen"
     :program="selectedProgram"
     @hidden="handleHidden"
+  />
+  <ProgramsConsultationsDialog
+    v-if="isClientReady && canManage"
+    v-model="consultationsDialogOpen"
+    :program-id="consultationsProgramId"
+    @saved="handleConsultationsSaved"
   />
 </template>
