@@ -11,7 +11,11 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['request-purchase'])
+const support = usePatientSupportStore()
+
+function openSupport() {
+  support.open('actions')
+}
 
 const store = usePatientHomeStore()
 
@@ -66,7 +70,9 @@ const actionText = computed(() => {
   if (isActive.value) return 'Продолжить'
   if (props.program.enrollment) return 'Открыть программу'
 
-  return 'Начать программу'
+  return isPaid.value
+    ? 'Ознакомиться бесплатно'
+    : 'Начать программу'
 })
 
 async function openProgram() {
@@ -101,7 +107,12 @@ async function openProgram() {
 
 <template>
   <article
-    class="border-base-300 bg-base-100 flex min-w-0 flex-col rounded-2xl border p-4 sm:p-5"
+    class="flex min-w-0 flex-col rounded-2xl border p-4 sm:p-5"
+    :class="
+      isPaid
+        ? 'border-primary/35 bg-primary/5'
+        : 'border-base-300 bg-base-100'
+    "
   >
     <MediaImage
       v-if="program.image_id"
@@ -111,6 +122,23 @@ async function openProgram() {
       class="mb-4 aspect-video w-full rounded-xl"
       :alt="`Обложка программы «${program.title}»`"
     />
+
+    <div
+      v-if="isPaid"
+      class="mb-3 flex justify-end"
+    >
+      <span
+        class="badge badge-primary h-auto max-w-full gap-1.5 py-2 text-right text-xs font-semibold"
+      >
+        <Icon
+          name="lucide:sparkles"
+          class="size-3.5 shrink-0"
+          aria-hidden="true"
+        />
+
+        Индивидуальная программа
+      </span>
+    </div>
 
     <div class="flex flex-wrap items-center gap-2 text-xs">
       <span
@@ -157,11 +185,11 @@ async function openProgram() {
 
     <p
       v-if="canRequestPurchase"
-      class="text-base-content/60 mt-3 text-xs leading-relaxed"
+      class="text-base-content/65 mt-3 text-xs leading-relaxed"
     >
-      Начните с бесплатных материалов.
-      Консультации и материалы с отметкой Pro
-      доступны после оформления программы сопровождения.
+      Индивидуальная комплексная программа сопровождения.
+      Ознакомьтесь с бесплатными материалами, а подбор
+      специалистов и дальнейшее сопровождение обсудите с клиникой.
     </p>
 
     <div
@@ -219,16 +247,23 @@ async function openProgram() {
           class="text-success flex items-center gap-1 text-xs"
           role="status"
         >
-          <Icon name="lucide:check" class="size-4" />
+          <Icon
+            name="lucide:check"
+            class="size-4 shrink-0"
+          />
           Запрос на сопровождение отправлен
         </p>
 
         <button
-          v-else
           type="button"
-          class="btn btn-outline btn-sm w-full"
-          @click="emit('request-purchase', program)"
+          class="btn btn-outline btn-primary btn-sm w-full"
+          @click="openSupport"
         >
+          <Icon
+            name="lucide:messages-square"
+            class="size-4 shrink-0"
+          />
+
           Обсудить сопровождение
         </button>
       </template>
