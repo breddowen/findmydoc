@@ -5,6 +5,15 @@ defineProps({
     type: Array,
     default: () => [],
   },
+  title: {
+    type: String,
+    default: 'Что Вы хотите улучшить?',
+  },
+  description: {
+    type: String,
+    default:
+      'Выберите сферу жизни и познакомьтесь с подходящими программами.',
+  },
 })
 
 const emit = defineEmits(['request-purchase'])
@@ -21,12 +30,14 @@ const emit = defineEmits(['request-purchase'])
         id="patient-life-aspects-title"
         class="text-xl font-bold sm:text-2xl"
       >
-        Что Вы хотите улучшить?
+        {{ title }}
       </h2>
 
-      <p class="text-base-content/60 mt-1 text-sm">
-        Выберите сферу жизни и познакомьтесь
-        с подходящими программами.
+      <p
+        v-if="description"
+        class="text-base-content/60 mt-1 text-sm"
+      >
+        {{ description }}
       </p>
     </header>
 
