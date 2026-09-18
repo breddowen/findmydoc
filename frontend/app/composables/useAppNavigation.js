@@ -218,6 +218,16 @@ export function useAppNavigation() {
       description: 'Пароль и passkey',
     })
 
+    // TEST_STYLES: временная студия оформления.
+    if (auth.activeRole === 'superuser') {
+      settingsLinks.push({
+        to: '/settings/test-styles',
+        label: 'Студия оформления',
+        icon: 'lucide:palette',
+        description: 'Локальная настройка цветов и оформления',
+      })
+    }
+
     groups.push({
       key: 'settings',
       label: 'Настройки',
