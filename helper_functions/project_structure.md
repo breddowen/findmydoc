@@ -1,156 +1,178 @@
 ﻿# Project Structure
 
-> Generated: 2026-09-13 21:15
+> Generated: 2026-09-19 00:02
 
 ---
 
 ## AI Backend
 
 ```
-backend/alembic/env.py
-backend/alembic/README
-backend/alembic/script.py.mako
-backend/alembic/versions/4a9d77a6cc23_initial_schema.py
-backend/alembic/versions/6042112705c7_article_analytics_events.py
-backend/alembic/versions/6eb4582e2464_add_new_field_to_users.py
-backend/alembic/versions/7c21a6d4ef10_admin_invitations_and_hidden_directories.py
-backend/alembic/versions/95f734785945_program_home_fields.py
-backend/alembic/versions/9f31b8c4d2e7_medical_services.py
-backend/alembic/versions/b1e4c7d902af_content_library_visibility.py
-backend/alembic/versions/c8d174f29a31_patient_tag_overrides.py
-backend/alembic/versions/d3f8a2c6e901_life_aspects.py
-backend/app/.env
-backend/app/__init__.py
-backend/app/core/__init__.py
-backend/app/core/config.py
-backend/app/core/db.py
-backend/app/core/email.py
-backend/app/core/security.py
-backend/app/core/transactions.py
-backend/app/core/websockets/__init__.py
-backend/app/core/websockets/manager.py
-backend/app/main.py
-backend/app/modules/__init__.py
-backend/app/modules/articles/__init__.py
-backend/app/modules/articles/access.py
-backend/app/modules/articles/models.py
-backend/app/modules/articles/routers.py
-backend/app/modules/articles/schemas.py
-backend/app/modules/articles/tracking.py
-backend/app/modules/articles/utils.py
-backend/app/modules/assignments/__init__.py
-backend/app/modules/assignments/enums.py
-backend/app/modules/assignments/models.py
-backend/app/modules/assignments/routers.py
-backend/app/modules/assignments/schemas.py
-backend/app/modules/assignments/utils.py
-backend/app/modules/auth/__init__.py
-backend/app/modules/auth/models.py
-backend/app/modules/auth/routers.py
-backend/app/modules/auth/schemas.py
-backend/app/modules/auth/utils.py
-backend/app/modules/consents/__init__.py
-backend/app/modules/consents/contact_routers.py
-backend/app/modules/consents/contact_schemas.py
-backend/app/modules/consents/contact_service.py
-backend/app/modules/consents/enums.py
-backend/app/modules/consents/models.py
-backend/app/modules/consents/routers.py
-backend/app/modules/consents/schemas.py
-backend/app/modules/consents/utils.py
-backend/app/modules/content/__init__.py
-backend/app/modules/content/utils.py
-backend/app/modules/events/__init__.py
-backend/app/modules/events/enums.py
-backend/app/modules/events/models.py
-backend/app/modules/events/routers.py
-backend/app/modules/events/schemas.py
-backend/app/modules/events/service.py
-backend/app/modules/invitations/__init__.py
-backend/app/modules/invitations/admin_routers.py
-backend/app/modules/invitations/admin_schemas.py
-backend/app/modules/invitations/admin_utils.py
-backend/app/modules/invitations/enums.py
-backend/app/modules/invitations/models.py
-backend/app/modules/invitations/routers.py
-backend/app/modules/invitations/schemas.py
-backend/app/modules/invitations/utils.py
-backend/app/modules/notifications/__init__.py
-backend/app/modules/notifications/enums.py
-backend/app/modules/notifications/models.py
-backend/app/modules/notifications/routers.py
-backend/app/modules/notifications/schemas.py
-backend/app/modules/notifications/service.py
-backend/app/modules/notifications/ToDo.md
-backend/app/modules/notifications/transactional.py
-backend/app/modules/patients/__init__.py
-backend/app/modules/patients/enums.py
-backend/app/modules/patients/routers.py
-backend/app/modules/patients/schemas.py
-backend/app/modules/patients/utils.py
-backend/app/modules/programs/__init__.py
-backend/app/modules/programs/enums.py
-backend/app/modules/programs/models.py
-backend/app/modules/programs/Readme.md
-backend/app/modules/programs/routers.py
-backend/app/modules/programs/schemas.py
-backend/app/modules/programs/utils.py
-backend/app/modules/questionnaires/__init__.py
-backend/app/modules/questionnaires/enums.py
-backend/app/modules/questionnaires/json_q/audit.json
-backend/app/modules/questionnaires/models.py
-backend/app/modules/questionnaires/Readme.md
-backend/app/modules/questionnaires/routers.py
-backend/app/modules/questionnaires/schemas.py
-backend/app/modules/questionnaires/utils.py
-backend/app/modules/referrals/__init__.py
-backend/app/modules/referrals/enums.py
-backend/app/modules/referrals/models.py
-backend/app/modules/referrals/routers.py
-backend/app/modules/referrals/schemas.py
-backend/app/modules/referrals/utils.py
-backend/app/modules/relationships/__init__.py
-backend/app/modules/relationships/routers.py
-backend/app/modules/relationships/schemas.py
-backend/app/modules/services/__init__.py
-backend/app/modules/services/enums.py
-backend/app/modules/services/models.py
-backend/app/modules/services/routers.py
-backend/app/modules/services/schemas.py
-backend/app/modules/services/utils.py
-backend/app/modules/specialities/__init__.py
-backend/app/modules/specialities/routers.py
-backend/app/modules/specialities/schemas.py
-backend/app/modules/tags/__init__.py
-backend/app/modules/tags/enums.py
-backend/app/modules/tags/life_aspect_catalog.py
-backend/app/modules/tags/life_aspect_patient_routers.py
-backend/app/modules/tags/life_aspect_routers.py
-backend/app/modules/tags/life_aspect_schemas.py
-backend/app/modules/tags/models.py
-backend/app/modules/tags/routers.py
-backend/app/modules/tags/schemas.py
-backend/app/modules/tags/utils.py
-backend/app/modules/users/__init__.py
-backend/app/modules/users/enums.py
-backend/app/modules/users/models.py
-backend/app/modules/users/routers.py
-backend/app/modules/users/schemas.py
-backend/app/modules/users/utils.py
-backend/requirements.txt
-backend/seed/check_program_progress.py
-backend/seed/create_superuser.py
-backend/seed/data/tags.json
-backend/seed/data/users.json
-backend/seed/Readme.md
-backend/seed/repair_program_submission_stage.py
-backend/seed/upload_tags.py
-backend/seed/upload_users.py
-backend/test_database — копия.db
-backend/test_database.db
+backend/alembic/env.py (60 lines)
+backend/alembic/README (1 lines)
+backend/alembic/script.py.mako (29 lines)
+backend/alembic/versions/4a9d77a6cc23_initial_schema.py (887 lines)
+backend/alembic/versions/6042112705c7_article_analytics_events.py (487 lines)
+backend/alembic/versions/6eb4582e2464_add_new_field_to_users.py (33 lines)
+backend/alembic/versions/7c21a6d4ef10_admin_invitations_and_hidden_directories.py (170 lines)
+backend/alembic/versions/95f734785945_program_home_fields.py (71 lines)
+backend/alembic/versions/9f31b8c4d2e7_medical_services.py (454 lines)
+backend/alembic/versions/b1e4c7d902af_content_library_visibility.py (40 lines)
+backend/alembic/versions/c8d174f29a31_patient_tag_overrides.py (141 lines)
+backend/alembic/versions/d3f8a2c6e901_life_aspects.py (157 lines)
+backend/alembic/versions/e4b7c2a901f6_media_images.py (116 lines)
+backend/alembic/versions/f7a2d9c103b8_entity_images.py (60 lines)
+backend/app/.env (14 lines)
+backend/app/__init__.py (0 lines)
+backend/app/core/__init__.py (0 lines)
+backend/app/core/config.py (73 lines)
+backend/app/core/db.py (131 lines)
+backend/app/core/email.py (150 lines)
+backend/app/core/security.py (232 lines)
+backend/app/core/transactions.py (60 lines)
+backend/app/core/websockets/__init__.py (0 lines)
+backend/app/core/websockets/manager.py (72 lines)
+backend/app/main.py (119 lines)
+backend/app/modules/__init__.py (0 lines)
+backend/app/modules/articles/__init__.py (0 lines)
+backend/app/modules/articles/access.py (64 lines)
+backend/app/modules/articles/models.py (132 lines)
+backend/app/modules/articles/routers.py (886 lines)
+backend/app/modules/articles/schemas.py (133 lines)
+backend/app/modules/articles/tracking.py (91 lines)
+backend/app/modules/articles/utils.py (188 lines)
+backend/app/modules/assignments/__init__.py (0 lines)
+backend/app/modules/assignments/enums.py (14 lines)
+backend/app/modules/assignments/models.py (81 lines)
+backend/app/modules/assignments/routers.py (302 lines)
+backend/app/modules/assignments/schemas.py (56 lines)
+backend/app/modules/assignments/utils.py (106 lines)
+backend/app/modules/auth/__init__.py (0 lines)
+backend/app/modules/auth/models.py (73 lines)
+backend/app/modules/auth/routers.py (753 lines)
+backend/app/modules/auth/schemas.py (97 lines)
+backend/app/modules/auth/utils.py (148 lines)
+backend/app/modules/consents/__init__.py (0 lines)
+backend/app/modules/consents/contact_routers.py (187 lines)
+backend/app/modules/consents/contact_schemas.py (20 lines)
+backend/app/modules/consents/contact_service.py (123 lines)
+backend/app/modules/consents/enums.py (15 lines)
+backend/app/modules/consents/models.py (83 lines)
+backend/app/modules/consents/routers.py (252 lines)
+backend/app/modules/consents/schemas.py (38 lines)
+backend/app/modules/consents/utils.py (37 lines)
+backend/app/modules/content/__init__.py (0 lines)
+backend/app/modules/content/utils.py (167 lines)
+backend/app/modules/events/__init__.py (0 lines)
+backend/app/modules/events/enums.py (34 lines)
+backend/app/modules/events/models.py (116 lines)
+backend/app/modules/events/routers.py (69 lines)
+backend/app/modules/events/schemas.py (32 lines)
+backend/app/modules/events/service.py (60 lines)
+backend/app/modules/invitations/__init__.py (0 lines)
+backend/app/modules/invitations/admin_routers.py (422 lines)
+backend/app/modules/invitations/admin_schemas.py (93 lines)
+backend/app/modules/invitations/admin_utils.py (224 lines)
+backend/app/modules/invitations/enums.py (17 lines)
+backend/app/modules/invitations/models.py (127 lines)
+backend/app/modules/invitations/routers.py (1277 lines)
+backend/app/modules/invitations/schemas.py (152 lines)
+backend/app/modules/invitations/utils.py (222 lines)
+backend/app/modules/media/__init__.py (0 lines)
+backend/app/modules/media/access.py (389 lines)
+backend/app/modules/media/constants.py (55 lines)
+backend/app/modules/media/image_routers.py (267 lines)
+backend/app/modules/media/models.py (68 lines)
+backend/app/modules/media/processing.py (214 lines)
+backend/app/modules/media/routers.py (265 lines)
+backend/app/modules/media/schemas.py (47 lines)
+backend/app/modules/media/service.py (158 lines)
+backend/app/modules/media/storage.py (71 lines)
+backend/app/modules/notifications/__init__.py (0 lines)
+backend/app/modules/notifications/enums.py (30 lines)
+backend/app/modules/notifications/models.py (64 lines)
+backend/app/modules/notifications/routers.py (288 lines)
+backend/app/modules/notifications/schemas.py (47 lines)
+backend/app/modules/notifications/service.py (163 lines)
+backend/app/modules/notifications/ToDo.md (1 lines)
+backend/app/modules/notifications/transactional.py (91 lines)
+backend/app/modules/patients/__init__.py (0 lines)
+backend/app/modules/patients/enums.py (7 lines)
+backend/app/modules/patients/routers.py (511 lines)
+backend/app/modules/patients/schemas.py (138 lines)
+backend/app/modules/patients/utils.py (231 lines)
+backend/app/modules/programs/__init__.py (0 lines)
+backend/app/modules/programs/consultation_routers.py (126 lines)
+backend/app/modules/programs/consultation_schemas.py (118 lines)
+backend/app/modules/programs/consultation_service.py (498 lines)
+backend/app/modules/programs/enums.py (22 lines)
+backend/app/modules/programs/models.py (364 lines)
+backend/app/modules/programs/Readme.md (30 lines)
+backend/app/modules/programs/routers.py (1875 lines)
+backend/app/modules/programs/schemas.py (279 lines)
+backend/app/modules/programs/utils.py (632 lines)
+backend/app/modules/questionnaires/__init__.py (0 lines)
+backend/app/modules/questionnaires/enums.py (17 lines)
+backend/app/modules/questionnaires/json_q/audit.json (272 lines)
+backend/app/modules/questionnaires/models.py (243 lines)
+backend/app/modules/questionnaires/Readme.md (61 lines)
+backend/app/modules/questionnaires/routers.py (1306 lines)
+backend/app/modules/questionnaires/schemas.py (223 lines)
+backend/app/modules/questionnaires/utils.py (303 lines)
+backend/app/modules/referrals/__init__.py (0 lines)
+backend/app/modules/referrals/enums.py (19 lines)
+backend/app/modules/referrals/models.py (114 lines)
+backend/app/modules/referrals/routers.py (464 lines)
+backend/app/modules/referrals/schemas.py (83 lines)
+backend/app/modules/referrals/utils.py (42 lines)
+backend/app/modules/relationships/__init__.py (0 lines)
+backend/app/modules/relationships/routers.py (580 lines)
+backend/app/modules/relationships/schemas.py (79 lines)
+backend/app/modules/services/__init__.py (0 lines)
+backend/app/modules/services/enums.py (8 lines)
+backend/app/modules/services/models.py (131 lines)
+backend/app/modules/services/routers.py (350 lines)
+backend/app/modules/services/schemas.py (159 lines)
+backend/app/modules/services/utils.py (118 lines)
+backend/app/modules/specialities/__init__.py (0 lines)
+backend/app/modules/specialities/routers.py (331 lines)
+backend/app/modules/specialities/schemas.py (50 lines)
+backend/app/modules/tags/__init__.py (0 lines)
+backend/app/modules/tags/enums.py (7 lines)
+backend/app/modules/tags/life_aspect_catalog.py (229 lines)
+backend/app/modules/tags/life_aspect_patient_routers.py (46 lines)
+backend/app/modules/tags/life_aspect_routers.py (384 lines)
+backend/app/modules/tags/life_aspect_schemas.py (140 lines)
+backend/app/modules/tags/models.py (285 lines)
+backend/app/modules/tags/routers.py (957 lines)
+backend/app/modules/tags/schemas.py (104 lines)
+backend/app/modules/tags/utils.py (246 lines)
+backend/app/modules/users/__init__.py (0 lines)
+backend/app/modules/users/enums.py (29 lines)
+backend/app/modules/users/models.py (340 lines)
+backend/app/modules/users/routers.py (360 lines)
+backend/app/modules/users/schemas.py (146 lines)
+backend/app/modules/users/utils.py (127 lines)
+backend/media/images/1d/1d721b7fd0654c9b9ba91eda1a9b7040.webp (360 lines)
+backend/media/images/34/34ddc045ce7f4202958de36ecbd46c56.webp (61 lines)
+backend/media/images/8c/8c2c5463ea814c5190f94e6963c0f762.webp (53 lines)
+backend/media/images/93/9373e2599ff34916bcb1595b9ee2b281.webp (53 lines)
+backend/media/images/93/93b92d16e612422ea666b826be259b2e.webp (354 lines)
+backend/media/images/cb/cb4b533270a1433da4bb7d0bddd56e9e.webp (41 lines)
+backend/media/images/d3/d35f720d0b6a4179ba97aaae61cbe00f.webp (61 lines)
+backend/requirements.txt (48 lines)
+backend/seed/check_program_progress.py (140 lines)
+backend/seed/create_superuser.py (153 lines)
+backend/seed/data/tags.json (52 lines)
+backend/seed/data/users.json (149 lines)
+backend/seed/Readme.md (1 lines)
+backend/seed/repair_program_submission_stage.py (193 lines)
+backend/seed/upload_tags.py (123 lines)
+backend/seed/upload_users.py (381 lines)
+backend/test_database — копия.db (1254 lines)
+backend/test_database.db (?)
 ```
 
-*Files: 141*
+*Files: 163*
 
 ---
 
@@ -159,223 +181,223 @@ backend/test_database.db
 ### components
 
 ```
-frontend/app/components/articles/Card.vue
-frontend/app/components/articles/Form.vue
-frontend/app/components/articles/PatientOverview.vue
-frontend/app/components/articles/Reader.vue
-frontend/app/components/articles/ReaderAction.vue
-frontend/app/components/assignments/ContentPicker.vue
-frontend/app/components/assignments/CreateDialog.vue
-frontend/app/components/assignments/PatientList.vue
-frontend/app/components/assignments/PickerItem.vue
-frontend/app/components/auth/PasswordForm.vue
-frontend/app/components/auth/RoleSelector.vue
-frontend/app/components/consents/AssistantContact.vue
-frontend/app/components/content/LibraryVisibility.vue
-frontend/app/components/content/RichTextEditor.vue
-frontend/app/components/content/RichTextRenderer.vue
-frontend/app/components/content/TagSelector.vue
-frontend/app/components/directories/Specialities.vue
-frontend/app/components/directories/Tags.vue
-frontend/app/components/Info/Article.vue
-frontend/app/components/invitations/LinkDialog.vue
-frontend/app/components/invitations/PatientDialog.vue
-frontend/app/components/layout/EmailVerificationBanner.vue
-frontend/app/components/layout/Footer.vue
-frontend/app/components/layout/Logo.vue
-frontend/app/components/layout/Navbar.vue
-frontend/app/components/layout/PatientActions.vue
-frontend/app/components/layout/Sidebar.vue
-frontend/app/components/layout/ThemeToggle.vue
-frontend/app/components/life-aspects/FormDialog.vue
-frontend/app/components/life-aspects/Tag.vue
-frontend/app/components/life-aspects/TagLinks.vue
-frontend/app/components/notifications/BrowserPermission.vue
-frontend/app/components/notifications/Center.vue
-frontend/app/components/patient/ContactDialog.vue
-frontend/app/components/patient/Home.vue
-frontend/app/components/patient/home/ContinueCard.vue
-frontend/app/components/patient/home/Hero.vue
-frontend/app/components/patient/home/LifeAspects.vue
-frontend/app/components/patient/home/Recommendations.vue
-frontend/app/components/patient/home/RotatingText.vue
-frontend/app/components/patient/Journey.vue
-frontend/app/components/patient/NextStep.vue
-frontend/app/components/patient/ProgramCard.vue
-frontend/app/components/patient/ProgramSteps.vue
-frontend/app/components/patient/PurchaseDialog.vue
-frontend/app/components/patient/Support.vue
-frontend/app/components/patient/support/Actions.vue
-frontend/app/components/patient/support/Fab.vue
-frontend/app/components/patient/support/Hub.vue
-frontend/app/components/patients/ContactStatus.vue
-frontend/app/components/patients/Item.vue
-frontend/app/components/patients/List.vue
-frontend/app/components/patients/ProAccess.vue
-frontend/app/components/patients/Tags.vue
-frontend/app/components/programs/configurator/Editor.vue
-frontend/app/components/programs/configurator/HomeSettings.vue
-frontend/app/components/programs/configurator/Item.vue
-frontend/app/components/programs/configurator/Library.vue
-frontend/app/components/programs/configurator/LibraryEntry.vue
-frontend/app/components/programs/configurator/ServiceSelect.vue
-frontend/app/components/programs/configurator/Stage.vue
-frontend/app/components/programs/journey/Navbar.vue
-frontend/app/components/programs/journey/Steps.vue
-frontend/app/components/programs/PatientAccess.vue
-frontend/app/components/programs/PatientOverview.vue
-frontend/app/components/programs/PatientProgress.vue
-frontend/app/components/programs/StaffOverview.vue
-frontend/app/components/programs/viewer/Stage.vue
-frontend/app/components/programs/VisibilityDialog.vue
-frontend/app/components/questionnaires/Editor.vue
-frontend/app/components/questionnaires/JsonImporter.vue
-frontend/app/components/questionnaires/QuestionField.vue
-frontend/app/components/questionnaires/QuestionItem.vue
-frontend/app/components/services/DeleteDialog.vue
-frontend/app/components/services/FormDialog.vue
-frontend/app/components/services/List.vue
-frontend/app/components/services/VisibilityDialog.vue
-frontend/app/components/tags/OverrideEditor.vue
-frontend/app/components/test/PsychiatristCard.vue
-frontend/app/components/ui/BottomSheet.vue
-frontend/app/components/ui/ContentSkeleton.vue
-frontend/app/components/ui/MegaMenu.vue
-frontend/app/components/ui/Modal.vue
-frontend/app/components/ui/Pagination.vue
-frontend/app/components/ui/ResponsiveDialog.vue
-frontend/app/components/users/InvitationList.vue
-frontend/app/components/users/InviteDialog.vue
-frontend/app/components/users/InviteForm.vue
-frontend/app/components/users/List.vue
+frontend/app/components/articles/Card.vue (237 lines)
+frontend/app/components/articles/FinishButton.vue (33 lines)
+frontend/app/components/articles/Form.vue (256 lines)
+frontend/app/components/articles/PatientOverview.vue (185 lines)
+frontend/app/components/articles/Reader.vue (521 lines)
+frontend/app/components/articles/ReaderAction.vue (209 lines)
+frontend/app/components/assignments/ContentPicker.vue (181 lines)
+frontend/app/components/assignments/CreateDialog.vue (345 lines)
+frontend/app/components/assignments/PatientList.vue (108 lines)
+frontend/app/components/assignments/PickerItem.vue (130 lines)
+frontend/app/components/auth/PasswordForm.vue (173 lines)
+frontend/app/components/auth/RoleSelector.vue (132 lines)
+frontend/app/components/consents/AssistantContact.vue (294 lines)
+frontend/app/components/content/LibraryVisibility.vue (38 lines)
+frontend/app/components/content/RichTextEditor.vue (469 lines)
+frontend/app/components/content/RichTextRenderer.vue (136 lines)
+frontend/app/components/content/TagSelector.vue (80 lines)
+frontend/app/components/directories/Specialities.vue (471 lines)
+frontend/app/components/directories/Tags.vue (311 lines)
+frontend/app/components/Info/Article.vue (62 lines)
+frontend/app/components/invitations/LinkDialog.vue (257 lines)
+frontend/app/components/invitations/PatientDialog.vue (435 lines)
+frontend/app/components/layout/EmailVerificationBanner.vue (88 lines)
+frontend/app/components/layout/Footer.vue (53 lines)
+frontend/app/components/layout/Logo.vue (86 lines)
+frontend/app/components/layout/Navbar.vue (405 lines)
+frontend/app/components/layout/PatientActions.vue (15 lines)
+frontend/app/components/layout/Sidebar.vue (178 lines)
+frontend/app/components/layout/ThemeToggle.vue (28 lines)
+frontend/app/components/life-aspects/FormDialog.vue (187 lines)
+frontend/app/components/life-aspects/Tag.vue (85 lines)
+frontend/app/components/life-aspects/TagLinks.vue (392 lines)
+frontend/app/components/media/Cropper.client.vue (206 lines)
+frontend/app/components/media/EntityEditor.vue (264 lines)
+frontend/app/components/media/Field.vue (336 lines)
+frontend/app/components/media/Image.vue (156 lines)
+frontend/app/components/notifications/BrowserPermission.vue (96 lines)
+frontend/app/components/notifications/Center.vue (181 lines)
+frontend/app/components/patient/ContactDialog.vue (209 lines)
+frontend/app/components/patient/Home.vue (179 lines)
+frontend/app/components/patient/home/ContinueCard.vue (74 lines)
+frontend/app/components/patient/home/Hero.vue (51 lines)
+frontend/app/components/patient/home/LifeAspects.vue (107 lines)
+frontend/app/components/patient/home/Recommendations.vue (265 lines)
+frontend/app/components/patient/home/RotatingText.vue (119 lines)
+frontend/app/components/patient/Journey.vue (79 lines)
+frontend/app/components/patient/NextStep.vue (184 lines)
+frontend/app/components/patient/ProgramCard.vue (277 lines)
+frontend/app/components/patient/Programs.vue (191 lines)
+frontend/app/components/patient/ProgramSteps.vue (96 lines)
+frontend/app/components/patient/PurchaseDialog.vue (129 lines)
+frontend/app/components/patient/Support.vue (186 lines)
+frontend/app/components/patient/support/Actions.vue (48 lines)
+frontend/app/components/patient/support/ConsultationButton.vue (27 lines)
+frontend/app/components/patient/support/Fab.vue (24 lines)
+frontend/app/components/patient/support/Hub.vue (105 lines)
+frontend/app/components/patients/ContactStatus.vue (66 lines)
+frontend/app/components/patients/Item.vue (111 lines)
+frontend/app/components/patients/List.vue (257 lines)
+frontend/app/components/patients/ProAccess.vue (107 lines)
+frontend/app/components/patients/Tags.vue (105 lines)
+frontend/app/components/programs/configurator/Editor.vue (784 lines)
+frontend/app/components/programs/configurator/HomeSettings.vue (68 lines)
+frontend/app/components/programs/configurator/Item.vue (143 lines)
+frontend/app/components/programs/configurator/Library.vue (395 lines)
+frontend/app/components/programs/configurator/LibraryEntry.vue (70 lines)
+frontend/app/components/programs/configurator/ServiceSelect.vue (170 lines)
+frontend/app/components/programs/configurator/Stage.vue (251 lines)
+frontend/app/components/programs/consultations/ConsultationsDialog.vue (446 lines)
+frontend/app/components/programs/consultations/Items.vue (250 lines)
+frontend/app/components/programs/journey/Navbar.vue (383 lines)
+frontend/app/components/programs/journey/Steps.vue (69 lines)
+frontend/app/components/programs/PatientAccess.vue (240 lines)
+frontend/app/components/programs/PatientOverview.vue (154 lines)
+frontend/app/components/programs/PatientProgress.vue (208 lines)
+frontend/app/components/programs/StaffOverview.vue (404 lines)
+frontend/app/components/programs/viewer/Stage.vue (452 lines)
+frontend/app/components/programs/VisibilityDialog.vue (128 lines)
+frontend/app/components/questionnaires/Editor.vue (570 lines)
+frontend/app/components/questionnaires/JsonImporter.vue (265 lines)
+frontend/app/components/questionnaires/QuestionField.vue (157 lines)
+frontend/app/components/questionnaires/QuestionItem.vue (314 lines)
+frontend/app/components/services/DeleteDialog.vue (95 lines)
+frontend/app/components/services/FormDialog.vue (463 lines)
+frontend/app/components/services/List.vue (181 lines)
+frontend/app/components/services/VisibilityDialog.vue (98 lines)
+frontend/app/components/tags/OverrideEditor.vue (231 lines)
+frontend/app/components/test/PsychiatristCard.vue (84 lines)
+frontend/app/components/ui/BottomSheet.vue (222 lines)
+frontend/app/components/ui/ContentSkeleton.vue (73 lines)
+frontend/app/components/ui/MegaMenu.vue (205 lines)
+frontend/app/components/ui/Modal.vue (157 lines)
+frontend/app/components/ui/Pagination.vue (69 lines)
+frontend/app/components/ui/ResponsiveDialog.vue (105 lines)
+frontend/app/components/users/InvitationList.vue (231 lines)
+frontend/app/components/users/InviteDialog.vue (29 lines)
+frontend/app/components/users/InviteForm.vue (367 lines)
+frontend/app/components/users/List.vue (202 lines)
+frontend/app/components/users/PhotoDialog.vue (49 lines)
 ```
-*Files: 89*
+*Files: 99*
 
 ### pages
 
 ```
-frontend/app/pages/content/articles/[id]/edit.vue
-frontend/app/pages/content/articles/[id]/index.vue
-frontend/app/pages/content/articles/index.vue
-frontend/app/pages/content/articles/new.vue
-frontend/app/pages/content/questionnaires/[id].vue
-frontend/app/pages/content/questionnaires/index.vue
-frontend/app/pages/content/questionnaires/new.vue
-frontend/app/pages/dashboard.vue
-frontend/app/pages/forgot-password.vue
-frontend/app/pages/index.vue
-frontend/app/pages/info/doctor/about.vue
-frontend/app/pages/info/doctor/conversation.vue
-frontend/app/pages/info/patient.vue
-frontend/app/pages/login.vue
-frontend/app/pages/patients/[id]/index.vue
-frontend/app/pages/patients/[id]/questionnaires/[submissionId].vue
-frontend/app/pages/patients/index.vue
-frontend/app/pages/programs/[id]/edit.vue
-frontend/app/pages/programs/[id]/index.vue
-frontend/app/pages/programs/index.vue
-frontend/app/pages/programs/new.vue
-frontend/app/pages/questionnaires/[id].vue
-frontend/app/pages/questionnaires/index.vue
-frontend/app/pages/register/invitation.vue
-frontend/app/pages/reset-password.vue
-frontend/app/pages/services/index.vue
-frontend/app/pages/settings/directories.vue
-frontend/app/pages/settings/life-aspects.vue
-frontend/app/pages/settings/profile.vue
-frontend/app/pages/settings/security.vue
-frontend/app/pages/settings/tags.vue
-frontend/app/pages/users/index.vue
-frontend/app/pages/verify-email.vue
+frontend/app/pages/content/articles/[id]/edit.vue (85 lines)
+frontend/app/pages/content/articles/[id]/index.vue (146 lines)
+frontend/app/pages/content/articles/index.vue (186 lines)
+frontend/app/pages/content/articles/new.vue (49 lines)
+frontend/app/pages/content/questionnaires/[id].vue (375 lines)
+frontend/app/pages/content/questionnaires/index.vue (166 lines)
+frontend/app/pages/content/questionnaires/new.vue (9 lines)
+frontend/app/pages/dashboard.vue (159 lines)
+frontend/app/pages/forgot-password.vue (102 lines)
+frontend/app/pages/index.vue (25 lines)
+frontend/app/pages/info/doctor/about.vue (16 lines)
+frontend/app/pages/info/doctor/conversation.vue (16 lines)
+frontend/app/pages/info/patient.vue (12 lines)
+frontend/app/pages/login.vue (241 lines)
+frontend/app/pages/patients/[id]/index.vue (469 lines)
+frontend/app/pages/patients/[id]/questionnaires/[submissionId].vue (184 lines)
+frontend/app/pages/patients/index.vue (37 lines)
+frontend/app/pages/programs/[id]/edit.vue (16 lines)
+frontend/app/pages/programs/[id]/index.vue (287 lines)
+frontend/app/pages/programs/index.vue (348 lines)
+frontend/app/pages/programs/new.vue (12 lines)
+frontend/app/pages/questionnaires/[id].vue (497 lines)
+frontend/app/pages/questionnaires/index.vue (235 lines)
+frontend/app/pages/register/invitation.vue (379 lines)
+frontend/app/pages/reset-password.vue (122 lines)
+frontend/app/pages/services/index.vue (205 lines)
+frontend/app/pages/settings/directories.vue (90 lines)
+frontend/app/pages/settings/life-aspects.vue (382 lines)
+frontend/app/pages/settings/profile.vue (284 lines)
+frontend/app/pages/settings/security.vue (325 lines)
+frontend/app/pages/settings/tags.vue (123 lines)
+frontend/app/pages/users/index.vue (543 lines)
+frontend/app/pages/verify-email.vue (81 lines)
 ```
 *Files: 33*
+
+### utils
+
+```
+frontend/app/utils/media.js (98 lines)
+```
+*Files: 1*
 
 ### layouts
 
 ```
-frontend/app/layouts/auth.vue
-frontend/app/layouts/default.vue
-frontend/app/layouts/program.vue
+frontend/app/layouts/auth.vue (28 lines)
+frontend/app/layouts/default.vue (22 lines)
+frontend/app/layouts/program.vue (40 lines)
 ```
 *Files: 3*
 
 ### composables
 
 ```
-frontend/app/composables/useAppNavigation.js
-frontend/app/composables/useBodyScrollLock.js
-frontend/app/composables/useBreakpoint.js
-frontend/app/composables/useClientReady.js
-frontend/app/composables/useFooterAwarePosition.js
-frontend/app/composables/useProgramContext.js
-frontend/app/composables/useProgramJourney.js
-frontend/app/composables/useProgramPrice.js
-frontend/app/composables/useReadingProgress.js
-frontend/app/composables/useWebAuthn.js
+frontend/app/composables/useAppNavigation.js (237 lines)
+frontend/app/composables/useBodyScrollLock.js (48 lines)
+frontend/app/composables/useBreakpoint.js (30 lines)
+frontend/app/composables/useClientReady.js (12 lines)
+frontend/app/composables/useFooterAwarePosition.js (147 lines)
+frontend/app/composables/useMediaApi.js (73 lines)
+frontend/app/composables/usePatientProgramGroups.js (94 lines)
+frontend/app/composables/usePrivateImage.js (96 lines)
+frontend/app/composables/useProgramContext.js (62 lines)
+frontend/app/composables/useProgramJourney.js (97 lines)
+frontend/app/composables/useProgramPrice.js (180 lines)
+frontend/app/composables/useReadingProgress.js (203 lines)
+frontend/app/composables/useWebAuthn.js (172 lines)
 ```
-*Files: 10*
+*Files: 13*
 
 ### stores
 
 ```
-frontend/app/stores/articles.js
-frontend/app/stores/assignments.js
-frontend/app/stores/auth.js
-frontend/app/stores/directories.js
-frontend/app/stores/emc-app.js
-frontend/app/stores/info.js
-frontend/app/stores/invitations.js
-frontend/app/stores/life-aspects.js
-frontend/app/stores/notifications.js
-frontend/app/stores/patient-home.js
-frontend/app/stores/patients.js
-frontend/app/stores/patient-support.js
-frontend/app/stores/program-journey.js
-frontend/app/stores/programs.js
-frontend/app/stores/questionnaires.js
-frontend/app/stores/services.js
-frontend/app/stores/tag-access.js
-frontend/app/stores/ui.js
-frontend/app/stores/user.js
-frontend/app/stores/users.js
+frontend/app/stores/articles.js (172 lines)
+frontend/app/stores/assignments.js (99 lines)
+frontend/app/stores/auth.js (205 lines)
+frontend/app/stores/directories.js (208 lines)
+frontend/app/stores/emc-app.js (61 lines)
+frontend/app/stores/info.js (44 lines)
+frontend/app/stores/invitations.js (53 lines)
+frontend/app/stores/life-aspects.js (158 lines)
+frontend/app/stores/notifications.js (387 lines)
+frontend/app/stores/patient-home.js (339 lines)
+frontend/app/stores/patients.js (105 lines)
+frontend/app/stores/patient-support.js (29 lines)
+frontend/app/stores/program-journey.js (137 lines)
+frontend/app/stores/programs.js (237 lines)
+frontend/app/stores/questionnaires.js (206 lines)
+frontend/app/stores/services.js (159 lines)
+frontend/app/stores/tag-access.js (210 lines)
+frontend/app/stores/ui.js (203 lines)
+frontend/app/stores/user.js (111 lines)
+frontend/app/stores/users.js (266 lines)
 ```
 *Files: 20*
 
 ### middleware
 
 ```
-frontend/app/middleware/auth.global.js
-frontend/app/middleware/doctor-only.js
-frontend/app/middleware/life-aspect-manager.js
-frontend/app/middleware/program-manager.js
-frontend/app/middleware/service-manager.js
-frontend/app/middleware/user-manager.js
+frontend/app/middleware/auth.global.js (39 lines)
+frontend/app/middleware/doctor-only.js (14 lines)
+frontend/app/middleware/life-aspect-manager.js (20 lines)
+frontend/app/middleware/program-manager.js (19 lines)
+frontend/app/middleware/service-manager.js (19 lines)
+frontend/app/middleware/user-manager.js (19 lines)
 ```
 *Files: 6*
 
 ### plugins
 
 ```
-frontend/app/plugins/api.js
+frontend/app/plugins/api.js (63 lines)
 ```
 *Files: 1*
-
----
-
-## Deploy
-
-```
-deploy/backend.Dockerfile
-deploy/docker-compose.yml
-deploy/env/backend.env.example
-deploy/env/compose.env.example
-deploy/env/frontend.env.example
-deploy/frontend.Dockerfile
-deploy/nginx/default.conf
-deploy/postgres/init/01-enable-pgcrypto.sql
-deploy/scripts/backup.sh
-deploy/scripts/deploy.sh
-deploy/scripts/init-letsencrypt.sh
-```
-
-*Files: 11*

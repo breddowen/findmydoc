@@ -208,6 +208,10 @@ onBeforeUnmount(() => {
       <div
         class="flex shrink-0 items-center justify-end gap-1"
       >
+      
+        <!-- TEST_STYLES: временные действия с оформлением. -->
+        <TestStylesNavbarActions />
+
         <NotificationsCenter />
 
         <LayoutThemeToggle />
