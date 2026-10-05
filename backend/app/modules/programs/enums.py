@@ -6,6 +6,7 @@ class ProgramItemType(str, Enum):
     ARTICLE = "article"
     QUESTIONNAIRE = "questionnaire"
     CONSULTATION = "consultation"
+    VIDEO = "video"
 
 
 class ProgramEnrollmentStatus(str, Enum):

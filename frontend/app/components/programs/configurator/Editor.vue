@@ -1,4 +1,3 @@
-<!-- ./frontend/app/components/programs/configurator/Editor.vue -->
 <script setup>
 import { VueDraggable } from 'vue-draggable-plus'
 
@@ -17,6 +16,7 @@ const articles = ref([])
 const questionnaires = ref([])
 const specialities = ref([])
 const tags = ref([])
+const videos = ref([])
 
 const loadingSources = ref(true)
 const loadingProgram = ref(Boolean(props.programId))
@@ -184,6 +184,11 @@ function mapProgramToForm(program) {
               ? item.content_id
               : null,
 
+          video_id:
+            item.item_type === 'video'
+              ? item.content_id
+              : null,
+
           speciality_id:
             item.item_type === 'consultation'
               ? item.speciality_id
@@ -247,11 +252,13 @@ async function loadSources() {
     const [
       articleItems,
       questionnaireItems,
+      videoItems,
       specialityItems,
       tagItems,
     ] = await Promise.all([
       fetchAllArticleSources(),
       $api('/api/v1/questionnaires'),
+      fetchAllVideoSources(),
       $api('/api/v1/specialities'),
       $api('/api/v1/tags'),
 
@@ -262,6 +269,7 @@ async function loadSources() {
 
     articles.value = articleItems
     questionnaires.value = questionnaireItems
+    videos.value = videoItems
     specialities.value = specialityItems
     tags.value = tagItems
   } catch (error) {
@@ -337,7 +345,7 @@ function validateForm() {
       for (const item of stage.items) {
         if (item.item_type === 'consultation') {
           return (
-            'Стартовый маршрут содержит статьи и опросники. '
+            'Стартовый маршрут содержит статьи, опросники и видео. '
             + 'Консультации добавьте в программу сопровождения.'
           )
         }
@@ -434,6 +442,11 @@ function buildPayload() {
                 ? item.questionnaire_id
                 : null,
 
+            video_id:
+              item.item_type === 'video'
+                ? item.video_id
+                : null,
+
             speciality_id:
               item.item_type === 'consultation'
                 ? item.speciality_id
@@ -502,6 +515,26 @@ onMounted(async () => {
     loadProgram(),
   ])
 })
+
+async function fetchAllVideoSources() {
+  const result = []
+  const limit = 100
+  let offset = 0
+
+  while (true) {
+    const page = await $api('/api/v1/videos/manage', {
+      query: { offset, limit },
+    })
+
+    result.push(...page)
+
+    if (page.length < limit) break
+
+    offset += page.length
+  }
+
+  return result
+}
 </script>
 
 <template>
@@ -696,6 +729,7 @@ onMounted(async () => {
           <ProgramsConfiguratorLibrary
             :articles="articles"
             :questionnaires="questionnaires"
+            :videos="videos"
             :specialities="specialities"
             :loading="loadingSources"
             draggable
@@ -775,6 +809,7 @@ onMounted(async () => {
     <ProgramsConfiguratorLibrary
       :articles="articles"
       :questionnaires="questionnaires"
+      :videos="videos"
       :specialities="specialities"
       :loading="loadingSources"
       :draggable="false"

@@ -56,6 +56,41 @@ class Settings(BaseSettings):
     # и предпросмотра в течение суток.
     MEDIA_UPLOAD_TTL_HOURS: int = 24
 
+    # VIDEO
+    MEDIA_VIDEO_MAX_BYTES: int = 350 * 1024 * 1024
+    MEDIA_VIDEO_MAX_DURATION_SECONDS: float = 600.0
+
+    # Ограничения независимо от ориентации.
+    MEDIA_VIDEO_MAX_LONG_SIDE: int = 1920
+    MEDIA_VIDEO_MAX_SHORT_SIDE: int = 1080
+    MEDIA_VIDEO_MAX_FPS: float = 30.0
+
+    MEDIA_VIDEO_FFPROBE_BIN: str = "ffprobe"
+    MEDIA_VIDEO_FFMPEG_BIN: str = "ffmpeg"
+
+    MEDIA_VIDEO_PROBE_TIMEOUT_SECONDS: float = 20.0
+
+    # Запас свободного места, который не отдаём под видео.
+    # Дополнительно проверяем место под максимально
+    # разрешённый файл перед началом сохранения.
+    MEDIA_VIDEO_MIN_FREE_BYTES: int = 1024 * 1024 * 1024
+
+    # MEDIA PLAYBACK
+    MEDIA_VIDEO_SESSION_SECONDS: int = 1800
+
+    # Локально localhost работает по HTTP.
+    # В production обязательно True.
+    MEDIA_VIDEO_COOKIE_SECURE: bool = False
+
+    # None: FastAPI отдаёт файл самостоятельно.
+    # На сервере: /_private_video/
+    MEDIA_VIDEO_X_ACCEL_PREFIX: str | None = None
+
+    # Отвязанные файлы удаляются не немедленно.
+    MEDIA_VIDEO_RETIRED_TTL_HOURS: int = 24
+
+    MEDIA_VIDEO_POSTER_TIMEOUT_SECONDS: float = 20.0
+
     model_config = SettingsConfigDict(
         env_file=ENV_FILE,
         env_file_encoding="utf-8",

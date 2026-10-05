@@ -106,6 +106,9 @@ from app.modules.programs.consultation_service import (
     lock_program_for_structure_edit,
 )
 
+from app.modules.videos.models import Video
+from app.modules.videos.lifecycle import lock_video_references
+
 router = APIRouter(
     prefix="/api/v1/programs",
     tags=["Programs"],
@@ -224,10 +227,11 @@ def validate_start_program(
                 )
 
             if item.item_type == ProgramItemType.ARTICLE:
-                content = session.get(
-                    Article,
-                    item.article_id,
-                )
+                content = session.get(Article, item.article_id)
+
+            elif item.item_type == ProgramItemType.VIDEO:
+                content = session.get(Video, item.video_id)
+
             else:
                 content = session.get(
                     Questionnaire,
@@ -292,6 +296,25 @@ def fill_program_structure(
 ) -> None:
     validate_program_periods(payload)
 
+    lock_video_references(
+        session=session,
+        video_ids={
+            item.video_id
+            for stage in payload.stages
+            for item in stage.items
+            if item.item_type == ProgramItemType.VIDEO
+        },
+    )
+
+    # Повторная проверка под блокировкой видео:
+    # материал мог стать скрытым или Pro после
+    # предварительной проверки запроса.
+    validate_start_program(
+        session=session,
+        payload=payload,
+        is_start=program.is_start,
+    )
+
     for tag_id in dict.fromkeys(payload.tag_ids):
         if not session.get(Tag, tag_id):
             raise HTTPException(
@@ -355,6 +378,13 @@ def fill_program_structure(
                         detail="Опросник не найден",
                     )
 
+            elif item_data.item_type == ProgramItemType.VIDEO:
+                if not session.get(Video, item_data.video_id):
+                    raise HTTPException(
+                        status_code=404,
+                        detail="Видео не найдено",
+                    )
+
             else:
                 speciality = session.get(
                     Speciality,
@@ -396,6 +426,7 @@ def fill_program_structure(
                     consultation_description=(
                         consultation_description
                     ),
+                    video_id=item_data.video_id,
                 )
             )
 
@@ -437,10 +468,7 @@ def serialize_item(
             submission_status=None,
         )
 
-    if (
-        item.item_type
-        == ProgramItemType.QUESTIONNAIRE
-    ):
+    if item.item_type == ProgramItemType.QUESTIONNAIRE:
         questionnaire = session.get(
             Questionnaire,
             item.questionnaire_id,
@@ -467,6 +495,28 @@ def serialize_item(
             is_completed=False,
             submission_id=None,
             submission_status=None,
+        )
+
+    if item.item_type == ProgramItemType.VIDEO:
+        video = session.get(Video, item.video_id)
+
+        if video is None:
+            raise HTTPException(
+                status_code=409,
+                detail="Видео этапа не найдено",
+            )
+
+        return ProgramStageItemResponse(
+            id=item.id,
+            item_type=item.item_type,
+            order_index=item.order_index,
+            content_id=video.id,
+            title=video.title,
+            description=None,
+            pro_content=video.pro_content,
+            is_hidden=video.is_hidden,
+            can_access=True,
+            is_completed=False,
         )
 
     speciality = session.get(

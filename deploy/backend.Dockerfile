@@ -1,3 +1,5 @@
+# ./deploy/backend.Dockerfile
+
 FROM python:3.10-slim-bookworm
 
 ENV PYTHONUNBUFFERED=1 \
@@ -6,6 +8,13 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1
 
 WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install \
+        --yes \
+        --no-install-recommends \
+        ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
 
 RUN groupadd --gid 10001 app \
     && useradd \

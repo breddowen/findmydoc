@@ -10,6 +10,7 @@ ImagePurpose = Literal[
     "questionnaire",
     "program",
     "life_aspect",
+    "video",
 ]
 
 
@@ -51,5 +52,11 @@ IMAGE_PRESETS: dict[str, ImagePreset] = {
         ratio_height=1,
         max_width=1800,
         max_height=600,
+    ),
+    "video": ImagePreset(
+        ratio_width=16,
+        ratio_height=9,
+        max_width=1600,
+        max_height=900,
     ),
 }

@@ -1,4 +1,3 @@
-<!-- ./frontend/app/components/programs/configurator/Item.vue -->
 <script setup>
 const props = defineProps({
   item: {
@@ -11,33 +10,19 @@ const emit = defineEmits([
   'remove',
 ])
 
-const iconName = computed(() => {
-  if (props.item.item_type === 'article') {
-    return 'lucide:file-text'
-  }
+const iconName = computed(() => ({
+  article: 'lucide:file-text',
+  questionnaire: 'lucide:clipboard-list',
+  consultation: 'lucide:stethoscope',
+  video: 'lucide:video',
+}[props.item.item_type] || 'lucide:file'))
 
-  if (
-    props.item.item_type === 'questionnaire'
-  ) {
-    return 'lucide:clipboard-list'
-  }
-
-  return 'lucide:stethoscope'
-})
-
-const typeName = computed(() => {
-  if (props.item.item_type === 'article') {
-    return 'Статья'
-  }
-
-  if (
-    props.item.item_type === 'questionnaire'
-  ) {
-    return 'Опросник'
-  }
-
-  return 'Консультация'
-})
+const typeName = computed(() => ({
+  article: 'Статья',
+  questionnaire: 'Опросник',
+  consultation: 'Консультация',
+  video: 'Видео',
+}[props.item.item_type] || 'Материал'))
 </script>
 
 <template>
@@ -65,6 +50,8 @@ const typeName = computed(() => {
             item.item_type === 'questionnaire',
           'bg-success/10 text-success':
             item.item_type === 'consultation',
+          'bg-accent/10 text-accent':
+            item.item_type === 'video',
         }"
       >
         <Icon

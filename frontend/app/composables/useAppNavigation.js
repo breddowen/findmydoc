@@ -87,6 +87,16 @@ export function useAppNavigation() {
       },
     ]
 
+    if (isStaff.value || auth.activeRole === 'patient') {
+      contentLinks.push({
+        to: '/content/videos',
+        label: 'Видео',
+        icon: 'lucide:video',
+        description: 'Видеоматериалы',
+        exact: true,
+      })
+    }
+
     if (auth.activeRole === 'patient') {
       contentLinks.push({
         to: '/questionnaires',
@@ -150,6 +160,13 @@ export function useAppNavigation() {
             label: 'Сферы жизни',
             icon: 'lucide:heart-pulse',
             description: 'Направления, описания и связанные теги',
+          },
+          {
+            to: '/content/videos/new',
+            label: 'Добавить видео',
+            icon: 'lucide:video',
+            description: 'Загрузка видеоматериала',
+            exact: true,
           },
         ],
       })

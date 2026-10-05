@@ -32,3 +32,7 @@ class EventType(str, Enum):
     PROGRAM_STARTED = "program_started"
     PROGRAM_COMPLETED = "program_completed"
     PROGRAM_IN_PROGRESS = "program_in_progress"
+
+    VIDEO_OPENED = "video_opened"
+    VIDEO_STARTED = "video_started"
+    VIDEO_COMPLETED = "video_completed"

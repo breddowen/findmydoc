@@ -78,11 +78,14 @@ def get_image_entity(
             )
         ).first()
     else:
+        from app.modules.videos.models import Video
+
         models = {
             "article": Article,
             "questionnaire": Questionnaire,
             "program": Program,
             "life_aspect": LifeAspect,
+            "video": Video,
         }
 
         entity = session.get(
@@ -294,6 +297,21 @@ def ensure_can_view_entity_image(
     program_id: uuid.UUID | None = None,
     program_stage_id: uuid.UUID | None = None,
 ) -> None:
+    
+    if purpose == "video":
+        from app.modules.videos.access import (
+            ensure_video_poster_access,
+        )
+
+        ensure_video_poster_access(
+            session=session,
+            auth=auth,
+            video=entity,
+            program_id=program_id,
+            program_stage_id=program_stage_id,
+        )
+        return
+    
     if program_stage_id is not None and program_id is None:
         raise HTTPException(
             status_code=422,
