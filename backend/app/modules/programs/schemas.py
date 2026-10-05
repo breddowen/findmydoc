@@ -32,39 +32,40 @@ class ProgramStageItemCreateRequest(BaseModel):
     )
     consultation_description: str | None = None
 
+    video_id: uuid.UUID | None = None
+
     @model_validator(mode="after")
     def validate_reference(self):
-        if self.item_type == ProgramItemType.ARTICLE:
-            if (
-                not self.article_id
-                or self.questionnaire_id
-                or self.speciality_id
-            ):
-                raise ValueError(
-                    "Для статьи требуется только article_id"
-                )
+        references = {
+            ProgramItemType.ARTICLE: (
+                "article_id",
+                self.article_id,
+            ),
+            ProgramItemType.QUESTIONNAIRE: (
+                "questionnaire_id",
+                self.questionnaire_id,
+            ),
+            ProgramItemType.CONSULTATION: (
+                "speciality_id",
+                self.speciality_id,
+            ),
+            ProgramItemType.VIDEO: (
+                "video_id",
+                self.video_id,
+            ),
+        }
 
-        if self.item_type == ProgramItemType.QUESTIONNAIRE:
-            if (
-                not self.questionnaire_id
-                or self.article_id
-                or self.speciality_id
-            ):
-                raise ValueError(
-                    "Для опросника требуется только "
-                    "questionnaire_id"
-                )
+        required_name, required_value = references[self.item_type]
 
-        if self.item_type == ProgramItemType.CONSULTATION:
-            if (
-                not self.speciality_id
-                or self.article_id
-                or self.questionnaire_id
-            ):
-                raise ValueError(
-                    "Для консультации требуется только "
-                    "speciality_id"
-                )
+        provided_count = sum(
+            value is not None
+            for _, value in references.values()
+        )
+
+        if required_value is None or provided_count != 1:
+            raise ValueError(
+                f"Для этого типа элемента требуется только {required_name}"
+            )
 
         return self
 

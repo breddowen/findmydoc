@@ -33,7 +33,8 @@ class MediaImage(SQLModel, table=True):
             "'article', "
             "'questionnaire', "
             "'program', "
-            "'life_aspect'"
+            "'life_aspect', "
+            "'video'"
             ")",
             name="ck_media_images_purpose",
         ),
@@ -64,5 +65,10 @@ class MediaImage(SQLModel, table=True):
 
     created_at: datetime = Field(
         default_factory=utc_now_naive,
+        index=True,
+    )
+
+    retired_at: datetime | None = Field(
+        default=None,
         index=True,
     )

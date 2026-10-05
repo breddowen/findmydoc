@@ -35,6 +35,14 @@ from app.modules.invitations.admin_routers import router as admin_invitations_ro
 from app.modules.media.routers import router as media_router
 from app.modules.media.image_routers import router as entity_images_router
 
+from app.modules.media.video_upload_routers import router as video_uploads_router
+from app.modules.videos.routers import router as videos_router
+from app.modules.media.video_sessions import router as video_sessions_router
+from app.modules.videos.delivery_routers import router as video_delivery_router
+from app.modules.videos.catalog_routers import router as video_catalog_router
+from app.modules.videos.progress_routers import router as video_progress_router
+
+
 from app.modules.test_styles.routers import router as test_styles_router
 
 @asynccontextmanager
@@ -94,6 +102,17 @@ app.include_router(notifications_router)
 
 app.include_router(media_router)
 app.include_router(entity_images_router)
+
+app.include_router(video_uploads_router)
+app.include_router(video_sessions_router)
+
+# Сначала статические /manage.
+app.include_router(videos_router)
+
+# Затем динамический /{video_id}.
+app.include_router(video_catalog_router)
+app.include_router(video_delivery_router)
+app.include_router(video_progress_router)
 
 # TEST_STYLES: временная студия оформления.
 app.include_router(test_styles_router)

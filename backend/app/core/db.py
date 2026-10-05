@@ -93,6 +93,9 @@ def import_all_models() -> None:
 
     from app.modules.media import models as media_models  # noqa: F401
 
+    from app.modules.media import video_models as media_video_models  # noqa: F401
+    from app.modules.videos import models as video_models  # noqa: F401
+    from app.modules.media import session_models as media_session_models  # noqa: F401
 
 def init_sqlite_db() -> None:
     """

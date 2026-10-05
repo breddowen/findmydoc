@@ -28,7 +28,7 @@ from app.modules.questionnaires.models import (
     QuestionnaireSubmission,
 )
 from app.modules.tags.models import Tag
-
+from app.modules.videos.models import VideoProgress
 
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)
@@ -239,15 +239,24 @@ def is_program_item_completed(
     if item.item_type == ProgramItemType.ARTICLE:
         progress = session.exec(
             select(ArticleProgress).where(
-                ArticleProgress.patient_id
-                == patient_id,
-                ArticleProgress.article_id
-                == item.article_id,
+                ArticleProgress.patient_id == patient_id,
+                ArticleProgress.article_id == item.article_id,
                 ArticleProgress.completed_at.is_not(None),
             )
         ).first()
 
         return progress is not None
+
+    if item.item_type == ProgramItemType.VIDEO:
+        progress_id = session.exec(
+            select(VideoProgress.id).where(
+                VideoProgress.video_id == item.video_id,
+                VideoProgress.patient_id == patient_id,
+                VideoProgress.completed_at.is_not(None),
+            )
+        ).first()
+
+        return progress_id is not None
 
     submission = get_program_questionnaire_submission(
         session=session,
@@ -265,12 +274,27 @@ def is_program_item_completed(
 def get_stage_task_items(
     stage: ProgramStage,
 ) -> list[ProgramStageItem]:
-    return [
-        item
-        for item in stage.items
-        if item.item_type
-        != ProgramItemType.CONSULTATION
-    ]
+    result = []
+
+    for item in stage.items:
+        if item.item_type == ProgramItemType.CONSULTATION:
+            continue
+
+        # Полностью скрытое видео не отображается пациенту
+        # и не должно блокировать прохождение.
+        #
+        # Правила существующих статей и опросников
+        # здесь намеренно не меняем.
+        if (
+            item.item_type == ProgramItemType.VIDEO
+            and item.video is not None
+            and item.video.is_hidden
+        ):
+            continue
+
+        result.append(item)
+
+    return result
 
 
 def calculate_stage_progress(
@@ -349,9 +373,7 @@ def calculate_program_progress(
     task_items = [
         item
         for stage in program.stages
-        for item in stage.items
-        if item.item_type
-        != ProgramItemType.CONSULTATION
+        for item in get_stage_task_items(stage)
     ]
 
     if not task_items:
@@ -381,11 +403,11 @@ def sync_program_enrollment(
     *,
     session: Session,
     enrollment: ProgramEnrollment,
+    complete_if_empty: bool = False,
+    actor_user_id: uuid.UUID | None = None,
+    metadata: dict | None = None,
 ) -> None:
-    if (
-        enrollment.status
-        != ProgramEnrollmentStatus.ACTIVE
-    ):
+    if enrollment.status != ProgramEnrollmentStatus.ACTIVE:
         return
 
     program = session.get(
@@ -414,19 +436,26 @@ def sync_program_enrollment(
             session=session,
             event_type=EventType.PROGRAM_IN_PROGRESS,
             patient_id=enrollment.patient_id,
+            actor_user_id=actor_user_id,
             program_id=program.id,
             subject_type="program",
             subject_id=program.id,
+            metadata=metadata,
         )
 
+    all_tasks_completed = (
+        total > 0 and completed == total
+    )
+
+    empty_after_structure_change = (
+        complete_if_empty and total == 0
+    )
+
     if (
-        total > 0
-        and completed == total
+        (all_tasks_completed or empty_after_structure_change)
         and enrollment.completed_event_at is None
     ):
-        enrollment.status = (
-            ProgramEnrollmentStatus.COMPLETED
-        )
+        enrollment.status = ProgramEnrollmentStatus.COMPLETED
         enrollment.completed_at = now
         enrollment.completed_event_at = now
 
@@ -434,9 +463,11 @@ def sync_program_enrollment(
             session=session,
             event_type=EventType.PROGRAM_COMPLETED,
             patient_id=enrollment.patient_id,
+            actor_user_id=actor_user_id,
             program_id=program.id,
             subject_type="program",
             subject_id=program.id,
+            metadata=metadata,
         )
 
     enrollment.updated_at = now
@@ -474,8 +505,7 @@ def get_program_content_item(
         select(ProgramStageItem)
         .join(
             ProgramStage,
-            ProgramStage.id
-            == ProgramStageItem.stage_id,
+            ProgramStage.id == ProgramStageItem.stage_id,
         )
         .where(
             ProgramStage.program_id == program_id,
@@ -493,87 +523,23 @@ def get_program_content_item(
             ProgramStageItem.article_id == content_id
         )
 
-    elif (
-        content_type
-        == ProgramItemType.QUESTIONNAIRE
-    ):
+    elif content_type == ProgramItemType.QUESTIONNAIRE:
         statement = statement.where(
-            ProgramStageItem.questionnaire_id
-            == content_id
+            ProgramStageItem.questionnaire_id == content_id
+        )
+
+    elif content_type == ProgramItemType.VIDEO:
+        statement = statement.where(
+            ProgramStageItem.video_id == content_id
+        )
+
+    else:
+        raise HTTPException(
+            status_code=422,
+            detail="Неподдерживаемый тип материала программы",
         )
 
     return session.exec(statement).first()
-
-
-# def ensure_patient_program_content_access(
-#     *,
-#     session: Session,
-#     patient,
-#     program_id: uuid.UUID,
-#     content_type: ProgramItemType,
-#     content_id: uuid.UUID,
-#     pro_content: bool,
-#     stage_id: uuid.UUID | None = None,
-# ) -> ProgramStageItem:
-#     from app.modules.content.utils import (
-#         patient_can_see_content,
-#     )
-
-#     program = session.get(Program, program_id)
-
-#     if not program or program.is_hidden:
-#         raise HTTPException(
-#             status_code=404,
-#             detail="Программа не найдена",
-#         )
-
-#     item = get_program_content_item(
-#         session=session,
-#         program_id=program.id,
-#         content_type=content_type,
-#         content_id=content_id,
-#         stage_id=stage_id,
-#     )
-
-#     if not item:
-#         raise HTTPException(
-#             status_code=404,
-#             detail="Контент не входит в эту программу",
-#         )
-
-#     has_access = patient_has_program_access(
-#         session=session,
-#         patient_id=patient.id,
-#         program_id=program.id,
-#     )
-
-#     can_see_program = patient_can_see_content(
-#         session=session,
-#         patient=patient,
-#         content_tag_ids=get_program_tag_ids(
-#             session=session,
-#             program_id=program.id,
-#         ),
-#         is_hidden=program.is_hidden,
-#     )
-
-#     if not has_access and not can_see_program:
-#         raise HTTPException(
-#             status_code=403,
-#             detail="Программа недоступна пациенту",
-#         )
-
-#     # Глобальный Pro здесь намеренно не используется.
-#     if pro_content and not has_access:
-#         raise HTTPException(
-#             status_code=403,
-#             detail=(
-#                 "Для этого материала необходима "
-#                 "покупка программы"
-#             ),
-#         )
-
-#     return item
 
 def ensure_patient_program_content_access(
     *,

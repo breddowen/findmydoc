@@ -64,9 +64,13 @@ const statusMeta = {
 }
 
 function getItemLink(item) {
-  if (item.item_type === 'article') {
+  if (['article', 'video'].includes(item.item_type)) {
+    const section = item.item_type === 'video'
+      ? 'videos'
+      : 'articles'
+
     return {
-      path: `/content/articles/${item.content_id}`,
+      path: `/content/${section}/${item.content_id}`,
       query: {
         source: 'program',
         program_id: props.programId,
@@ -116,7 +120,7 @@ function canOpenItem(item) {
     return item.can_access
   }
 
-  if (item.item_type === 'article') {
+  if (['article', 'video'].includes(item.item_type)) {
     return true
   }
 
@@ -131,6 +135,10 @@ function getActionText(item) {
     return item.is_completed
       ? 'Открыть снова'
       : 'Выполнить'
+  }
+
+  if (item.item_type === 'video') {
+    return 'Смотреть видео'
   }
 
   if (item.item_type === 'article') {
@@ -302,6 +310,12 @@ const displayedStatus = computed(() => {
           />
 
           <Icon
+            v-else-if="item.item_type === 'video'"
+            name="lucide:video"
+            class="size-4"
+          />
+
+          <Icon
             v-else
             name="lucide:stethoscope"
             class="size-4"
@@ -404,7 +418,7 @@ const displayedStatus = computed(() => {
               >
                 <Icon
                   :name="
-                    item.item_type === 'article'
+                    ['article', 'video'].includes(item.item_type)
                       ? 'lucide:external-link'
                       : 'lucide:clipboard-check'
                   "

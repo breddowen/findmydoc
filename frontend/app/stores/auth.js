@@ -1,4 +1,14 @@
 // ./frontend/app/stores/auth.js
+
+async function clearVideoMediaSession(api) {
+  await api('/api/v1/videos/media-session', {
+    method: 'DELETE',
+    credentials: 'include',
+    retry: 0,
+    timeout: 5000,
+  })
+}
+
 export const useAuthStore = defineStore('auth', () => {
   const accessToken = ref(null)
   const activeRole = ref(null)
@@ -60,7 +70,11 @@ export const useAuthStore = defineStore('auth', () => {
     availableRoles.value = []
   }
 
-  function processLoginResponse(response) {
+  async function processLoginResponse(response, api) {
+    // До сохранения новой авторизации убираем cookie
+    // прежнего аккаунта/роли этого браузера.
+    await clearVideoMediaSession(api)
+
     if (response.status === 'authenticated') {
       accessToken.value = response.access_token
       activeRole.value = response.active_role
@@ -99,7 +113,7 @@ export const useAuthStore = defineStore('auth', () => {
         },
       })
 
-      return processLoginResponse(response)
+      return processLoginResponse(response, $api)
     } finally {
       loading.value = false
     }
@@ -127,7 +141,7 @@ export const useAuthStore = defineStore('auth', () => {
         },
       )
 
-      return processLoginResponse(response)
+      return processLoginResponse(response, $api)
     } finally {
       loading.value = false
     }
@@ -162,13 +176,28 @@ export const useAuthStore = defineStore('auth', () => {
         },
       )
 
-      return processLoginResponse(response)
+      return processLoginResponse(response, $api)
     } finally {
       loading.value = false
     }
   }
 
-  function logout() {
+  async function logout() {
+    const { $api } = useNuxtApp()
+
+    try {
+      await clearVideoMediaSession($api)
+    } catch {
+      // При недоступном сервере локальный выход
+      // всё равно выполняется.
+      //
+      // Серверная медиасессия в таком случае
+      // останется действительной до своего истечения.
+      console.warn(
+        'Не удалось подтвердить завершение медиасессии',
+      )
+    }
+
     accessToken.value = null
     activeRole.value = null
 

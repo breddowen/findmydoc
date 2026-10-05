@@ -31,6 +31,12 @@ export const MEDIA_PRESETS = Object.freeze({
     height: 600,
     label: 'Обложка сферы жизни',
   },
+  video: {
+    ratio: 16 / 9,
+    width: 1600,
+    height: 900,
+    label: 'Обложка видео',
+  },
 })
 
 export const MEDIA_MAX_BYTES = 10 * 1024 * 1024

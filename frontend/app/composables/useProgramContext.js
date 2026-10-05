@@ -24,8 +24,15 @@ export function useProgramContext() {
     && Boolean(route.params.id),
   )
 
+  const isVideoPage = computed(() =>
+    /^\/content\/videos\/[^/]+\/?$/.test(route.path)
+    && Boolean(route.params.id),
+  )
+
   const isMaterialPage = computed(() =>
-    isArticlePage.value || isQuestionnairePage.value,
+    isArticlePage.value
+    || isQuestionnairePage.value
+    || isVideoPage.value,
   )
 
   const programId = computed(() => {
@@ -56,6 +63,7 @@ export function useProgramContext() {
     isProgramPage,
     isArticlePage,
     isQuestionnairePage,
+    isVideoPage,
     isMaterialPage,
     usesProgramLayout,
   }

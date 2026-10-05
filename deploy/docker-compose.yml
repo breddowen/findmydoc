@@ -130,10 +130,21 @@ services:
       - /bin/sh
       - -c
       - |
+        set -e
+
+        if ! grep -q '^media-readers:' /etc/group; then
+          addgroup -g 10001 media-readers
+        fi
+
+        if ! id -nG nginx | grep -qw media-readers; then
+          addgroup nginx media-readers
+        fi
+
         while true; do
           sleep 6h
           nginx -s reload || true
         done &
+
         exec nginx -g 'daemon off;'
     ports:
       - "80:80"
@@ -142,6 +153,19 @@ services:
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
       - letsencrypt:/etc/letsencrypt:ro
       - certbot_www:/var/www/certbot:ro
+      - type: bind
+        source: ${MEDIA_PRODUCTION_HOST_PATH:?MEDIA_PRODUCTION_HOST_PATH must be set}
+        target: /var/lib/findmydoc/media-prod
+        read_only: true
+        bind:
+          create_host_path: false
+
+      - type: bind
+        source: ${MEDIA_STAGING_HOST_PATH:?MEDIA_STAGING_HOST_PATH must be set}
+        target: /var/lib/findmydoc/media-staging
+        read_only: true
+        bind:
+          create_host_path: false
     networks:
       - proxy
     logging:

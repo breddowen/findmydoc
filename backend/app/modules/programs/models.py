@@ -21,6 +21,8 @@ from app.modules.programs.enums import (
     ProgramItemType,
 )
 
+from app.modules.videos.models import Video
+
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -219,6 +221,19 @@ class ProgramStageItem(SQLModel, table=True):
     speciality: Optional[Speciality] = Relationship(
         sa_relationship_kwargs={
             "foreign_keys": "[ProgramStageItem.speciality_id]",
+        }
+    )
+
+    video_id: Optional[uuid.UUID] = Field(
+        default=None,
+        foreign_key="videos.id",
+        ondelete="RESTRICT",
+        index=True,
+    )
+
+    video: Optional[Video] = Relationship(
+        sa_relationship_kwargs={
+            "foreign_keys": "[ProgramStageItem.video_id]",
         }
     )
 

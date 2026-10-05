@@ -114,6 +114,16 @@ def update_entity_image(
     auth: AuthContext = Depends(get_current_auth),
     session: Session = Depends(get_session),
 ) -> EntityImageResponse:
+    
+    if purpose == "video":
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Обложка видео сохраняется через "
+                "редактор видеоматериала."
+            ),
+        )
+    
     entity = get_image_entity(
         session=session,
         purpose=purpose,

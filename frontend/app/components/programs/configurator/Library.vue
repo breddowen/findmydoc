@@ -1,4 +1,3 @@
-<!-- ./frontend/app/components/programs/configurator/Library.vue -->
 <script setup>
 import { VueDraggable } from 'vue-draggable-plus'
 
@@ -23,6 +22,10 @@ const props = defineProps({
     type: Boolean,
     default: true,
   },
+  videos: {
+    type: Array,
+    default: () => [],
+  },
 })
 
 const emit = defineEmits(['add'])
@@ -44,6 +47,11 @@ const tabs = [
     value: 'questionnaire',
     title: 'Опросники',
     icon: 'lucide:clipboard-list',
+  },
+  {
+    value: 'video',
+    title: 'Видео',
+    icon: 'lucide:video',
   },
   {
     value: 'consultation',
@@ -81,10 +89,20 @@ const sourceItems = computed(() => {
       })
   }
 
-  const isArticle = activeTab.value === 'article'
-  const source = isArticle
-    ? props.articles
-    : props.questionnaires
+  const sources = {
+    article: props.articles,
+    questionnaire: props.questionnaires,
+    video: props.videos,
+  }
+
+  const referenceFields = {
+    article: 'article_id',
+    questionnaire: 'questionnaire_id',
+    video: 'video_id',
+  }
+
+  const type = activeTab.value
+  const source = sources[type] || []
 
   return source
     // Исключённые из общего каталога материалы
@@ -92,19 +110,24 @@ const sourceItems = computed(() => {
     .filter(item => !item.is_hidden)
     .map(item => ({
       source_id: item.id,
-      item_type: isArticle ? 'article' : 'questionnaire',
+      item_type: type,
       title: item.title,
-      description: isArticle ? null : item.description,
+      description:
+        type === 'questionnaire' ? item.description : null,
       pro_content: item.pro_content,
       is_hidden: false,
       is_library_hidden: Boolean(item.is_library_hidden),
       tags: item.tags || [],
-      article_id: isArticle ? item.id : null,
-      questionnaire_id: isArticle ? null : item.id,
+
+      article_id: null,
+      questionnaire_id: null,
+      video_id: null,
       speciality_id: null,
       speciality_name: null,
       consultation_title: null,
       consultation_description: null,
+
+      [referenceFields[type]]: item.id,
     }))
 })
 
@@ -190,6 +213,7 @@ function cloneItem(item) {
     is_hidden: item.is_hidden,
     article_id: item.article_id,
     questionnaire_id: item.questionnaire_id,
+    video_id: item.video_id || null,
     speciality_id: item.speciality_id,
     speciality_name: item.speciality_name,
     consultation_title: item.consultation_title,
@@ -228,7 +252,7 @@ watch(
 <template>
   <div class="space-y-4">
     <div
-      class="bg-base-200 grid grid-cols-3 gap-1 rounded-xl p-1"
+      class="bg-base-200 grid grid-cols-4 gap-1 rounded-xl p-1"
       role="group"
       aria-label="Тип материала"
     >
